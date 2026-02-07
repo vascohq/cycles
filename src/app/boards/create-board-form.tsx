@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createRoom } from '@/app/boards/actions'
 
-function toSlug(title: string) {
+export function toSlug(title: string) {
   return title
     .toLowerCase()
     .trim()
