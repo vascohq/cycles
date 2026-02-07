@@ -1,6 +1,7 @@
 import { ArchiveCollapsible } from '@/app/boards/[roomId]/archive-collapsible'
 import { BoardContextMenu } from '@/app/boards/board-context-menu'
 import { CreateBoardDialog } from '@/app/boards/create-board-dialog'
+import { CreateBoardForm } from '@/app/boards/create-board-form'
 import { OrganizationSelector } from '@/app/boards/organization-selector'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +17,6 @@ import { auth, clerkClient } from '@clerk/nextjs/server'
 import { RoomInfo } from '@liveblocks/node'
 import { groupBy } from 'lodash'
 import { Ellipsis } from 'lucide-react'
-import { nanoid } from 'nanoid'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -73,43 +73,7 @@ export default async function OrganizationsPage() {
 function CreateBoardButton({ roomPrefix }: { roomPrefix: string }) {
   return (
     <CreateBoardDialog roomPrefix={roomPrefix}>
-      <form className="flex flex-col gap-4" action={createRoom}>
-        <DialogHeader>
-          <DialogTitle>Create a new board</DialogTitle>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4">
-          <section className="flex flex-col gap-2">
-            <Label htmlFor="title">Board title</Label>
-            <Input
-              type="text"
-              placeholder="My awesome board"
-              id="title"
-              name="title"
-              required
-            />
-          </section>
-          <section className="flex flex-col gap-2">
-            <Label htmlFor="title">Slug</Label>
-            <Input
-              type="text"
-              placeholder="my-awesome-board"
-              id="slug"
-              name="slug"
-              required
-              minLength={5}
-              pattern="[a-z0-9\-]*"
-            />
-            <p className="text-muted-foreground text-xs">
-              Must contain only lowercase letters, digits, and dashes.
-            </p>
-          </section>
-        </div>
-
-        <DialogFooter>
-          <Button type="submit">Create</Button>
-        </DialogFooter>
-      </form>
+      <CreateBoardForm />
     </CreateBoardDialog>
   )
 }
@@ -229,74 +193,3 @@ async function updateBoard(formData: FormData) {
   redirect('/boards')
 }
 
-async function createRoom(formData: FormData) {
-  'use server'
-
-  const { userId, orgId } = auth()
-  if (!userId) throw new Error('Not authenticated')
-
-  const roomPrefix = orgId ?? userId
-
-  const slug = formData.get('slug')
-  const title = String(formData.get('title') ?? 'New board')
-
-  if (!slug) throw new Error('No slug')
-
-  const roomId = `${roomPrefix}:${slug}`
-
-  if (!(await roomExists(roomId))) {
-    await liveblocks.createRoom(`${roomPrefix}:${slug}`, {
-      metadata: {
-        title,
-        createdOn: new Date().toISOString(),
-        createdBy: userId,
-      },
-      defaultAccesses: ['room:write'],
-    })
-
-    const pitchId = nanoid()
-    const scopeId = nanoid()
-    await liveblocks.initializeStorageDocument(roomId, {
-      liveblocksType: 'LiveObject',
-      data: {
-        tasks: { liveblocksType: 'LiveList', data: [] },
-        scopes: {
-          liveblocksType: 'LiveList',
-          data: [
-            {
-              liveblocksType: 'LiveObject',
-              data: {
-                id: scopeId,
-                pitchId,
-                title: 'First scope',
-                color: 'color-2',
-                core: true,
-              },
-            },
-          ],
-        },
-        pitches: {
-          liveblocksType: 'LiveList',
-          data: [
-            {
-              liveblocksType: 'LiveObject',
-              data: { id: pitchId, title: 'First pitch' },
-            },
-          ],
-        },
-        info: { liveblocksType: 'LiveObject', data: { name: 'New board' } },
-      },
-    })
-  }
-
-  redirect(`/boards/${slug}`)
-}
-
-async function roomExists(roomId: string) {
-  try {
-    await liveblocks.getRoom(roomId)
-    return true
-  } catch {
-    return false
-  }
-}
