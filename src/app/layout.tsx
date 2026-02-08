@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster'
 
 export const metadata: Metadata = {
   title: 'Cycles',
+  manifest: '/site.webmanifest',
 }
 
 export default function RootLayout({
