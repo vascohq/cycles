@@ -15,7 +15,7 @@ async function roomExists(roomId: string) {
 }
 
 export async function createRoom(formData: FormData) {
-  const { userId, orgId } = auth()
+  const { userId, orgId } = await auth()
   if (!userId) throw new Error('Not authenticated')
 
   const roomPrefix = orgId ?? userId
