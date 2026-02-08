@@ -1,4 +1,6 @@
-# 🌀 Cycles
+<p align="center">
+  <img src="public/logo-cycles.png" alt="Cycles" width="400" />
+</p>
 
 A project management tool built to support the [Shape Up](https://basecamp.com/shapeup) methodology, helping teams work in focused cycles with clear outcomes and visual progress tracking.
 
