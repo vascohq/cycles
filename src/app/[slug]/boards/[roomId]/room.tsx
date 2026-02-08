@@ -18,6 +18,7 @@ import {
   forwardRef,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { nanoid } from "nanoid";
@@ -162,23 +163,20 @@ function SelectedPitchRoomContent({
   const firstPitchId = useStorage(
     (root) => root.pitches.filter((pitch) => !pitch.archived).at(0)?.id ?? ""
   );
-  const [selectedPitchId, setSelectedPitchId] = useState<
-    string | undefined | null
-  >(null);
-
-  useEffect(() => {
+  const selectedPitchId = useMemo(() => {
+    if (typeof document === "undefined") return undefined;
     const hash = document.location.hash;
-    if (hash) {
-      setSelectedPitchId(hash.replace(/^#/, ""));
-    } else {
-      if (firstPitchId) {
-        history.replaceState(undefined, "", `#${firstPitchId}`);
-      }
-      setSelectedPitchId(firstPitchId);
-    }
+    if (hash) return hash.replace(/^#/, "");
+    return firstPitchId || undefined;
   }, [firstPitchId]);
 
-  if (selectedPitchId === null) return null;
+  useEffect(() => {
+    if (selectedPitchId && !document.location.hash) {
+      history.replaceState(undefined, "", `#${selectedPitchId}`);
+    }
+  }, [selectedPitchId]);
+
+  if (!selectedPitchId) return null;
 
   return (
     <SelectedPitchContextProvider initialSelectedPitchId={selectedPitchId}>
