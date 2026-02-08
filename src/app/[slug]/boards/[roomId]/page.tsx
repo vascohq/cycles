@@ -1,4 +1,4 @@
-import { Room } from '@/app/boards/[roomId]/room'
+import { Room } from '@/app/[slug]/boards/[roomId]/room'
 import { liveblocks } from '@/lib/liveblocks'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation'
 export default async function RoomPage({
   params,
 }: {
-  params: Promise<{ roomId: string }>
+  params: Promise<{ slug: string; roomId: string }>
 }) {
   const { roomId: slug } = await params
   const authResult = await auth()

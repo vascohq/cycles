@@ -23,7 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { UserAvatar } from '@/app/boards/[roomId]/user-avatar'
+import { UserAvatar } from '@/app/[slug]/boards/[roomId]/user-avatar'
 
 const getBgColorForTaskType = (taskType: TaskType | undefined) =>
   match(taskType)

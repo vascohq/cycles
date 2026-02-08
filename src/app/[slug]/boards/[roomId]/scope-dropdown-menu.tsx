@@ -1,7 +1,7 @@
 import {
   ScopeIcon,
   getScopeColorClasses,
-} from '@/app/boards/[roomId]/scope-icon'
+} from '@/app/[slug]/boards/[roomId]/scope-icon'
 import {
   Scope,
   ScopeColor,
@@ -28,7 +28,7 @@ import {
 import {
   useArchiveScopeMutation,
   useRestoreScopeMutation,
-} from '@/app/boards/[roomId]/pitch-view'
+} from '@/app/[slug]/boards/[roomId]/pitch-view'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { pick } from 'lodash'

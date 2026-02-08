@@ -5,17 +5,17 @@ import { auth } from '@clerk/nextjs/server'
 import { revalidatePath } from 'next/cache'
 
 export async function archiveBoard(roomId: string) {
-  const { orgId, userId } = await auth()
+  const { orgId, userId, orgSlug } = await auth()
   if (!roomId.startsWith(`${orgId ?? userId}:`)) throw new Error('Unauthorized')
 
   await liveblocks.updateRoom(roomId, { metadata: { archived: 'yes' } })
-  revalidatePath('/boards')
+  revalidatePath(`/${orgSlug ?? 'me'}/boards`)
 }
 
 export async function restoreBoard(roomId: string) {
-  const { orgId, userId } = await auth()
+  const { orgId, userId, orgSlug } = await auth()
   if (!roomId.startsWith(`${orgId ?? userId}:`)) throw new Error('Unauthorized')
 
   await liveblocks.updateRoom(roomId, { metadata: { archived: null } })
-  revalidatePath('/boards')
+  revalidatePath(`/${orgSlug ?? 'me'}/boards`)
 }

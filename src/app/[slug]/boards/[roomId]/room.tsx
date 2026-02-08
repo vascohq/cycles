@@ -8,7 +8,7 @@ import {
   useOthers,
   useStorage,
   useUpdateMyPresence,
-} from "../../../liveblocks.config";
+} from "../../../../liveblocks.config";
 import { LiveList, LiveObject } from "@liveblocks/client";
 import {
   CSSProperties,
@@ -37,7 +37,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import assert from "assert";
-import { PitchView } from "@/app/boards/[roomId]/pitch-view";
+import { PitchView } from "@/app/[slug]/boards/[roomId]/pitch-view";
 import { Button } from "@/components/ui/button";
 import {
   CircleAlert,
@@ -53,7 +53,7 @@ import { OrganizationUsersProvider } from "@/components/organization-users-conte
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { match } from "ts-pattern";
-import { UserAvatar } from "@/app/boards/[roomId]/user-avatar";
+import { UserAvatar } from "@/app/[slug]/boards/[roomId]/user-avatar";
 import { uniqBy } from "lodash";
 
 export function Room({

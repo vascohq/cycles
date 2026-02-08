@@ -3,7 +3,7 @@
 import {
   archiveBoard,
   restoreBoard,
-} from '@/app/boards/board-context-menu.actions'
+} from '@/app/[slug]/boards/board-context-menu.actions'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import {
