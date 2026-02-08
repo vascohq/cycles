@@ -1,7 +1,7 @@
 import {
   HoveredScopeContextProvider,
   PitchDashboardView,
-} from '@/app/boards/[roomId]/hill-chart'
+} from '@/app/[slug]/boards/[roomId]/hill-chart'
 import { Button } from '@/components/ui/button'
 import { DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {

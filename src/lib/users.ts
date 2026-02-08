@@ -14,7 +14,7 @@ export async function getOrganizationUsers(
   if (!organizationId) return []
 
   const { data: memberships } =
-    await clerkClient.organizations.getOrganizationMembershipList({
+    await (await clerkClient()).organizations.getOrganizationMembershipList({
       organizationId,
       limit: 100,
     })

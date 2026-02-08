@@ -15,7 +15,7 @@ async function roomExists(roomId: string) {
 }
 
 export async function createRoom(formData: FormData) {
-  const { userId, orgId } = await auth()
+  const { userId, orgId, orgSlug } = await auth()
   if (!userId) throw new Error('Not authenticated')
 
   const roomPrefix = orgId ?? userId
@@ -72,5 +72,5 @@ export async function createRoom(formData: FormData) {
     })
   }
 
-  redirect(`/boards/${slug}`)
+  redirect(`/${orgSlug ?? 'me'}/boards/${slug}`)
 }

@@ -5,7 +5,7 @@ import { DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { createRoom } from '@/app/boards/actions'
+import { createRoom } from '@/app/[slug]/boards/actions'
 
 export function toSlug(title: string) {
   return title

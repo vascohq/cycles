@@ -4,7 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toSlug, CreateBoardForm } from './create-board-form'
 
-vi.mock('@/app/boards/actions', () => ({
+vi.mock('@/app/[slug]/boards/actions', () => ({
   createRoom: vi.fn(),
 }))
 

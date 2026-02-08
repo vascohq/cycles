@@ -8,7 +8,7 @@ import {
   useOthers,
   useStorage,
   useUpdateMyPresence,
-} from "../../../liveblocks.config";
+} from "../../../../liveblocks.config";
 import { LiveList, LiveObject } from "@liveblocks/client";
 import {
   CSSProperties,
@@ -18,6 +18,7 @@ import {
   forwardRef,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { nanoid } from "nanoid";
@@ -37,7 +38,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import assert from "assert";
-import { PitchView } from "@/app/boards/[roomId]/pitch-view";
+import { PitchView } from "@/app/[slug]/boards/[roomId]/pitch-view";
 import { Button } from "@/components/ui/button";
 import {
   CircleAlert,
@@ -53,7 +54,7 @@ import { OrganizationUsersProvider } from "@/components/organization-users-conte
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { match } from "ts-pattern";
-import { UserAvatar } from "@/app/boards/[roomId]/user-avatar";
+import { UserAvatar } from "@/app/[slug]/boards/[roomId]/user-avatar";
 import { uniqBy } from "lodash";
 
 export function Room({
@@ -162,23 +163,20 @@ function SelectedPitchRoomContent({
   const firstPitchId = useStorage(
     (root) => root.pitches.filter((pitch) => !pitch.archived).at(0)?.id ?? ""
   );
-  const [selectedPitchId, setSelectedPitchId] = useState<
-    string | undefined | null
-  >(null);
-
-  useEffect(() => {
+  const selectedPitchId = useMemo(() => {
+    if (typeof document === "undefined") return undefined;
     const hash = document.location.hash;
-    if (hash) {
-      setSelectedPitchId(hash.replace(/^#/, ""));
-    } else {
-      if (firstPitchId) {
-        history.replaceState(undefined, "", `#${firstPitchId}`);
-      }
-      setSelectedPitchId(firstPitchId);
-    }
+    if (hash) return hash.replace(/^#/, "");
+    return firstPitchId || undefined;
   }, [firstPitchId]);
 
-  if (selectedPitchId === null) return null;
+  useEffect(() => {
+    if (selectedPitchId && !document.location.hash) {
+      history.replaceState(undefined, "", `#${selectedPitchId}`);
+    }
+  }, [selectedPitchId]);
+
+  if (!selectedPitchId) return null;
 
   return (
     <SelectedPitchContextProvider initialSelectedPitchId={selectedPitchId}>

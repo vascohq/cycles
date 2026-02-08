@@ -1,4 +1,4 @@
-import { ScopeIcon } from '@/app/boards/[roomId]/scope-icon'
+import { ScopeIcon } from '@/app/[slug]/boards/[roomId]/scope-icon'
 import { Scope, useMutation, useStorage } from '@/liveblocks.config'
 import { match } from 'ts-pattern'
 import { CSS } from '@dnd-kit/utilities'
@@ -28,7 +28,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu'
-import { useCreateScopeMutation } from '@/app/boards/[roomId]/pitch-view'
+import { useCreateScopeMutation } from '@/app/[slug]/boards/[roomId]/pitch-view'
 import { ScopeDropdownMenu } from './scope-dropdown-menu'
 import {
   Tooltip,

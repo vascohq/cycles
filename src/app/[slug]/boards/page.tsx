@@ -1,8 +1,8 @@
-import { ArchiveCollapsible } from '@/app/boards/[roomId]/archive-collapsible'
-import { BoardContextMenu } from '@/app/boards/board-context-menu'
-import { CreateBoardDialog } from '@/app/boards/create-board-dialog'
-import { CreateBoardForm } from '@/app/boards/create-board-form'
-import { OrganizationSelector } from '@/app/boards/organization-selector'
+import { ArchiveCollapsible } from '@/app/[slug]/boards/[roomId]/archive-collapsible'
+import { BoardContextMenu } from '@/app/[slug]/boards/board-context-menu'
+import { CreateBoardDialog } from '@/app/[slug]/boards/create-board-dialog'
+import { CreateBoardForm } from '@/app/[slug]/boards/create-board-form'
+import { OrganizationSelector } from '@/app/[slug]/boards/organization-selector'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -21,10 +21,18 @@ import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
-export default async function OrganizationsPage() {
+export default async function OrganizationsPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
   const authResult = await auth()
-  const { userId, orgId } = authResult
+  const { userId, orgId, orgSlug } = authResult
   if (!userId) return authResult.redirectToSignIn()
+
+  const urlSlug = orgSlug ?? 'me'
+  if (slug !== urlSlug) redirect(`/${urlSlug}/boards`)
 
   const roomPrefix = orgId ?? userId
   const { data: rooms } = await liveblocks.getRooms({
@@ -50,7 +58,7 @@ export default async function OrganizationsPage() {
       {activeRooms && (
         <ul className="border p-2 rounded-lg">
           {activeRooms.map((room) => (
-            <BoardListItem key={room.id} room={room} />
+            <BoardListItem key={room.id} room={room} orgSlug={slug} />
           ))}
         </ul>
       )}
@@ -61,7 +69,7 @@ export default async function OrganizationsPage() {
           >
             <ul className="border p-2 rounded-lg">
               {archivedRooms.map((room) => (
-                <BoardListItem key={room.id} room={room} />
+                <BoardListItem key={room.id} room={room} orgSlug={slug} />
               ))}
             </ul>
           </ArchiveCollapsible>
@@ -79,19 +87,19 @@ function CreateBoardButton({ roomPrefix }: { roomPrefix: string }) {
   )
 }
 
-async function BoardListItem({ room }: { room: RoomInfo }) {
+async function BoardListItem({ room, orgSlug }: { room: RoomInfo; orgSlug: string }) {
   const slug = room.id.split(':')[1]
   const createdOn = room.metadata.createdOn
     ? new Date(String(room.metadata.createdOn))
     : null
   const createdByUser = room.metadata.createdBy
-    ? await clerkClient.users.getUser(String(room.metadata.createdBy))
+    ? await (await clerkClient()).users.getUser(String(room.metadata.createdBy))
     : null
 
   return (
     <div className="p-2 hover:bg-muted flex gap-1">
       <div className="flex flex-col gap-1 flex-1">
-        <Link href={`/boards/${slug}`} className="text-sm font-semibold">
+        <Link href={`/${orgSlug}/boards/${slug}`} className="text-sm font-semibold">
           {room.metadata.title ?? 'No title'}
         </Link>
         <div className="text-muted-foreground text-xs">
@@ -158,7 +166,7 @@ async function BoardListItem({ room }: { room: RoomInfo }) {
 async function updateBoard(formData: FormData) {
   'use server'
 
-  const { userId, orgId } = await auth()
+  const { userId, orgId, orgSlug } = await auth()
   if (!userId) throw new Error('Not authenticated')
 
   const roomId = formData.get('roomId')
@@ -191,6 +199,6 @@ async function updateBoard(formData: FormData) {
     })
   }
 
-  redirect('/boards')
+  redirect(`/${orgSlug ?? 'me'}/boards`)
 }
 

@@ -38,15 +38,15 @@ import {
   Menu,
   Plus,
 } from "lucide-react";
-import { ArchiveCollapsible } from "@/app/boards/[roomId]/archive-collapsible";
+import { ArchiveCollapsible } from "@/app/[slug]/boards/[roomId]/archive-collapsible";
 import { TaskView } from "./task-view";
 import { match } from "ts-pattern";
-import { PitchDashboard } from "@/app/boards/[roomId]/hill-chart";
+import { PitchDashboard } from "@/app/[slug]/boards/[roomId]/hill-chart";
 import { ScopeIcon } from "./scope-icon";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { SnapshotsDialogContent } from "@/app/boards/[roomId]/snapshots-dialog";
+import { SnapshotsDialogContent } from "@/app/[slug]/boards/[roomId]/snapshots-dialog";
 import { countBy, uniq } from "lodash";
-import { ScopeDropdownMenu } from "@/app/boards/[roomId]/scope-dropdown-menu";
+import { ScopeDropdownMenu } from "@/app/[slug]/boards/[roomId]/scope-dropdown-menu";
 import { PitchDropdownMenu } from "./pitch-dropdown-menu";
 import { SidePanelCollapsedContext } from "./room";
 
