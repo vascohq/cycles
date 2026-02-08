@@ -85,7 +85,7 @@ async function BoardListItem({ room }: { room: RoomInfo }) {
     ? new Date(String(room.metadata.createdOn))
     : null
   const createdByUser = room.metadata.createdBy
-    ? await clerkClient.users.getUser(String(room.metadata.createdBy))
+    ? await (await clerkClient()).users.getUser(String(room.metadata.createdBy))
     : null
 
   return (
