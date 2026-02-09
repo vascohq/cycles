@@ -20,10 +20,11 @@ export async function createRoom(formData: FormData) {
 
   const roomPrefix = orgId ?? userId
 
-  const slug = formData.get('slug')
+  const slug = String(formData.get('slug') ?? '')
   const title = String(formData.get('title') ?? 'New board')
 
-  if (!slug) throw new Error('No slug')
+  if (!slug || !/^[a-zA-Z0-9_-]+$/.test(slug))
+    throw new Error('Invalid slug')
 
   const roomId = `${roomPrefix}:${slug}`
 
