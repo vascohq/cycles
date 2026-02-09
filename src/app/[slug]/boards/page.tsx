@@ -1,14 +1,10 @@
+import { updateBoard } from '@/app/[slug]/boards/actions'
 import { ArchiveCollapsible } from '@/app/[slug]/boards/[roomId]/archive-collapsible'
 import { BoardContextMenu } from '@/app/[slug]/boards/board-context-menu'
 import { CreateBoardDialog } from '@/app/[slug]/boards/create-board-dialog'
 import { CreateBoardForm } from '@/app/[slug]/boards/create-board-form'
 import { OrganizationSelector } from '@/app/[slug]/boards/organization-selector'
 import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import { DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,10 +12,13 @@ import { liveblocks } from '@/lib/liveblocks'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { RoomInfo } from '@liveblocks/node'
 import { groupBy } from 'lodash'
-import { Ellipsis } from 'lucide-react'
-import { revalidatePath } from 'next/cache'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+
+export const metadata: Metadata = {
+  title: 'Boards | Cycles',
+}
 
 export default async function OrganizationsPage({
   params,
@@ -44,6 +43,24 @@ export default async function OrganizationsPage({
     (room) => (room.metadata.archived ? 'archived' : 'active')
   )
 
+  // Batch-fetch all unique creator users to avoid N+1 queries
+  const allRooms = [...(activeRooms ?? []), ...(archivedRooms ?? [])]
+  const uniqueUserIds = [
+    ...new Set(
+      allRooms
+        .map((room) => room.metadata.createdBy)
+        .filter((id): id is string => Boolean(id))
+        .map(String)
+    ),
+  ]
+  const clerk = await clerkClient()
+  const users = await Promise.all(
+    uniqueUserIds.map((id) => clerk.users.getUser(id).catch(() => null))
+  )
+  const usersById = new Map(
+    uniqueUserIds.map((id, i) => [id, users[i]])
+  )
+
   return (
     <main className="mt-16 w-full max-w-screen-md mx-auto">
       <div className="mb-4 flex justify-between items-center">
@@ -58,7 +75,7 @@ export default async function OrganizationsPage({
       {activeRooms && (
         <ul className="border p-2 rounded-lg">
           {activeRooms.map((room) => (
-            <BoardListItem key={room.id} room={room} orgSlug={slug} />
+            <BoardListItem key={room.id} room={room} orgSlug={slug} usersById={usersById} />
           ))}
         </ul>
       )}
@@ -69,7 +86,7 @@ export default async function OrganizationsPage({
           >
             <ul className="border p-2 rounded-lg">
               {archivedRooms.map((room) => (
-                <BoardListItem key={room.id} room={room} orgSlug={slug} />
+                <BoardListItem key={room.id} room={room} orgSlug={slug} usersById={usersById} />
               ))}
             </ul>
           </ArchiveCollapsible>
@@ -87,13 +104,21 @@ function CreateBoardButton({ roomPrefix }: { roomPrefix: string }) {
   )
 }
 
-async function BoardListItem({ room, orgSlug }: { room: RoomInfo; orgSlug: string }) {
+function BoardListItem({
+  room,
+  orgSlug,
+  usersById,
+}: {
+  room: RoomInfo
+  orgSlug: string
+  usersById: Map<string, Awaited<ReturnType<Awaited<ReturnType<typeof clerkClient>>['users']['getUser']>> | null>
+}) {
   const slug = room.id.split(':')[1]
   const createdOn = room.metadata.createdOn
     ? new Date(String(room.metadata.createdOn))
     : null
   const createdByUser = room.metadata.createdBy
-    ? await (await clerkClient()).users.getUser(String(room.metadata.createdBy))
+    ? usersById.get(String(room.metadata.createdBy)) ?? null
     : null
 
   return (
@@ -163,42 +188,4 @@ async function BoardListItem({ room, orgSlug }: { room: RoomInfo; orgSlug: strin
   )
 }
 
-async function updateBoard(formData: FormData) {
-  'use server'
-
-  const { userId, orgId, orgSlug } = await auth()
-  if (!userId) throw new Error('Not authenticated')
-
-  const roomId = formData.get('roomId')
-  const title = String(formData.get('title'))
-  const slug = formData.get('slug')
-  const boardOrgId = formData.get('orgId')
-
-  if (!roomId || !String(roomId).startsWith(`${orgId ?? userId}:`)) {
-    throw new Error('Unauthorized')
-  }
-
-  const room = await liveblocks.getRoom(String(roomId))
-
-  if (title !== room.metadata.title) {
-    await liveblocks.updateRoom(String(roomId), {
-      metadata: {
-        createdBy: userId,
-        createdOn: new Date().toISOString(),
-        ...room.metadata,
-        title,
-      },
-    })
-  }
-
-  const newRoomId = `${boardOrgId}:${slug}`
-  if (newRoomId !== roomId) {
-    await liveblocks.updateRoomId({
-      currentRoomId: String(roomId),
-      newRoomId: `${boardOrgId}:${slug}`,
-    })
-  }
-
-  redirect(`/${orgSlug ?? 'me'}/boards`)
-}
 

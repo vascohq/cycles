@@ -3,12 +3,10 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { userId, orgId } = await auth()
+  const [{ userId, orgId }, user] = await Promise.all([auth(), currentUser()])
   if (!userId) {
     return new NextResponse('Unauthorized', { status: 401 })
   }
-
-  const user = await currentUser()
 
   // Start an auth session inside your endpoint
   const session = liveblocks.prepareSession(userId, {
