@@ -75,3 +75,40 @@ export async function createRoom(formData: FormData) {
 
   redirect(`/${orgSlug ?? 'me'}/boards/${slug}`)
 }
+
+export async function updateBoard(formData: FormData) {
+  const { userId, orgId, orgSlug } = await auth()
+  if (!userId) throw new Error('Not authenticated')
+
+  const roomId = formData.get('roomId')
+  const title = String(formData.get('title'))
+  const slug = formData.get('slug')
+  const boardOrgId = formData.get('orgId')
+
+  if (!roomId || !String(roomId).startsWith(`${orgId ?? userId}:`)) {
+    throw new Error('Unauthorized')
+  }
+
+  const room = await liveblocks.getRoom(String(roomId))
+
+  if (title !== room.metadata.title) {
+    await liveblocks.updateRoom(String(roomId), {
+      metadata: {
+        createdBy: userId,
+        createdOn: new Date().toISOString(),
+        ...room.metadata,
+        title,
+      },
+    })
+  }
+
+  const newRoomId = `${boardOrgId}:${slug}`
+  if (newRoomId !== roomId) {
+    await liveblocks.updateRoomId({
+      currentRoomId: String(roomId),
+      newRoomId: `${boardOrgId}:${slug}`,
+    })
+  }
+
+  redirect(`/${orgSlug ?? 'me'}/boards`)
+}
