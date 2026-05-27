@@ -74,3 +74,9 @@
       @apply bg-background text-foreground;
     }
   }
+
+  @media (min-width: 980px) {
+    .mc-row {
+      grid-template-columns: 320px 1fr;
+    }
+  }
