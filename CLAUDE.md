@@ -68,3 +68,17 @@ Real-time state lives in Liveblocks (accessed via hooks from `src/liveblocks.con
 - Slug validation: `/^[a-zA-Z0-9_-]+$/` (no slashes, dots, or encoded characters — prevents open redirects)
 - Room IDs: `{orgPrefix}:{slug}` where orgPrefix is orgId or userId
 - CSS theming via HSL CSS variables; dark mode via class strategy
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as GitHub Issues on `vascohq/cycles`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
