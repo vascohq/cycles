@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import type { Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
-import { deriveZone, clampProgress } from '@/lib/needle-engine'
+import { clampProgress } from '@/lib/needle-engine'
 import { ZONE_COLORS, NULL_COLOR } from './zone-colors'
 
 const ARC_SAMPLES = 200

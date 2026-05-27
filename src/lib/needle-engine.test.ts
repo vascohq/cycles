@@ -1,32 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { deriveZone, snapForZone, clampProgress, deriveGhost } from './needle-engine'
+import { snapForZone, clampProgress, deriveGhost } from './needle-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
-
-describe('deriveZone', () => {
-  it('returns concerned for progress 0', () => {
-    expect(deriveZone(0)).toBe('concerned')
-  })
-
-  it('returns concerned for progress just below 0.33', () => {
-    expect(deriveZone(0.32)).toBe('concerned')
-  })
-
-  it('returns some_risk at exactly 0.33', () => {
-    expect(deriveZone(0.33)).toBe('some_risk')
-  })
-
-  it('returns some_risk for progress just below 0.66', () => {
-    expect(deriveZone(0.65)).toBe('some_risk')
-  })
-
-  it('returns on_track at exactly 0.66', () => {
-    expect(deriveZone(0.66)).toBe('on_track')
-  })
-
-  it('returns on_track for progress 1.0', () => {
-    expect(deriveZone(1.0)).toBe('on_track')
-  })
-})
 
 describe('snapForZone', () => {
   it('snaps on_track to 0.85', () => {

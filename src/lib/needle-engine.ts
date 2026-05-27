@@ -1,11 +1,5 @@
 import type { Zone, NeedleSnapshot, PitchUpdate } from '@/cycle-liveblocks.config'
 
-export function deriveZone(progress: number): Zone {
-  if (progress < 0.33) return 'concerned'
-  if (progress < 0.66) return 'some_risk'
-  return 'on_track'
-}
-
 const SNAP_VALUES: Record<Zone, number> = {
   on_track: 0.85,
   some_risk: 0.5,
