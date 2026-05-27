@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
+import { Gloria_Hallelujah } from 'next/font/google'
 import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
+
+const gloria = Gloria_Hallelujah({ weight: '400', subsets: ['latin'], variable: '--font-gloria' })
 
 export const metadata: Metadata = {
   title: 'Cycles',
@@ -17,7 +20,7 @@ export default function RootLayout({
   return (
     <ClerkProvider dynamic>
       <html lang="en" suppressHydrationWarning>
-        <body className="flex flex-col min-h-[100dvh]">
+        <body className={`flex flex-col min-h-[100dvh] ${gloria.variable}`}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

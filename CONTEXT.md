@@ -1,0 +1,131 @@
+# Cycles
+
+Cycles is a Shape Up project management tool. Teams work in fixed time-boxed cycles, shape pitches with clear problem/outcome frames, break work into vertical-slice scopes, and move the needle each week to communicate how things are going.
+
+## Language
+
+### Containers
+
+**Cycle**:
+A time-boxed period of work containing pitches. Either a build cycle (6 weeks) or a cooldown (2 weeks).
+_Avoid_: Sprint, iteration, board
+
+**Cooldown**:
+A short cycle (typically 2 weeks) between build cycles for small fixes and exploration. Pitches in a cooldown skip to the building stage.
+_Avoid_: Buffer, break, maintenance window
+
+### Pitch lifecycle
+
+**Pitch**:
+A shaped piece of work within a cycle. Has a stage, timebox, frame, scopes, and a needle.
+_Avoid_: Project, epic, initiative, ticket
+
+**Stage**:
+A pitch's current lifecycle phase: `framing`, `shaping`, `building`, `done`. Can move forward or backward. Cooldown pitches start at `building`.
+_Avoid_: Status (ambiguous — see Flagged ambiguities)
+
+**Frame**:
+The problem/outcome definition of a pitch. Two columns: Problem (why this matters) and Outcome (what success looks like). "Frame Go" means both are defined.
+_Avoid_: Brief, requirements, spec, PRD
+
+**Timebox**:
+The fixed time boundary of a pitch. Has start and end dates. Visualized as a tape-measure strip with day ticks and a "today" marker.
+_Avoid_: Deadline, due date, sprint length
+
+### The Needle
+
+**Needle**:
+The team's subjective impression of how a pitch is going. A position on an arc (0..1) plus a zone. Intentionally manual — never calculated from scope progress.
+_Avoid_: Gauge, status indicator, health check
+
+**Zone**:
+The needle's sentiment: `on_track`, `some_risk`, or `concerned`. Rendered as color (green, yellow, red). A null needle (not yet set) renders as grey.
+_Avoid_: Status, RAG status, health
+
+**Move the Needle**:
+The action of updating a pitch's needle and posting a narrative update to Slack. Can happen any day but follows a Tuesday cadence. Always creates an immutable update — never edits a previous one.
+_Avoid_: Check-in, standup, status update
+
+### Scopes and tasks
+
+**Scope**:
+A vertical slice of work within a pitch. Has a tier, litmus text, hill progress, and tasks.
+_Avoid_: Story, work item, feature
+
+**Tier**:
+A scope's intrinsic priority: `must`, `should`, or `could`. Encoded as color (red, orange, grey). Independent of build order — reordering scopes does not change their tier.
+_Avoid_: Priority level, P0/P1/P2, severity
+
+**Litmus Text**:
+A scope's "if only this ships" statement. Tests whether the scope is a meaningful vertical slice that delivers value on its own.
+_Avoid_: Description, acceptance criteria, definition of done
+
+**Hill Progress**:
+A scope's position on the hill chart (0..1). Left side (0–0.5) = figuring it out (unknown). Right side (0.5–1.0) = figured out, making it happen (known). Updated by dragging dots.
+_Avoid_: Completion percentage, progress bar
+
+**Hill Chart**:
+Visualization of all scopes' hill progress on a hill-shaped curve. Each scope is a numbered, tier-colored dot. Left = unknown, right = known.
+_Avoid_: Burndown, velocity chart
+
+**Task**:
+A checklist item within a scope. Binary: done or not done. No assignee, no type, no intermediate states.
+_Avoid_: Subtask, to-do, issue, ticket
+
+**Parking Lot**:
+Open decisions on a pitch that need resolving but aren't scopes. Not work items — questions and choices.
+_Avoid_: Backlog, blockers, open questions list
+
+### Updates
+
+**Update**:
+An immutable record of a needle move. Contains the zone, needle progress, narrative text, and snapshots of all hill positions and task counts at post time. Posted to a shared Slack channel. Updates are always appended, never edited.
+_Avoid_: Check-in, standup note, status report
+
+**Needle Snapshot**:
+The needle's progress and zone frozen at the time an update was posted. Used to render the "ghost" showing where the needle was at the last update.
+_Avoid_: Previous state
+
+**Hill Snapshot**:
+All scopes' hill progress values frozen at the time an update was posted. Captured in v1 for future diff rendering in v2.
+_Avoid_: Scope snapshot (conflicts with existing PitchSnapshot)
+
+### Views
+
+**Mission Control**:
+The overview surface showing all pitches in a cycle. Each pitch renders as a card with a mini needle, timebox tape, stage badge, and context note.
+_Avoid_: Dashboard, board listing, overview page
+
+**Scope Map**:
+The per-pitch detail view. Shows hero card, needle, hill chart, scope grid, updates timeline, and parking lot.
+_Avoid_: Pitch detail, pitch page
+
+## Relationships
+
+- A **Cycle** contains one or more **Pitches**
+- A **Pitch** has one **Needle** (nullable until first set), one **Timebox**, and one **Stage**
+- A **Pitch** contains zero or more **Scopes** and zero or more **Parking Lot** items
+- A **Scope** has one **Tier** and one **Hill Progress** value
+- A **Scope** contains zero or more **Tasks**
+- An **Update** belongs to one **Pitch** and captures a **Needle Snapshot** and a **Hill Snapshot**
+- **Mission Control** renders all **Pitches** in a **Cycle**
+- **Scope Map** renders one **Pitch** in detail
+- A **Cycle** has one Slack channel; all pitch **Updates** in that cycle post there
+
+## Example dialogue
+
+> **Dev:** "When a team moves the **Needle** to *concerned*, does that change the **Pitch**'s **Stage**?"
+> **Domain expert:** "No — the **Needle** reflects the team's subjective impression. **Stage** tracks the lifecycle phase (framing → shaping → building → done). A pitch can be *on_track* in building or *concerned* in shaping — they're independent."
+
+> **Dev:** "If I reorder scopes, does the first scope become a **Must**?"
+> **Domain expert:** "No. **Tier** is intrinsic priority — it doesn't change when you reorder. The number on the dot is build order, the color is tier. They're independent signals."
+
+> **Dev:** "Can someone edit a Tuesday **Update** after posting?"
+> **Domain expert:** "No. **Updates** are immutable. If something changes, post a new one. The timeline tells the honest story of how the team felt over time."
+
+## Flagged ambiguities
+
+- **"status"** was used to mean both **Stage** (framing/shaping/building/done) and **Zone** (on_track/some_risk/concerned). Resolved: use "stage" for the pitch lifecycle phase, "zone" for the needle sentiment. Never use "status" unqualified.
+- **"progress"** was used to mean both **Hill Progress** (scope-level, position on hill chart) and **Needle** progress (pitch-level, position on arc). Resolved: always qualify — "hill progress" for scopes, "needle progress" for the pitch-level arc position.
+- **"snapshot"** was used for the existing `PitchSnapshot` type (legacy board feature) and for the new update snapshots. Resolved: the legacy type is retired. New terms are **Needle Snapshot** and **Hill Snapshot**, both part of an **Update**.
+- **"color"** was used for tier color (red/orange/grey on scope dots) and zone color (green/yellow/red on the needle). These overlap on red. Resolved: context distinguishes them — tier colors appear on scope dots and cards, zone colors appear on the needle and update cards. Tier red = highest priority, zone red = concerned.

@@ -1,0 +1,98 @@
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { useState } from 'react'
+import { HillChart, type HillScope } from './hill-chart'
+
+const meta = {
+  title: 'HillChart/HillChart',
+  component: HillChart,
+  parameters: { layout: 'centered' },
+} satisfies Meta<typeof HillChart>
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+const SAMPLE_SCOPES: HillScope[] = [
+  { id: '1', title: 'Auth flow', tier: 'must', hill_progress: 0.15, order: 1 },
+  { id: '2', title: 'Dashboard', tier: 'must', hill_progress: 0.4, order: 2 },
+  { id: '3', title: 'Notifications', tier: 'should', hill_progress: 0.6, order: 3 },
+  { id: '4', title: 'Dark mode', tier: 'could', hill_progress: 0.85, order: 4 },
+]
+
+export const Default: Story = {
+  args: {
+    scopes: SAMPLE_SCOPES,
+  },
+}
+
+export const Empty: Story = {
+  args: {
+    scopes: [],
+  },
+}
+
+export const SingleScope: Story = {
+  args: {
+    scopes: [
+      { id: '1', title: 'Only scope', tier: 'must', hill_progress: 0.5, order: 1 },
+    ],
+  },
+}
+
+export const AllAtStart: Story = {
+  args: {
+    scopes: [
+      { id: '1', title: 'Scope A', tier: 'must', hill_progress: 0.05, order: 1 },
+      { id: '2', title: 'Scope B', tier: 'should', hill_progress: 0.1, order: 2 },
+      { id: '3', title: 'Scope C', tier: 'could', hill_progress: 0.15, order: 3 },
+    ],
+  },
+}
+
+export const AllDone: Story = {
+  args: {
+    scopes: [
+      { id: '1', title: 'Scope A', tier: 'must', hill_progress: 0.9, order: 1 },
+      { id: '2', title: 'Scope B', tier: 'should', hill_progress: 0.92, order: 2 },
+      { id: '3', title: 'Scope C', tier: 'could', hill_progress: 0.95, order: 3 },
+    ],
+  },
+}
+
+export const Highlighted: Story = {
+  args: {
+    scopes: SAMPLE_SCOPES,
+    highlightedScopeId: '2',
+  },
+}
+
+export const Interactive: Story = {
+  args: { scopes: [] },
+  render: () => {
+    const [scopes, setScopes] = useState<HillScope[]>(SAMPLE_SCOPES)
+    const [highlighted, setHighlighted] = useState<string | null>(null)
+
+    return (
+      <div className="w-[500px]">
+        <HillChart
+          scopes={scopes}
+          highlightedScopeId={highlighted}
+          onScopeHover={setHighlighted}
+          onHillProgressChange={(scopeId, progress) => {
+            setScopes((prev) =>
+              prev.map((s) =>
+                s.id === scopeId ? { ...s, hill_progress: progress } : s
+              )
+            )
+          }}
+        />
+        <div className="mt-4 text-xs text-muted-foreground space-y-1">
+          {scopes.map((s) => (
+            <div key={s.id} className={highlighted === s.id ? 'font-bold' : ''}>
+              {s.order}. {s.title}: {(s.hill_progress * 100).toFixed(0)}%
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  },
+}

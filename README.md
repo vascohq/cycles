@@ -57,7 +57,7 @@ Navigate to [http://localhost:3000](http://localhost:3000) to see the applicatio
 
 ## Built With
 
-- [Next.js 15](https://nextjs.org/) - React framework
+- [Next.js 16](https://nextjs.org/) - React framework
 - [React 19](https://react.dev/) - UI library
 - [TypeScript](https://www.typescriptlang.org/) - Type safety
 
@@ -65,3 +65,7 @@ Navigate to [http://localhost:3000](http://localhost:3000) to see the applicatio
 
 - [Shape Up Book](https://basecamp.com/shapeup) - The complete guide to the Shape Up methodology
 - [Hill Charts](https://basecamp.com/features/hill-charts) - Understanding progress visualization
+
+## Credits
+
+Originally based on [scastiel/cycles](https://github.com/scastiel/cycles).
