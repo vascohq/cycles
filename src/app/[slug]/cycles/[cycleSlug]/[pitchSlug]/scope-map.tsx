@@ -23,10 +23,12 @@ import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage, Zone, PitchUpdate } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
+import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useSlackEnabled } from '@/components/slack-config-context'
+import { slugify } from '@/lib/slugify'
 import { useCallback } from 'react'
 
 type ScopeMapProps = {
@@ -94,9 +96,9 @@ function ScopeMapWired({
     const bySlug = root.pitches.find(
       (p) =>
         p.id === pitchSlug ||
-        p.title.toLowerCase().replace(/\s+/g, '-') === pitchSlug
+        slugify(p.title) === pitchSlug
     )
-    return bySlug ?? root.pitches[0] ?? null
+    return bySlug ?? null
   })
   const allScopes = useCycleStorage((root) => [...root.scopes])
   const allTasks = useCycleStorage((root) => [...root.tasks])
@@ -144,6 +146,29 @@ function ScopeMapWired({
     []
   )
 
+  const onAddTask = useCycleMutation(
+    ({ storage }, scopeId: string, title: string) => {
+      const task: ScopeTask = { id: nanoid(), scopeId, title, done: false }
+      storage.get('tasks').push(new LiveObject(task))
+    },
+    []
+  )
+
+  const onAddScope = useCycleMutation(
+    ({ storage }, title: string, tier: string) => {
+      const scope: CycleScope = {
+        id: nanoid(),
+        pitchId,
+        title,
+        tier: tier as CycleScope['tier'],
+        litmus_text: '',
+        hill_progress: 0,
+      }
+      storage.get('scopes').push(new LiveObject(scope))
+    },
+    [pitchId]
+  )
+
   const onScopeReorder = useCycleMutation(
     ({ storage }, activeId: string, overId: string) => {
       const scopesList = storage.get('scopes')
@@ -173,6 +198,35 @@ function ScopeMapWired({
       for (let i = 0; i < tasksList.length; i++) {
         const task = tasksList.get(i)!
         if (task.get('scopeId') === scopeId) task.set('done', false)
+      }
+    },
+    []
+  )
+
+  const onEditScope = useCycleMutation(
+    ({ storage }, scopeId: string, newTitle: string, newTier: string) => {
+      const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
+      if (!scope) return
+      scope.set('title', newTitle)
+      scope.set('tier', newTier as CycleScope['tier'])
+    },
+    []
+  )
+
+  const onDeleteScope = useCycleMutation(
+    ({ storage }, scopeId: string) => {
+      const tasksList = storage.get('tasks')
+      for (let i = tasksList.length - 1; i >= 0; i--) {
+        if (tasksList.get(i)!.get('scopeId') === scopeId) {
+          tasksList.delete(i)
+        }
+      }
+      const scopesList = storage.get('scopes')
+      for (let i = scopesList.length - 1; i >= 0; i--) {
+        if (scopesList.get(i)!.get('id') === scopeId) {
+          scopesList.delete(i)
+          break
+        }
       }
     },
     []
@@ -353,6 +407,10 @@ function ScopeMapWired({
       onNeedleProgressChange={onNeedleProgressChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
+      onAddTask={onAddTask}
+      onAddScope={onAddScope}
+      onEditScope={onEditScope}
+      onDeleteScope={onDeleteScope}
       onScopeReorder={onScopeReorder}
       onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}

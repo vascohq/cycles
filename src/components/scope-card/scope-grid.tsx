@@ -19,24 +19,33 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { ScopeCard, type ScopeCardProps } from './scope-card'
 
-type ScopeGridItem = Omit<ScopeCardProps, 'dragHandleProps' | 'isDragging'>
+type ScopeGridItem = Omit<ScopeCardProps, 'dragHandleProps' | 'isDragging' | 'onEdit' | 'onDelete'>
 
 type ScopeGridProps = {
   scopes: ScopeGridItem[]
   onReorder?: (activeId: string, overId: string) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
+  onAddTask?: (scopeId: string, title: string) => void
   onReset?: (scopeId: string) => void
+  onEditScope?: (scopeId: string) => void
+  onDeleteScope?: (scopeId: string) => void
   readOnly?: boolean
 }
 
 function SortableScopeCard({
   scope,
   onTaskToggle,
+  onAddTask,
   onReset,
+  onEdit,
+  onDelete,
 }: {
   scope: ScopeGridItem
   onTaskToggle?: (taskId: string, done: boolean) => void
+  onAddTask?: (title: string) => void
   onReset?: () => void
+  onEdit?: () => void
+  onDelete?: () => void
 }) {
   const {
     attributes,
@@ -59,7 +68,10 @@ function SortableScopeCard({
         dragHandleProps={listeners}
         isDragging={isDragging}
         onTaskToggle={onTaskToggle}
+        onAddTask={onAddTask}
         onReset={onReset}
+        onEdit={onEdit}
+        onDelete={onDelete}
       />
     </div>
   )
@@ -69,7 +81,10 @@ export function ScopeGrid({
   scopes,
   onReorder,
   onTaskToggle,
+  onAddTask,
   onReset,
+  onEditScope,
+  onDeleteScope,
   readOnly,
 }: ScopeGridProps) {
   const sensors = useSensors(
@@ -118,7 +133,14 @@ export function ScopeGrid({
                   ? (taskId, done) => onTaskToggle(scope.id, taskId, done)
                   : undefined
               }
+              onAddTask={
+                onAddTask
+                  ? (title) => onAddTask(scope.id, title)
+                  : undefined
+              }
               onReset={onReset ? () => onReset(scope.id) : undefined}
+              onEdit={onEditScope ? () => onEditScope(scope.id) : undefined}
+              onDelete={onDeleteScope ? () => onDeleteScope(scope.id) : undefined}
             />
           ))}
         </div>

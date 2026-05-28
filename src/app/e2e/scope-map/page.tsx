@@ -4,6 +4,7 @@ import { ScopeMapView } from '@/components/scope-map'
 import { FIXTURE } from './fixture'
 import { useState } from 'react'
 import type { Stage } from '@/cycle-liveblocks.config'
+import { nanoid } from 'nanoid'
 
 export default function ScopeMapE2EPage() {
   const [pitch, setPitch] = useState(FIXTURE.pitch)
@@ -33,6 +34,31 @@ export default function ScopeMapE2EPage() {
               : s
           )
         )
+      }
+      onAddScope={(title, tier) =>
+        setScopeGridItems((items) => [
+          ...items,
+          {
+            id: nanoid(),
+            order: items.length + 1,
+            title,
+            tier: tier as 'must' | 'should' | 'could',
+            litmus_text: '',
+            tasks: [],
+          },
+        ])
+      }
+      onEditScope={(scopeId, title, tier) =>
+        setScopeGridItems((items) =>
+          items.map((s) =>
+            s.id === scopeId
+              ? { ...s, title, tier: tier as 'must' | 'should' | 'could' }
+              : s
+          )
+        )
+      }
+      onDeleteScope={(scopeId) =>
+        setScopeGridItems((items) => items.filter((s) => s.id !== scopeId))
       }
       onParkingToggle={(itemId, resolved) =>
         setParkingLotItems((items) =>

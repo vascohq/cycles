@@ -1,4 +1,5 @@
 import { liveblocks } from '@/lib/liveblocks'
+import { slugify } from '@/lib/slugify'
 import type {
   Cycle,
   CyclePitch,
@@ -23,10 +24,6 @@ export type StorageJson = {
   tasks: ScopeTask[]
   updates: PitchUpdate[]
   parkingItems: ParkingItem[]
-}
-
-export function slugify(title: string): string {
-  return title.toLowerCase().replace(/\s+/g, '-')
 }
 
 export async function listCycleRooms(orgId: string): Promise<CycleSummary[]> {

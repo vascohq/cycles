@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { fn } from 'storybook/test'
 import { ScopeCard } from './scope-card'
 
 const meta = {
@@ -106,5 +107,32 @@ export const NoLitmus: Story = {
     tier: 'could',
     litmus_text: '',
     tasks: [{ id: 't1', title: 'Some task', done: false }],
+  },
+}
+
+export const WithActions: Story = {
+  args: {
+    id: 's8',
+    order: 1,
+    title: 'Editable scope',
+    tier: 'must',
+    litmus_text: 'Users can edit and delete this scope',
+    tasks: SAMPLE_TASKS,
+    onEdit: fn(),
+    onDelete: fn(),
+  },
+}
+
+export const ActionsReadOnly: Story = {
+  args: {
+    id: 's9',
+    order: 1,
+    title: 'Locked scope',
+    tier: 'must',
+    litmus_text: 'This scope is done — no actions menu',
+    tasks: SAMPLE_TASKS,
+    onEdit: fn(),
+    onDelete: fn(),
+    readOnly: true,
   },
 }

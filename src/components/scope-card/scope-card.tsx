@@ -1,9 +1,15 @@
 'use client'
 
-import { forwardRef } from 'react'
+import { forwardRef, useState } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { TIER_COLORS } from '@/components/hill-chart/tier-colors'
-import { Check } from 'lucide-react'
+import { Check, Plus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export type ScopeCardTask = {
   id: string
@@ -19,7 +25,10 @@ export type ScopeCardProps = {
   litmus_text: string
   tasks: ScopeCardTask[]
   onTaskToggle?: (taskId: string, done: boolean) => void
+  onAddTask?: (title: string) => void
   onReset?: () => void
+  onEdit?: () => void
+  onDelete?: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
   isDragging?: boolean
   readOnly?: boolean
@@ -34,7 +43,10 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       litmus_text,
       tasks,
       onTaskToggle,
+      onAddTask,
       onReset,
+      onEdit,
+      onDelete,
       dragHandleProps,
       isDragging,
       readOnly,
@@ -72,6 +84,9 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
               </p>
             )}
           </div>
+          {!readOnly && (onEdit || onDelete) && (
+            <ScopeActions onEdit={onEdit} onDelete={onDelete} />
+          )}
         </div>
 
         {tasks.length > 0 && (
@@ -112,6 +127,10 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
           </div>
         )}
 
+        {onAddTask && !readOnly && (
+          <AddTaskInput onAddTask={onAddTask} />
+        )}
+
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
             {doneCount}/{totalCount} done
@@ -130,3 +149,82 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     )
   }
 )
+
+function ScopeActions({
+  onEdit,
+  onDelete,
+}: {
+  onEdit?: () => void
+  onDelete?: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Scope actions"
+          className="flex-shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-36">
+        {onEdit && (
+          <DropdownMenuItem onClick={onEdit}>
+            <Pencil className="w-3.5 h-3.5 mr-2" />
+            Edit
+          </DropdownMenuItem>
+        )}
+        {onDelete && (
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
+  const [value, setValue] = useState('')
+  const [active, setActive] = useState(false)
+
+  function handleSubmit() {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    onAddTask(trimmed)
+    setValue('')
+  }
+
+  if (!active) {
+    return (
+      <button
+        type="button"
+        onClick={() => setActive(true)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors py-0.5"
+      >
+        <Plus className="w-3 h-3" />
+        add task
+      </button>
+    )
+  }
+
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') handleSubmit()
+        if (e.key === 'Escape') { setValue(''); setActive(false) }
+      }}
+      onBlur={() => { handleSubmit(); setActive(false) }}
+      placeholder="Task title…"
+      className="w-full text-xs bg-transparent border-b border-foreground/10 focus:border-foreground/30 py-1 outline-none placeholder:text-muted-foreground/40"
+      autoFocus
+    />
+  )
+}
