@@ -17,6 +17,7 @@ import type { PitchCard } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
+import { slugify } from '@/lib/slugify'
 
 const STAGE_BADGE_STYLES: Record<Stage, string> = {
   framing: 'bg-muted text-muted-foreground',
@@ -199,7 +200,7 @@ function PitchCardItem({
   today: string
   delay: number
 }) {
-  const pitchSlug = card.title.toLowerCase().replace(/\s+/g, '-')
+  const pitchSlug = slugify(card.title)
   const zoneLabel = card.needle
     ? card.needle.zone.replace('_', ' ')
     : null

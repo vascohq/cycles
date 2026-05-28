@@ -28,6 +28,7 @@ import { LiveObject } from '@liveblocks/client'
 import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useSlackEnabled } from '@/components/slack-config-context'
+import { slugify } from '@/lib/slugify'
 import { useCallback } from 'react'
 
 type ScopeMapProps = {
@@ -95,9 +96,9 @@ function ScopeMapWired({
     const bySlug = root.pitches.find(
       (p) =>
         p.id === pitchSlug ||
-        p.title.toLowerCase().replace(/\s+/g, '-') === pitchSlug
+        slugify(p.title) === pitchSlug
     )
-    return bySlug ?? root.pitches[0] ?? null
+    return bySlug ?? null
   })
   const allScopes = useCycleStorage((root) => [...root.scopes])
   const allTasks = useCycleStorage((root) => [...root.tasks])

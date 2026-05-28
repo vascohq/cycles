@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { listCycleRooms, getCycleStorage, resolvePitch, slugify } from './liveblocks-reader'
+import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
 
 vi.mock('@/lib/liveblocks', () => ({
   liveblocks: {
@@ -12,16 +12,6 @@ import { liveblocks } from '@/lib/liveblocks'
 
 const mockGetRooms = vi.mocked(liveblocks.getRooms)
 const mockGetStorage = vi.mocked(liveblocks.getStorageDocument)
-
-describe('slugify', () => {
-  it('lowercases and replaces spaces with hyphens', () => {
-    expect(slugify('Mission Control')).toBe('mission-control')
-  })
-
-  it('collapses multiple spaces', () => {
-    expect(slugify('A  B   C')).toBe('a-b-c')
-  })
-})
 
 describe('listCycleRooms', () => {
   beforeEach(() => {
@@ -114,5 +104,18 @@ describe('resolvePitch', () => {
 
   it('returns undefined when not found', () => {
     expect(resolvePitch(storage, 'no-such-pitch')).toBeUndefined()
+  })
+
+  it('resolves a title with special characters via its cleaned slug', () => {
+    const storageWithSpecialChars = {
+      ...storage,
+      pitches: [
+        ...storage.pitches,
+        { id: 'p3', title: 'Agentic Capabilities (Skills & Tools)', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '' },
+      ],
+    }
+    expect(
+      resolvePitch(storageWithSpecialChars, 'agentic-capabilities-skills-tools')
+    ).toEqual(storageWithSpecialChars.pitches[2])
   })
 })
