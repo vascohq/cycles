@@ -18,7 +18,6 @@ export const Default: Story = {
     weekLabel: 'Week 3 of 6',
     dateLabel: 'May 27, 2025',
     userName: 'Seb',
-    channelName: 'product-general',
     pitchTitle: 'Mission Control',
     tasksDone: 9,
     tasksTotal: 13,
@@ -50,7 +49,6 @@ export const Interactive: Story = {
           weekLabel="Week 3 of 6"
           dateLabel="May 27, 2025"
           userName="Seb"
-          channelName="product-general"
           pitchTitle="Mission Control"
           tasksDone={9}
           tasksTotal={13}

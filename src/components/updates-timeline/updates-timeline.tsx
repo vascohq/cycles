@@ -7,17 +7,16 @@ import { cn } from '@/lib/utils'
 
 export type UpdatesTimelineProps = {
   cards: TimelineCard[]
-  channelName: string
   onRetrySlack?: (updateId: string) => void
 }
 
-export function UpdatesTimeline({ cards, channelName, onRetrySlack }: UpdatesTimelineProps) {
+export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
   return (
     <section className="flex flex-col gap-4">
       <div>
         <h2 className="font-gloria text-[32px]">Updates</h2>
         <p className="text-xs font-mono text-muted-foreground">
-          Posted Tuesdays to #{channelName}
+          Posted Tuesdays to Slack
         </p>
       </div>
 

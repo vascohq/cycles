@@ -35,11 +35,9 @@ export default async function MissionControlPage({ params }: PageParams) {
   const roomId = `${roomPrefix}:cycle:${cycleSlug}`
 
   let cycleTitle: string
-  let channelName: string
   try {
     const room = await liveblocks.getRoom(roomId)
     cycleTitle = String(room.metadata.title)
-    channelName = String(room.metadata.slack_channel || 'general')
   } catch {
     notFound()
   }
@@ -51,7 +49,6 @@ export default async function MissionControlPage({ params }: PageParams) {
       roomId={roomId}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle!}
-      channelName={channelName!}
       slug={slug}
       organizationUsers={users}
     />

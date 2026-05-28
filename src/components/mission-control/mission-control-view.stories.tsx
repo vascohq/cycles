@@ -78,7 +78,6 @@ export const Default: Story = {
     slug: 'acme',
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
-    channelName: 'product-general',
     today: '2025-01-27',
     inFlight: inFlightCards,
     done: doneCards,
@@ -90,7 +89,6 @@ export const Empty: Story = {
     slug: 'acme',
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
-    channelName: 'product-general',
     today: '2025-01-27',
     inFlight: [],
     done: [],
@@ -102,7 +100,6 @@ export const AllDone: Story = {
     slug: 'acme',
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
-    channelName: 'product-general',
     today: '2025-02-14',
     inFlight: [],
     done: [...inFlightCards.map((c) => ({ ...c, stage: 'done' as const })), ...doneCards],
@@ -118,7 +115,6 @@ export const WithCreatePitch: Story = {
         slug="acme"
         cycleSlug="cycle-5"
         cycleTitle="Cycle 5 — Build"
-        channelName="product-general"
         today="2025-01-27"
         inFlight={pitches}
         done={doneCards}

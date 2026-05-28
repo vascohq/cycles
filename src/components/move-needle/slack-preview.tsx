@@ -17,7 +17,6 @@ export type SlackPreviewProps = {
   tasksDone: number
   tasksTotal: number
   daysLeft: number
-  channelName: string
 }
 
 export function SlackPreview({
@@ -28,14 +27,11 @@ export function SlackPreview({
   tasksDone,
   tasksTotal,
   daysLeft,
-  channelName,
 }: SlackPreviewProps) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
-        <span>Slack preview</span>
-        <span>·</span>
-        <span>#{channelName}</span>
+      <div className="text-[10px] font-mono text-muted-foreground">
+        Slack preview
       </div>
 
       <div className="flex flex-col gap-1.5 text-xs">

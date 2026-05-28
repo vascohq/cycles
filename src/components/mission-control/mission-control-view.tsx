@@ -38,7 +38,6 @@ export type MissionControlViewProps = {
   slug: string
   cycleSlug: string
   cycleTitle: string
-  channelName: string
   today: string
   inFlight: PitchCard[]
   done: PitchCard[]
@@ -48,7 +47,6 @@ export type MissionControlViewProps = {
 export function MissionControlView({
   slug,
   cycleSlug,
-  channelName,
   today,
   inFlight,
   done,
@@ -63,14 +61,14 @@ export function MissionControlView({
           Mission Control
         </h1>
         <p className="text-sm font-mono text-muted-foreground">
-          Updates posted Tuesdays to #{channelName}
+          Updates posted Tuesdays to Slack
         </p>
       </header>
 
       <Section
         title="In flight"
         count={inFlight.length}
-        subtitle={`Updates posted Tuesdays to #${channelName}`}
+        subtitle="Updates posted Tuesdays to Slack"
         action={
           onCreatePitch && (
             <button

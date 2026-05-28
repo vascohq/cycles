@@ -18,7 +18,6 @@ type MissionControlProps = {
   roomId: string
   cycleSlug: string
   cycleTitle: string
-  channelName: string
   slug: string
   organizationUsers: OrganizationUser[]
 }
@@ -27,7 +26,6 @@ export function MissionControl({
   roomId,
   cycleSlug,
   cycleTitle,
-  channelName,
   slug,
   organizationUsers,
 }: MissionControlProps) {
@@ -49,7 +47,6 @@ export function MissionControl({
             <MissionControlWired
               cycleSlug={cycleSlug}
               cycleTitle={cycleTitle}
-              channelName={channelName}
               slug={slug}
             />
           )}
@@ -62,12 +59,10 @@ export function MissionControl({
 function MissionControlWired({
   cycleSlug,
   cycleTitle,
-  channelName,
   slug,
 }: {
   cycleSlug: string
   cycleTitle: string
-  channelName: string
   slug: string
 }) {
   const pitches = useCycleStorage((root) => [...root.pitches])
@@ -107,7 +102,6 @@ function MissionControlWired({
       slug={slug}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
-      channelName={channelName}
       today={today}
       inFlight={inFlight}
       done={done}

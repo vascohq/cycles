@@ -102,7 +102,6 @@ function ScopeMapWired({
   const cycle = useCycleStorage((root) => ({
     start_date: root.cycle.start_date,
     end_date: root.cycle.end_date,
-    slack_channel: root.cycle.slack_channel,
   }))
   const orgUsers = useOrganizationUsers()
 
@@ -267,7 +266,6 @@ function ScopeMapWired({
     : ''
 
   const userName = user?.firstName ?? usersMap.get(userId ?? '')?.name ?? 'You'
-  const channelName = cycle.slack_channel || 'general'
 
   const onPostUpdate = useCallback(
     async (zone: Zone, narrative: string) => {
@@ -355,7 +353,6 @@ function ScopeMapWired({
       onParkingToggle={onParkingToggle}
       onPostUpdate={onPostUpdate}
       userName={userName}
-      channelName={channelName}
       timelineCards={timelineCards}
       onRetrySlack={onRetrySlack}
     />

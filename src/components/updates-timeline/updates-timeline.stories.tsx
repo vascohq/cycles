@@ -53,28 +53,24 @@ const cards: TimelineCard[] = [
 export const WithUpdates: Story = {
   args: {
     cards,
-    channelName: 'product-general',
   },
 }
 
 export const Empty: Story = {
   args: {
     cards: [],
-    channelName: 'product-general',
   },
 }
 
 export const SingleUpdate: Story = {
   args: {
     cards: [cards[0]],
-    channelName: 'eng-team',
   },
 }
 
 export const WithRetryBanner: Story = {
   args: {
     cards,
-    channelName: 'product-general',
     onRetrySlack: () => {},
   },
 }

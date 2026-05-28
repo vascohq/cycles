@@ -25,7 +25,6 @@ export type MoveNeedleModalProps = {
   weekLabel: string
   dateLabel: string
   userName: string
-  channelName: string
   pitchTitle: string
   tasksDone: number
   tasksTotal: number
@@ -39,7 +38,6 @@ export function MoveNeedleModal({
   weekLabel,
   dateLabel,
   userName,
-  channelName,
   pitchTitle,
   tasksDone,
   tasksTotal,
@@ -136,7 +134,6 @@ export function MoveNeedleModal({
             tasksDone={tasksDone}
             tasksTotal={tasksTotal}
             daysLeft={daysLeft}
-            channelName={channelName}
           />
         </div>
 
@@ -152,7 +149,7 @@ export function MoveNeedleModal({
             disabled={!canPost}
             className="px-4 py-2 text-sm rounded-lg bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
           >
-            {posting ? 'Posting...' : `Post to #${channelName}`}
+            {posting ? 'Posting…' : 'Post to Slack'}
           </button>
         </DialogFooter>
       </DialogContent>
