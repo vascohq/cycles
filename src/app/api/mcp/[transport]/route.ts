@@ -1,26 +1,22 @@
-import { createMcpHandler } from 'mcp-handler'
-import { validateMcpAuth } from '@/lib/mcp/auth'
+import { createMcpHandler, withMcpAuth } from 'mcp-handler'
+import { verifyMcpToken } from '@/lib/mcp/auth'
 import { registerCyclesTools } from '@/lib/mcp/tools'
 
 const handler = createMcpHandler(
   (server) => {
-    const orgId = process.env.MCP_ORG_ID
-    if (!orgId) return
-    registerCyclesTools(server, orgId)
+    registerCyclesTools(server)
   },
   { serverInfo: { name: 'cycles', version: '1.0.0' } },
   { basePath: '/api/mcp' }
 )
 
-async function withAuth(request: Request) {
-  const result = validateMcpAuth(request)
-  if (!result.ok) {
-    return new Response(JSON.stringify({ error: result.error }), {
-      status: result.status,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-  return handler(request)
-}
+const authHandler = withMcpAuth(handler, verifyMcpToken, {
+  required: true,
+  resourceMetadataPath: '/.well-known/oauth-protected-resource',
+})
 
-export { withAuth as GET, withAuth as POST, withAuth as DELETE }
+export {
+  authHandler as GET,
+  authHandler as POST,
+  authHandler as DELETE,
+}

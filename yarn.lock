@@ -379,6 +379,13 @@
     "@clerk/shared" "^3.47.7"
     tslib "2.8.1"
 
+"@clerk/mcp-tools@^0.3.1":
+  version "0.3.1"
+  resolved "https://registry.yarnpkg.com/@clerk/mcp-tools/-/mcp-tools-0.3.1.tgz#ce28d2a97d68a4b66d5749637af2543389878fbb"
+  integrity sha512-c/7bmT9KxA3CYVhCS08RGmVwjU8+zJ6ZCuIA5KpcJfE5xh8XLKKvZzOD4mP0GgvUGjcnT+IViaqBRlRKAyE5rw==
+  dependencies:
+    "@modelcontextprotocol/sdk" "^1.17.0"
+
 "@clerk/nextjs@^6":
   version "6.39.5"
   resolved "https://registry.yarnpkg.com/@clerk/nextjs/-/nextjs-6.39.5.tgz#1032a57720d3bdb6760eb3bdb45a9b908b84ea36"
@@ -1157,7 +1164,7 @@
   dependencies:
     "@types/mdx" "^2.0.0"
 
-"@modelcontextprotocol/sdk@^1.29.0":
+"@modelcontextprotocol/sdk@^1.17.0", "@modelcontextprotocol/sdk@^1.29.0":
   version "1.29.0"
   resolved "https://registry.yarnpkg.com/@modelcontextprotocol/sdk/-/sdk-1.29.0.tgz#79786d8b525e269de850ac82b1f1f757f3915f44"
   integrity sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==

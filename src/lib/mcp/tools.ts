@@ -1,14 +1,30 @@
 import { z } from 'zod'
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
 import { parseSlugPath } from './slug-path'
+import { resolveOrg, type OrgMembership } from './auth'
 import { derivePitchCards } from '@/lib/mission-control-helpers'
 
-const slugPathSchema = { slug_path: z.string().describe('Slug path, e.g. "2026-q2-build" or "2026-q2-build/mission-control"') }
+const orgArg = {
+  org: z
+    .string()
+    .optional()
+    .describe(
+      'Organization slug. Optional when the user belongs to a single org; required otherwise.'
+    ),
+}
+
+const slugPathArg = {
+  slug_path: z
+    .string()
+    .describe('Slug path, e.g. "2026-q2-build" or "2026-q2-build/mission-control"'),
+}
 
 type ToolResult = {
   content: { type: 'text'; text: string }[]
   isError?: true
 }
+
+type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } }
 
 function jsonResult(data: unknown): ToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
@@ -18,9 +34,29 @@ function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true }
 }
 
+function getMemberships(extra: ToolExtra): OrgMembership[] {
+  const memberships = extra.authInfo?.extra?.memberships
+  if (!Array.isArray(memberships) || memberships.length === 0) {
+    throw new Error('Missing org memberships in authInfo')
+  }
+  return memberships as OrgMembership[]
+}
+
 export async function handleListCycles(orgId: string): Promise<ToolResult> {
   const rooms = await listCycleRooms(orgId)
   return jsonResult(rooms)
+}
+
+export async function handleListCyclesAllOrgs(
+  memberships: OrgMembership[]
+): Promise<ToolResult> {
+  const perOrg = await Promise.all(
+    memberships.map(async (m) => ({
+      org: m.slug,
+      cycles: await listCycleRooms(m.id),
+    }))
+  )
+  return jsonResult(perOrg)
 }
 
 export async function handleGetCycle(
@@ -88,44 +124,73 @@ export async function handleGetPitchUpdates(
   }
 }
 
-export function registerCyclesTools(server: any, orgId: string): void {
-  server.tool('list_cycles', 'List all cycles for the organization', {}, async () => {
-    return handleListCycles(orgId)
-  })
+export function registerCyclesTools(server: any): void {
+  server.tool(
+    'list_cycles',
+    'List cycles. With no "org" argument: lists cycles for the user\'s only org, or grouped by org if they belong to several.',
+    orgArg,
+    async ({ org }: { org?: string }, extra: ToolExtra) => {
+      const memberships = getMemberships(extra)
+      if (!org && memberships.length > 1) {
+        return handleListCyclesAllOrgs(memberships)
+      }
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleListCycles(resolved.org.id)
+    }
+  )
 
   server.tool(
     'get_cycle',
     'Get cycle details with pitch summaries',
-    slugPathSchema,
-    async ({ slug_path }: { slug_path: string }) => {
+    { ...orgArg, ...slugPathArg },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
       const parsed = parseSlugPath(slug_path)
-      return handleGetCycle(orgId, parsed.cycleSlug)
+      return handleGetCycle(resolved.org.id, parsed.cycleSlug)
     }
   )
 
   server.tool(
     'get_pitch',
     'Get full pitch detail with scopes, tasks, and parking items',
-    slugPathSchema,
-    async ({ slug_path }: { slug_path: string }) => {
+    { ...orgArg, ...slugPathArg },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
       const parsed = parseSlugPath(slug_path)
       if (parsed.kind !== 'pitch') {
         return errorResult('slug_path must include both cycle and pitch slug: "cycle-slug/pitch-slug"')
       }
-      return handleGetPitch(orgId, parsed.cycleSlug, parsed.pitchSlug)
+      return handleGetPitch(resolved.org.id, parsed.cycleSlug, parsed.pitchSlug)
     }
   )
 
   server.tool(
     'get_pitch_updates',
     'Get update history for a pitch, newest first',
-    slugPathSchema,
-    async ({ slug_path }: { slug_path: string }) => {
+    { ...orgArg, ...slugPathArg },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
       const parsed = parseSlugPath(slug_path)
       if (parsed.kind !== 'pitch') {
         return errorResult('slug_path must include both cycle and pitch slug: "cycle-slug/pitch-slug"')
       }
-      return handleGetPitchUpdates(orgId, parsed.cycleSlug, parsed.pitchSlug)
+      return handleGetPitchUpdates(resolved.org.id, parsed.cycleSlug, parsed.pitchSlug)
     }
   )
 }
