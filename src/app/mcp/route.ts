@@ -7,7 +7,7 @@ const handler = createMcpHandler(
     registerCyclesTools(server)
   },
   { serverInfo: { name: 'cycles', version: '1.0.0' } },
-  { basePath: '/api/mcp' }
+  { streamableHttpEndpoint: '/mcp', disableSse: true }
 )
 
 const authHandler = withMcpAuth(handler, verifyMcpToken, {
