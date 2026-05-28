@@ -20,6 +20,7 @@ const config = {
     extend: {
       fontFamily: {
         gloria: ['var(--font-gloria)', 'cursive'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",

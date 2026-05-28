@@ -15,11 +15,13 @@ export default defineConfig({
     }
   },
   test: {
+    exclude: ['node_modules', 'e2e'],
     projects: [{
       extends: true,
       test: {
         environment: 'jsdom',
-        setupFiles: ['./vitest.setup.ts']
+        setupFiles: ['./vitest.setup.ts'],
+        exclude: ['node_modules', 'e2e']
       }
     }, {
       extends: true,
