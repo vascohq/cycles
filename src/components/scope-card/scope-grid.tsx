@@ -25,6 +25,7 @@ type ScopeGridProps = {
   scopes: ScopeGridItem[]
   onReorder?: (activeId: string, overId: string) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
+  onAddTask?: (scopeId: string, title: string) => void
   onReset?: (scopeId: string) => void
   readOnly?: boolean
 }
@@ -32,10 +33,12 @@ type ScopeGridProps = {
 function SortableScopeCard({
   scope,
   onTaskToggle,
+  onAddTask,
   onReset,
 }: {
   scope: ScopeGridItem
   onTaskToggle?: (taskId: string, done: boolean) => void
+  onAddTask?: (title: string) => void
   onReset?: () => void
 }) {
   const {
@@ -59,6 +62,7 @@ function SortableScopeCard({
         dragHandleProps={listeners}
         isDragging={isDragging}
         onTaskToggle={onTaskToggle}
+        onAddTask={onAddTask}
         onReset={onReset}
       />
     </div>
@@ -69,6 +73,7 @@ export function ScopeGrid({
   scopes,
   onReorder,
   onTaskToggle,
+  onAddTask,
   onReset,
   readOnly,
 }: ScopeGridProps) {
@@ -116,6 +121,11 @@ export function ScopeGrid({
               onTaskToggle={
                 onTaskToggle
                   ? (taskId, done) => onTaskToggle(scope.id, taskId, done)
+                  : undefined
+              }
+              onAddTask={
+                onAddTask
+                  ? (title) => onAddTask(scope.id, title)
                   : undefined
               }
               onReset={onReset ? () => onReset(scope.id) : undefined}

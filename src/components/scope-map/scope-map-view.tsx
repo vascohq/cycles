@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Plus } from 'lucide-react'
 import { NeedleGauge } from '@/components/needle'
 import { HillChart, type HillScope } from '@/components/hill-chart'
 import { TimeboxTape } from '@/components/timebox'
@@ -15,6 +15,7 @@ import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.con
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
+import type { Tier } from '@/cycle-liveblocks.config'
 
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
@@ -42,6 +43,8 @@ export type ScopeMapViewProps = {
   onNeedleProgressChange?: (progress: number) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
+  onAddTask?: (scopeId: string, title: string) => void
+  onAddScope?: (title: string, tier: string) => void
   onScopeReorder?: (activeId: string, overId: string) => void
   onScopeReset?: (scopeId: string) => void
   onParkingToggle?: (itemId: string, resolved: boolean) => void
@@ -66,6 +69,8 @@ export function ScopeMapView({
   onNeedleProgressChange,
   onHillProgressChange,
   onTaskToggle,
+  onAddTask,
+  onAddScope,
   onScopeReorder,
   onScopeReset,
   onParkingToggle,
@@ -150,11 +155,15 @@ export function ScopeMapView({
               drag to reorder
             </span>
           )}
+          {!isDone && onAddScope && (
+            <AddScopeButton onAddScope={onAddScope} />
+          )}
         </div>
         <ScopeGrid
           scopes={scopeGridItems}
           onReorder={isDone ? undefined : onScopeReorder}
           onTaskToggle={isDone ? undefined : onTaskToggle}
+          onAddTask={isDone ? undefined : onAddTask}
           onReset={isDone ? undefined : onScopeReset}
           readOnly={isDone}
         />
@@ -311,6 +320,80 @@ function StageButtons({
           {STAGES[currentIndex + 1]} →
         </button>
       )}
+    </div>
+  )
+}
+
+const TIERS: Tier[] = ['must', 'should', 'could']
+
+function AddScopeButton({
+  onAddScope,
+}: {
+  onAddScope: (title: string, tier: string) => void
+}) {
+  const [active, setActive] = useState(false)
+  const [title, setTitle] = useState('')
+  const [tier, setTier] = useState<Tier>('must')
+
+  function handleSubmit() {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    onAddScope(trimmed, tier)
+    setTitle('')
+    setTier('must')
+    setActive(false)
+  }
+
+  if (!active) {
+    return (
+      <button
+        type="button"
+        onClick={() => setActive(true)}
+        className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-auto"
+      >
+        <Plus className="w-3 h-3" />
+        add scope
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2 ml-auto">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSubmit()
+          if (e.key === 'Escape') { setTitle(''); setActive(false) }
+        }}
+        placeholder="Scope name…"
+        className="text-xs bg-transparent border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring w-36"
+        autoFocus
+      />
+      <select
+        value={tier}
+        onChange={(e) => setTier(e.target.value as Tier)}
+        className="text-xs bg-transparent border rounded px-1 py-1 outline-none"
+      >
+        {TIERS.map((t) => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!title.trim()}
+        className="text-xs px-2 py-1 rounded bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
+      >
+        Add
+      </button>
+      <button
+        type="button"
+        onClick={() => { setTitle(''); setActive(false) }}
+        className="text-xs text-muted-foreground hover:text-foreground"
+      >
+        ✕
+      </button>
     </div>
   )
 }

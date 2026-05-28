@@ -23,8 +23,9 @@ import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage, Zone, PitchUpdate } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
+import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { useCallback } from 'react'
@@ -142,6 +143,29 @@ function ScopeMapWired({
       task?.set('done', done)
     },
     []
+  )
+
+  const onAddTask = useCycleMutation(
+    ({ storage }, scopeId: string, title: string) => {
+      const task: ScopeTask = { id: nanoid(), scopeId, title, done: false }
+      storage.get('tasks').push(new LiveObject(task))
+    },
+    []
+  )
+
+  const onAddScope = useCycleMutation(
+    ({ storage }, title: string, tier: string) => {
+      const scope: CycleScope = {
+        id: nanoid(),
+        pitchId,
+        title,
+        tier: tier as CycleScope['tier'],
+        litmus_text: '',
+        hill_progress: 0,
+      }
+      storage.get('scopes').push(new LiveObject(scope))
+    },
+    [pitchId]
   )
 
   const onScopeReorder = useCycleMutation(
@@ -353,6 +377,8 @@ function ScopeMapWired({
       onNeedleProgressChange={onNeedleProgressChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
+      onAddTask={onAddTask}
+      onAddScope={onAddScope}
       onScopeReorder={onScopeReorder}
       onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}

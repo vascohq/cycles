@@ -1,9 +1,9 @@
 'use client'
 
-import { forwardRef } from 'react'
+import { forwardRef, useState } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { TIER_COLORS } from '@/components/hill-chart/tier-colors'
-import { Check } from 'lucide-react'
+import { Check, Plus } from 'lucide-react'
 
 export type ScopeCardTask = {
   id: string
@@ -19,6 +19,7 @@ export type ScopeCardProps = {
   litmus_text: string
   tasks: ScopeCardTask[]
   onTaskToggle?: (taskId: string, done: boolean) => void
+  onAddTask?: (title: string) => void
   onReset?: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
   isDragging?: boolean
@@ -34,6 +35,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       litmus_text,
       tasks,
       onTaskToggle,
+      onAddTask,
       onReset,
       dragHandleProps,
       isDragging,
@@ -112,6 +114,10 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
           </div>
         )}
 
+        {onAddTask && !readOnly && (
+          <AddTaskInput onAddTask={onAddTask} />
+        )}
+
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
             {doneCount}/{totalCount} done
@@ -130,3 +136,43 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     )
   }
 )
+
+function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
+  const [value, setValue] = useState('')
+  const [active, setActive] = useState(false)
+
+  function handleSubmit() {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    onAddTask(trimmed)
+    setValue('')
+  }
+
+  if (!active) {
+    return (
+      <button
+        type="button"
+        onClick={() => setActive(true)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors py-0.5"
+      >
+        <Plus className="w-3 h-3" />
+        add task
+      </button>
+    )
+  }
+
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') handleSubmit()
+        if (e.key === 'Escape') { setValue(''); setActive(false) }
+      }}
+      onBlur={() => { handleSubmit(); setActive(false) }}
+      placeholder="Task title…"
+      className="w-full text-xs bg-transparent border-b border-foreground/10 focus:border-foreground/30 py-1 outline-none placeholder:text-muted-foreground/40"
+      autoFocus
+    />
+  )
+}
