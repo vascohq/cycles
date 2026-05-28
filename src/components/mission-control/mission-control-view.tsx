@@ -1,9 +1,18 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape } from '@/components/timebox'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import type { PitchCard } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
 import { cn } from '@/lib/utils'
@@ -33,6 +42,7 @@ export type MissionControlViewProps = {
   today: string
   inFlight: PitchCard[]
   done: PitchCard[]
+  onCreatePitch?: (title: string) => void
 }
 
 export function MissionControlView({
@@ -42,7 +52,10 @@ export function MissionControlView({
   today,
   inFlight,
   done,
+  onCreatePitch,
 }: MissionControlViewProps) {
+  const [createOpen, setCreateOpen] = useState(false)
+
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
       <header className="text-center flex flex-col gap-2">
@@ -58,6 +71,17 @@ export function MissionControlView({
         title="In flight"
         count={inFlight.length}
         subtitle={`Updates posted Tuesdays to #${channelName}`}
+        action={
+          onCreatePitch && (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              Add pitch
+            </button>
+          )
+        }
       >
         <PitchGrid
           cards={inFlight}
@@ -78,6 +102,14 @@ export function MissionControlView({
         </Section>
       )}
 
+      {onCreatePitch && (
+        <CreatePitchDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreate={onCreatePitch}
+        />
+      )}
+
       <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
         mission control · click a pitch to open its scope map
       </footer>
@@ -89,11 +121,13 @@ function Section({
   title,
   count,
   subtitle,
+  action,
   children,
 }: {
   title: string
   count: number
   subtitle?: string
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -108,6 +142,7 @@ function Section({
             {subtitle}
           </span>
         )}
+        {action && <div className="ml-auto">{action}</div>}
       </div>
       {children}
     </section>
@@ -217,5 +252,65 @@ function PitchCardItem({
         )}
       </div>
     </Link>
+  )
+}
+
+function CreatePitchDialog({
+  open,
+  onOpenChange,
+  onCreate,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCreate: (title: string) => void
+}) {
+  const [title, setTitle] = useState('')
+
+  function handleCreate() {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    onCreate(trimmed)
+    setTitle('')
+    onOpenChange(false)
+  }
+
+  function handleOpenChange(next: boolean) {
+    if (!next) setTitle('')
+    onOpenChange(next)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-gloria text-xl">
+            New pitch
+          </DialogTitle>
+        </DialogHeader>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+          placeholder="What are we betting on?"
+          className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          autoFocus
+        />
+        <DialogFooter className="gap-2">
+          <button
+            onClick={() => handleOpenChange(false)}
+            className="px-4 py-2 text-sm rounded-lg border hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={!title.trim()}
+            className="px-4 py-2 text-sm rounded-lg bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
+          >
+            Create
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
