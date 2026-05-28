@@ -50,6 +50,7 @@ export function HillChart({
 }: HillChartProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragProgress, setDragProgress] = useState<number | null>(null)
   const [tooltip, setTooltip] = useState<{
     x: number
     y: number
@@ -72,15 +73,21 @@ export function HillChart({
       e.preventDefault()
       if (!onHillProgressChange) return
       setDraggingId(scopeId)
+      let latestProgress: number | null = null
 
       const handleMove = (ev: MouseEvent | TouchEvent) => {
         const x = svgXFromEvent(ev)
         const progress = clampHillProgress(pointToProgress(x))
-        onHillProgressChange(scopeId, progress)
+        latestProgress = progress
+        setDragProgress(progress)
       }
 
       const handleUp = () => {
+        if (latestProgress !== null) {
+          onHillProgressChange(scopeId, latestProgress)
+        }
         setDraggingId(null)
+        setDragProgress(null)
         window.removeEventListener('mousemove', handleMove)
         window.removeEventListener('mouseup', handleUp)
         window.removeEventListener('touchmove', handleMove)
@@ -179,11 +186,15 @@ export function HillChart({
         </text>
 
         {scopes.map((scope) => {
-          const pt = progressToPoint(scope.hill_progress)
+          const isDragging = draggingId === scope.id
+          const progress =
+            isDragging && dragProgress !== null
+              ? dragProgress
+              : scope.hill_progress
+          const pt = progressToPoint(progress)
           const cx = pt.x + SVG_PAD
           const cy = pt.y + SVG_PAD
           const isHighlighted = highlightedScopeId === scope.id
-          const isDragging = draggingId === scope.id
           const r = isHighlighted || isDragging ? 17 : 13
           const sw = isHighlighted || isDragging ? 2.5 : 1.5
 
