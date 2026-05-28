@@ -21,12 +21,13 @@ npx vitest run src/path/to/file.test.ts  # Run a single test file
 
 There is no traditional database — **Liveblocks** is the primary data layer, providing real-time collaborative storage per room.
 
-- **Boards** → Liveblocks rooms (ID pattern: `{orgId}:{slug}`)
-- **Pitches** → Top-level initiatives within a board
-- **Scopes** → Work items under a pitch (with color, progress, effort, impact)
-- **Tasks** → Individual items under a scope (status: todo/in_progress/done; type: task/optional/bug/question)
+- **Cycles** → Liveblocks rooms (ID pattern: `{orgId}:cycle:{slug}`)
+- **Pitches** → Top-level initiatives within a cycle
+- **Scopes** → Work items under a pitch (with tier, hill progress, color)
+- **Tasks** → Individual items under a scope (done: boolean)
+- **Updates** → Point-in-time needle snapshots with narrative
 
-Types and hooks are defined in `src/liveblocks.config.ts`. Use `useStorage()`, `useMutation()`, etc. from there.
+Types are defined in `src/cycle-liveblocks.config.ts`. Hooks are in `src/cycle-room-context.ts` — use `useCycleStorage()`, `useCycleMutation()`, etc.
 
 ### Auth
 
@@ -34,22 +35,24 @@ Clerk v6 handles authentication. Middleware is in `src/middleware.ts`. Routes ar
 
 ### Routing
 
-- `/` → redirects to `/{slug}/boards`
-- `/[slug]/boards` → board listing
-- `/[slug]/boards/[roomId]` → board room (real-time collaboration)
+- `/` → redirects to `/{slug}/cycles`
+- `/[slug]/cycles` → cycle listing
+- `/[slug]/cycles/[cycleSlug]` → Mission Control (all pitches in a cycle)
+- `/[slug]/cycles/[cycleSlug]/[pitchSlug]` → Scope Map (single pitch detail)
 - `/api/liveblocks-auth` → Liveblocks auth endpoint
 
 ### Key Directories
 
-- `src/app/[slug]/boards/` — Board pages, server actions, and board creation
-- `src/app/[slug]/boards/[roomId]/` — Room UI: pitch views, hill charts, task views, drag-and-drop
+- `src/app/[slug]/cycles/` — Cycle pages, server actions, Mission Control & Scope Map
+- `src/components/` — Shared components (needle, hill-chart, scope-card, move-needle, etc.)
 - `src/components/ui/` — shadcn/ui components (Radix + Tailwind)
-- `src/lib/` — Utilities (`cn()` in utils.ts, Liveblocks server client, user helpers)
-- `src/liveblocks.config.ts` — Liveblocks client setup, storage types, all real-time hooks
+- `src/lib/` — Pure-function engines (needle, hill, timebox, update, slack-message) and utilities
+- `src/cycle-liveblocks.config.ts` — Cycle storage types
+- `src/cycle-room-context.ts` — Liveblocks client setup, room hooks
 
 ### State Management
 
-Real-time state lives in Liveblocks (accessed via hooks from `src/liveblocks.config.ts`). Org user data is provided via `OrganizationUsersProvider` React context. Themes via `next-themes`.
+Real-time state lives in Liveblocks (accessed via hooks from `src/cycle-room-context.ts`). Org user data is provided via `OrganizationUsersProvider` React context. Themes via `next-themes`.
 
 ## Tech Stack
 
@@ -66,7 +69,7 @@ Real-time state lives in Liveblocks (accessed via hooks from `src/liveblocks.con
 - Path alias: `@/*` maps to `./src/*`
 - IDs generated with `nanoid`
 - Slug validation: `/^[a-zA-Z0-9_-]+$/` (no slashes, dots, or encoded characters — prevents open redirects)
-- Room IDs: `{orgPrefix}:{slug}` where orgPrefix is orgId or userId
+- Room IDs: `{orgPrefix}:cycle:{slug}` where orgPrefix is orgId or userId
 - CSS theming via HSL CSS variables; dark mode via class strategy
 - **No prop drilling for cross-cutting concerns.** Use React Context providers or hooks (e.g. Clerk's `useAuth()`, `useSlackEnabled()`) instead of threading props through intermediate components. Server-only values (env vars) go in a context provider at the page boundary; auth data comes from Clerk hooks.
 
