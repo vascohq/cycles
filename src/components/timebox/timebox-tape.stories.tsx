@@ -68,6 +68,15 @@ export const CompactBeforeStart: Story = {
   },
 }
 
+export const Done: Story = {
+  args: {
+    start: '2026-06-01',
+    end: '2026-07-13',
+    today: '2026-06-18',
+    done: true,
+  },
+}
+
 export const AllVariants: Story = {
   args: {
     start: '2026-06-01',
@@ -95,6 +104,10 @@ export const AllVariants: Story = {
       <div>
         <span className="text-xs text-muted-foreground mb-1 block">Compact — Before start</span>
         <TimeboxTape start="2026-06-01" end="2026-07-13" today="2026-05-25" compact />
+      </div>
+      <div>
+        <span className="text-xs text-muted-foreground mb-1 block">Full — Done (forced 100%)</span>
+        <TimeboxTape start="2026-06-01" end="2026-07-13" today="2026-06-18" done />
       </div>
     </div>
   ),

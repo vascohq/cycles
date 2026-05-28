@@ -86,6 +86,18 @@ export const NoTasks: Story = {
   },
 }
 
+export const ReadOnly: Story = {
+  args: {
+    id: 's7',
+    order: 1,
+    title: 'Auth flow',
+    tier: 'must',
+    litmus_text: 'Users can sign in and access their workspace',
+    tasks: SAMPLE_TASKS,
+    readOnly: true,
+  },
+}
+
 export const NoLitmus: Story = {
   args: {
     id: 's6',

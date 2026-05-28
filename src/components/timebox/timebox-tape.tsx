@@ -7,6 +7,7 @@ type TimeboxTapeProps = {
   end: string
   today: string
   compact?: boolean
+  done?: boolean
 }
 
 const TRACK_W = 400
@@ -22,8 +23,11 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function TimeboxTape({ start, end, today, compact = false }: TimeboxTapeProps) {
-  const info = computeTimebox(start, end, today)
+export function TimeboxTape({ start, end, today, compact = false, done = false }: TimeboxTapeProps) {
+  const computed = computeTimebox(start, end, today)
+  const info = done
+    ? { ...computed, fractionElapsed: 1, phase: 'after' as const, daysLeft: 0 }
+    : computed
   const ticks = dayTicks(info.totalDays)
 
   const h = compact ? COMPACT_H : FULL_H

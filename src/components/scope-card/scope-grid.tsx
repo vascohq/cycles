@@ -26,6 +26,7 @@ type ScopeGridProps = {
   onReorder?: (activeId: string, overId: string) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
   onReset?: (scopeId: string) => void
+  readOnly?: boolean
 }
 
 function SortableScopeCard({
@@ -69,6 +70,7 @@ export function ScopeGrid({
   onReorder,
   onTaskToggle,
   onReset,
+  readOnly,
 }: ScopeGridProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -85,6 +87,16 @@ export function ScopeGrid({
   }
 
   const sortedScopes = [...scopes].sort((a, b) => a.order - b.order)
+
+  if (readOnly) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {sortedScopes.map((scope) => (
+          <ScopeCard key={scope.id} {...scope} readOnly />
+        ))}
+      </div>
+    )
+  }
 
   return (
     <DndContext

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { snapForZone, clampProgress, deriveGhost } from './needle-engine'
+import { snapForZone, clampProgress, SHIPPED_NEEDLE, deriveGhost } from './needle-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
 
 describe('snapForZone', () => {
@@ -31,6 +31,12 @@ describe('clampProgress', () => {
 
   it('passes through mid-range values unchanged', () => {
     expect(clampProgress(0.5)).toBe(0.5)
+  })
+})
+
+describe('SHIPPED_NEEDLE', () => {
+  it('is a frozen needle at full progress, on_track zone', () => {
+    expect(SHIPPED_NEEDLE).toEqual({ progress: 1, zone: 'on_track' })
   })
 })
 

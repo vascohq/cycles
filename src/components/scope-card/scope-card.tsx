@@ -22,6 +22,7 @@ export type ScopeCardProps = {
   onReset?: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
   isDragging?: boolean
+  readOnly?: boolean
 }
 
 export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
@@ -36,6 +37,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       onReset,
       dragHandleProps,
       isDragging,
+      readOnly,
     },
     ref
   ) {
@@ -51,8 +53,8 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       >
         <div className="flex items-start gap-3">
           <div
-            {...dragHandleProps}
-            className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-grab active:cursor-grabbing"
+            {...(readOnly ? {} : dragHandleProps)}
+            className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
             style={{ backgroundColor: TIER_COLORS[tier] }}
           >
             {order}
@@ -74,35 +76,39 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
 
         {tasks.length > 0 && (
           <div className="flex flex-col gap-1">
-            {tasks.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => onTaskToggle?.(task.id, !task.done)}
-                className="flex items-center gap-2 text-xs text-left group py-0.5"
-              >
-                <span
-                  className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                    task.done
-                      ? 'bg-foreground/10 border-foreground/20'
-                      : 'border-foreground/20 group-hover:border-foreground/40'
-                  }`}
+            {tasks.map((task) => {
+              const Tag = readOnly ? 'div' : 'button'
+              return (
+                <Tag
+                  key={task.id}
+                  {...(!readOnly && { type: 'button' as const, onClick: () => onTaskToggle?.(task.id, !task.done) })}
+                  className={`flex items-center gap-2 text-xs text-left py-0.5 ${readOnly ? '' : 'group'}`}
                 >
-                  {task.done && (
-                    <Check className="w-3 h-3 text-foreground/60" />
-                  )}
-                </span>
-                <span
-                  className={
-                    task.done
-                      ? 'line-through text-muted-foreground/60'
-                      : 'text-foreground'
-                  }
-                >
-                  {task.title}
-                </span>
-              </button>
-            ))}
+                  <span
+                    className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                      task.done
+                        ? 'bg-foreground/10 border-foreground/20'
+                        : readOnly
+                          ? 'border-foreground/20'
+                          : 'border-foreground/20 group-hover:border-foreground/40'
+                    }`}
+                  >
+                    {task.done && (
+                      <Check className="w-3 h-3 text-foreground/60" />
+                    )}
+                  </span>
+                  <span
+                    className={
+                      task.done
+                        ? 'line-through text-muted-foreground/60'
+                        : 'text-foreground'
+                    }
+                  >
+                    {task.title}
+                  </span>
+                </Tag>
+              )
+            })}
           </div>
         )}
 
@@ -110,7 +116,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
           <span>
             {doneCount}/{totalCount} done
           </span>
-          {doneCount > 0 && onReset && (
+          {doneCount > 0 && onReset && !readOnly && (
             <button
               type="button"
               onClick={onReset}

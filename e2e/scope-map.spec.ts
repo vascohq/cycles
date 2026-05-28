@@ -8,12 +8,12 @@ test.describe('Scope Map view assembly', () => {
 
   test('renders all major sections', async ({ page }) => {
     // App bar with breadcrumbs
-    await expect(page.locator('nav')).toContainText('Cycles')
-    await expect(page.locator('nav')).toContainText('Cycle 34')
-    await expect(page.locator('nav')).toContainText('Mission Control')
+    await expect(page.locator('main nav')).toContainText('Cycles')
+    await expect(page.locator('main nav')).toContainText('Cycle 34')
+    await expect(page.locator('main nav')).toContainText('Mission Control')
 
     // Task progress counter
-    await expect(page.locator('nav')).toContainText('9 / 13 tasks')
+    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
 
     // Hero card — pitch title
     await expect(page.locator('h1')).toContainText('Mission Control')
@@ -96,14 +96,14 @@ test.describe('Scope Map view assembly', () => {
 
   test('task toggle updates progress counter', async ({ page }) => {
     // Initially 9/13
-    await expect(page.locator('nav')).toContainText('9 / 13 tasks')
+    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
 
     // Find an unchecked task and click it
     const uncheckedTask = page.getByText('Drag-to-update dots')
     await uncheckedTask.click()
 
     // Should now be 10/13
-    await expect(page.locator('nav')).toContainText('10 / 13 tasks')
+    await expect(page.locator('main nav')).toContainText('10 / 13 tasks')
   })
 
   test('parking lot item can be toggled', async ({ page }) => {
@@ -154,5 +154,68 @@ test.describe('Scope Map view assembly', () => {
     // After hover, the card should have a box-shadow
     const shadow = await heroCard.evaluate((el) => getComputedStyle(el).boxShadow)
     expect(shadow).not.toBe('none')
+  })
+})
+
+test.describe('Done state lockdown', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/e2e/scope-map')
+    await page.waitForLoadState('networkidle')
+    // Transition to done state
+    await page.getByRole('button', { name: /done →/ }).click()
+  })
+
+  test('needle shows "Shipped" label', async ({ page }) => {
+    await expect(page.getByText('Shipped')).toBeVisible()
+    await expect(page.getByText('on track')).not.toBeVisible()
+  })
+
+  test('"Move the needle" button is hidden', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Move the needle' })).not.toBeVisible()
+  })
+
+  test('timebox tape shows "complete"', async ({ page }) => {
+    await expect(page.locator('text:has-text("complete")')).toBeVisible()
+    await expect(page.locator('text:has-text("days left")')).not.toBeVisible()
+  })
+
+  test('"drag to reorder" hint is hidden', async ({ page }) => {
+    await expect(page.getByText('drag to reorder')).not.toBeVisible()
+  })
+
+  test('task checkboxes are not clickable', async ({ page }) => {
+    // Progress before click
+    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
+    // Try clicking a task — it should be a div, not a button
+    const task = page.getByText('Drag-to-update dots')
+    await task.click()
+    // Progress should be unchanged
+    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
+  })
+
+  test('parking lot items are not clickable', async ({ page }) => {
+    const item = page.getByText('Should updates auto-post to Slack or require confirmation?')
+    await item.click()
+    // Should NOT have line-through after clicking
+    await expect(item).not.toHaveClass(/line-through/)
+  })
+
+  test('scope card reset links are hidden', async ({ page }) => {
+    await expect(page.locator('main button:has-text("reset")')).toHaveCount(0)
+  })
+
+  test('moving stage back from done re-enables interactions', async ({ page }) => {
+    // Currently at done — click "← building" to go back
+    await page.getByRole('button', { name: /← building/ }).click()
+
+    // Needle should show "on track" again (not "Shipped")
+    await expect(page.getByText('on track')).toBeVisible()
+    await expect(page.getByText('Shipped')).not.toBeVisible()
+
+    // "Move the needle" button should reappear
+    await expect(page.getByRole('button', { name: 'Move the needle' })).toBeVisible()
+
+    // "drag to reorder" hint should reappear
+    await expect(page.getByText('drag to reorder')).toBeVisible()
   })
 })
