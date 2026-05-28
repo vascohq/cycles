@@ -24,6 +24,7 @@ import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
 import type { Stage, Zone } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
+import { useAuth, useUser } from '@clerk/nextjs'
 import { useCallback } from 'react'
 
 type ScopeMapProps = {
@@ -32,7 +33,6 @@ type ScopeMapProps = {
   cycleSlug: string
   cycleTitle: string
   slug: string
-  userId: string
   organizationUsers: OrganizationUser[]
 }
 
@@ -42,7 +42,6 @@ export function ScopeMap({
   cycleSlug,
   cycleTitle,
   slug,
-  userId,
   organizationUsers,
 }: ScopeMapProps) {
   return (
@@ -66,7 +65,6 @@ export function ScopeMap({
                 cycleSlug={cycleSlug}
                 cycleTitle={cycleTitle}
                 slug={slug}
-                userId={userId}
               />
             )}
           </ClientSideSuspense>
@@ -81,14 +79,14 @@ function ScopeMapWired({
   cycleSlug,
   cycleTitle,
   slug,
-  userId,
 }: {
   pitchSlug: string
   cycleSlug: string
   cycleTitle: string
   slug: string
-  userId: string
 }) {
+  const { userId } = useAuth()
+  const { user } = useUser()
   const pitch = useCycleStorage((root) => {
     const bySlug = root.pitches.find(
       (p) =>
@@ -268,12 +266,12 @@ function ScopeMapWired({
     ? `${window.location.origin}/${slug}/cycles/${cycleSlug}/${pitchSlug}`
     : ''
 
-  const userName = usersMap.get(userId)?.name ?? 'You'
+  const userName = user?.firstName ?? usersMap.get(userId ?? '')?.name ?? 'You'
   const channelName = cycle.slack_channel || 'general'
 
   const onPostUpdate = useCallback(
     async (zone: Zone, narrative: string) => {
-      if (!pitch) return
+      if (!pitch || !userId) return
       const built = persistUpdate({
         pitchId,
         userId,

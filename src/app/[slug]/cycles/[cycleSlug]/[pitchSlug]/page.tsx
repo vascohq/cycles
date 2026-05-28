@@ -51,7 +51,6 @@ export default async function ScopeMapPage({ params }: PageParams) {
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle!}
       slug={slug}
-      userId={userId}
       organizationUsers={users}
     />
   )
