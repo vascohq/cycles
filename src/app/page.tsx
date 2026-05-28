@@ -6,5 +6,5 @@ export default async function Home() {
   const { userId, orgSlug } = authResult
   if (!userId) return authResult.redirectToSignIn()
 
-  redirect(`/${orgSlug ?? 'me'}/boards`)
+  redirect(`/${orgSlug ?? 'me'}/cycles`)
 }
