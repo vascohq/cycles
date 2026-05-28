@@ -254,12 +254,10 @@ export async function deleteScope(roomId: string, scopeId: string): Promise<void
     scopes.delete(idx)
 
     // Cascade delete tasks belonging to this scope
-    for (let i = tasks.toArray().length - 1; i >= 0; i--) {
-      if (tasks.toArray()[i].get('id') !== undefined) {
-        const task = tasks.toArray()[i]
-        if (task.get('scopeId') === scopeId) {
-          tasks.delete(i)
-        }
+    const taskArray = [...tasks]
+    for (let i = taskArray.length - 1; i >= 0; i--) {
+      if (taskArray[i].get('scopeId') === scopeId) {
+        tasks.delete(i)
       }
     }
   })

@@ -47,6 +47,7 @@ function makeMockList(items: MockItem[]) {
     toArray: () => items,
     delete: (index: number) => items.splice(index, 1),
     findIndex: (fn: (item: MockItem) => boolean) => items.findIndex(fn),
+    [Symbol.iterator]: () => items[Symbol.iterator](),
   }
 }
 

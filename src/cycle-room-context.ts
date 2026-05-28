@@ -41,10 +41,10 @@ export function cycleInitialStorage(): CycleStorage {
       end_date: '',
       slack_channel: '',
     }),
-    pitches: new LiveList(),
-    scopes: new LiveList(),
-    tasks: new LiveList(),
-    updates: new LiveList(),
-    parkingItems: new LiveList(),
+    pitches: new LiveList([]),
+    scopes: new LiveList([]),
+    tasks: new LiveList([]),
+    updates: new LiveList([]),
+    parkingItems: new LiveList([]),
   }
 }
