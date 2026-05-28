@@ -18,6 +18,8 @@ import {
   deriveTotalTaskProgress,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost } from '@/lib/needle-engine'
+import { deriveTimelineCards } from '@/lib/timeline-helpers'
+import { useOrganizationUsers } from '@/components/organization-users-context'
 import type { Stage } from '@/cycle-liveblocks.config'
 
 type ScopeMapProps = {
@@ -90,6 +92,7 @@ function ScopeMapWired({
   const allTasks = useCycleStorage((root) => [...root.tasks])
   const allUpdates = useCycleStorage((root) => [...root.updates])
   const allParkingItems = useCycleStorage((root) => [...root.parkingItems])
+  const orgUsers = useOrganizationUsers()
 
   const pitchId = pitch?.id ?? ''
 
@@ -179,11 +182,17 @@ function ScopeMapWired({
     )
   }
 
+  const usersMap = new Map(
+    (orgUsers ?? []).map((u) => [u.userId, { name: u.name, initials: u.initials }])
+  )
+
   const scopeGridItems = deriveScopeGridItems(allScopes, allTasks, pitchId)
   const hillScopes = deriveHillScopes(allScopes, pitchId)
   const parkingLotItems = deriveParkingLotItems(allParkingItems, pitchId)
   const totalProgress = deriveTotalTaskProgress(allScopes, allTasks, pitchId)
-  const ghost = deriveGhost(allUpdates.filter((u) => u.pitchId === pitchId))
+  const pitchUpdates = allUpdates.filter((u) => u.pitchId === pitchId)
+  const ghost = deriveGhost(pitchUpdates)
+  const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
   const today = new Date().toISOString().slice(0, 10)
 
   return (
@@ -205,6 +214,7 @@ function ScopeMapWired({
       onScopeReorder={onScopeReorder}
       onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}
+      timelineCards={timelineCards}
     />
   )
 }

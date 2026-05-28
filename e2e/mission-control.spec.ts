@@ -99,4 +99,30 @@ test.describe('Mission Control view', () => {
       page.getByText('mission control · click a pitch to open its scope map')
     ).toBeVisible()
   })
+
+  test('add pitch button is visible', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /Add pitch/ })).toBeVisible()
+  })
+
+  test('clicking add pitch opens dialog and creates a pitch', async ({ page }) => {
+    await page.getByRole('button', { name: /Add pitch/ }).click()
+    await expect(page.getByRole('heading', { name: 'New pitch' })).toBeVisible()
+
+    await page.getByPlaceholder('What are we betting on?').fill('Billing v2')
+    await page.getByRole('button', { name: 'Create' }).click()
+
+    // Dialog closes and new pitch card appears
+    await expect(page.getByRole('heading', { name: 'New pitch' })).not.toBeVisible()
+    await expect(page.getByText('Billing v2')).toBeVisible()
+
+    // Count badge updates to 5
+    const section = page.locator('section').filter({ hasText: 'In flight' })
+    await expect(section.locator('.rounded-full').first()).toContainText('5')
+  })
+
+  test('create button is disabled when title is empty', async ({ page }) => {
+    await page.getByRole('button', { name: /Add pitch/ }).click()
+    const createBtn = page.getByRole('button', { name: 'Create' })
+    await expect(createBtn).toBeDisabled()
+  })
 })

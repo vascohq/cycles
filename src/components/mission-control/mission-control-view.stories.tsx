@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { useState } from 'react'
 import { MissionControlView } from './mission-control-view'
 import type { PitchCard } from '@/lib/mission-control-helpers'
 
@@ -105,5 +106,39 @@ export const AllDone: Story = {
     today: '2025-02-14',
     inFlight: [],
     done: [...inFlightCards.map((c) => ({ ...c, stage: 'done' as const })), ...doneCards],
+  },
+}
+
+export const WithCreatePitch: Story = {
+  render: function Render() {
+    const [pitches, setPitches] = useState<PitchCard[]>([...inFlightCards])
+
+    return (
+      <MissionControlView
+        slug="acme"
+        cycleSlug="cycle-5"
+        cycleTitle="Cycle 5 — Build"
+        channelName="product-general"
+        today="2025-01-27"
+        inFlight={pitches}
+        done={doneCards}
+        onCreatePitch={(title) =>
+          setPitches((prev) => [
+            ...prev,
+            {
+              id: `p-${Date.now()}`,
+              title,
+              stage: 'framing',
+              needle: null,
+              tasksDone: 0,
+              tasksTotal: 0,
+              lastUpdatedAt: null,
+              timebox_start: '2025-01-06',
+              timebox_end: '2025-02-14',
+            },
+          ])
+        }
+      />
+    )
   },
 }
