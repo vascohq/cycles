@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils'
 export type UpdatesTimelineProps = {
   cards: TimelineCard[]
   channelName: string
+  onRetrySlack?: (updateId: string) => void
 }
 
-export function UpdatesTimeline({ cards, channelName }: UpdatesTimelineProps) {
+export function UpdatesTimeline({ cards, channelName, onRetrySlack }: UpdatesTimelineProps) {
   return (
     <section className="flex flex-col gap-4">
       <div>
@@ -27,7 +28,12 @@ export function UpdatesTimeline({ cards, channelName }: UpdatesTimelineProps) {
       ) : (
         <div className="flex flex-col gap-3">
           {cards.map((card, i) => (
-            <UpdateCard key={card.id} card={card} isNewest={i === 0} />
+            <UpdateCard
+              key={card.id}
+              card={card}
+              isNewest={i === 0}
+              onRetrySlack={onRetrySlack}
+            />
           ))}
         </div>
       )}
@@ -38,9 +44,11 @@ export function UpdatesTimeline({ cards, channelName }: UpdatesTimelineProps) {
 function UpdateCard({
   card,
   isNewest,
+  onRetrySlack,
 }: {
   card: TimelineCard
   isNewest: boolean
+  onRetrySlack?: (updateId: string) => void
 }) {
   const zoneLabel = card.needleSnapshot.zone.replace('_', ' ')
   const zoneColor = ZONE_COLORS[card.needleSnapshot.zone]
@@ -84,6 +92,15 @@ function UpdateCard({
         </div>
 
         <p className="text-[13.5px] leading-relaxed">{card.narrative}</p>
+
+        {card.slackFailed && onRetrySlack && (
+          <button
+            onClick={() => onRetrySlack(card.id)}
+            className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 font-mono transition-colors"
+          >
+            Slack post failed — retry?
+          </button>
+        )}
       </div>
     </div>
   )

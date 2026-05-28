@@ -19,6 +19,10 @@ export const Default: Story = {
     dateLabel: 'May 27, 2025',
     userName: 'Seb',
     channelName: 'product-general',
+    pitchTitle: 'Mission Control',
+    tasksDone: 9,
+    tasksTotal: 13,
+    daysLeft: 21,
     onOpenChange: () => {},
     onPost: () => {},
   },
@@ -47,6 +51,10 @@ export const Interactive: Story = {
           dateLabel="May 27, 2025"
           userName="Seb"
           channelName="product-general"
+          pitchTitle="Mission Control"
+          tasksDone={9}
+          tasksTotal={13}
+          daysLeft={21}
           onPost={async (zone, narrative) => {
             await new Promise((r) => setTimeout(r, 800))
             setLastPost({ zone, narrative })

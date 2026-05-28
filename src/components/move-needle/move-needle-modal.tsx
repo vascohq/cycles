@@ -11,6 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { SlackPreview } from './slack-preview'
 
 const ZONES: { value: Zone; label: string }[] = [
   { value: 'on_track', label: 'On track' },
@@ -25,6 +26,10 @@ export type MoveNeedleModalProps = {
   dateLabel: string
   userName: string
   channelName: string
+  pitchTitle: string
+  tasksDone: number
+  tasksTotal: number
+  daysLeft: number
   onPost: (zone: Zone, narrative: string) => void | Promise<void>
 }
 
@@ -35,6 +40,10 @@ export function MoveNeedleModal({
   dateLabel,
   userName,
   channelName,
+  pitchTitle,
+  tasksDone,
+  tasksTotal,
+  daysLeft,
   onPost,
 }: MoveNeedleModalProps) {
   const [zone, setZone] = useState<Zone | null>(null)
@@ -118,6 +127,17 @@ export function MoveNeedleModal({
               className="w-full min-h-[100px] rounded-lg border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+
+          <SlackPreview
+            pitchTitle={pitchTitle}
+            weekLabel={weekLabel}
+            zone={zone}
+            narrative={narrative}
+            tasksDone={tasksDone}
+            tasksTotal={tasksTotal}
+            daysLeft={daysLeft}
+            channelName={channelName}
+          />
         </div>
 
         <DialogFooter className="gap-2">

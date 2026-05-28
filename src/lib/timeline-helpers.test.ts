@@ -67,4 +67,18 @@ describe('deriveTimelineCards', () => {
   it('returns empty array for no updates', () => {
     expect(deriveTimelineCards([], users)).toEqual([])
   })
+
+  it('marks cards without slack_delivered_at as slackFailed', () => {
+    const cards = deriveTimelineCards(updates, users)
+    expect(cards[0].slackFailed).toBe(true)
+    expect(cards[1].slackFailed).toBe(true)
+  })
+
+  it('marks cards with slack_delivered_at as not slackFailed', () => {
+    const delivered: PitchUpdate[] = [
+      { ...updates[0], slack_delivered_at: '2025-06-03T14:31:00Z' },
+    ]
+    const cards = deriveTimelineCards(delivered, users)
+    expect(cards[0].slackFailed).toBe(false)
+  })
 })

@@ -9,6 +9,7 @@ export type TimelineCard = {
   narrative: string
   needleSnapshot: NeedleSnapshot
   scopesMoved: number
+  slackFailed: boolean
 }
 
 export function formatUpdateTimestamp(iso: string): string {
@@ -56,6 +57,7 @@ export function deriveTimelineCards(
       narrative: update.narrative,
       needleSnapshot: update.needle_snapshot,
       scopesMoved,
+      slackFailed: !update.slack_delivered_at,
     }
   })
 }

@@ -22,6 +22,7 @@ const cards: TimelineCard[] = [
       'Scope map is fully wired with real-time Liveblocks data. Hill chart drag works. Task toggles persist. Ready to start on Mission Control page next.',
     needleSnapshot: { progress: 0.85, zone: 'on_track' },
     scopesMoved: 3,
+    slackFailed: false,
   },
   {
     id: 'u2',
@@ -33,6 +34,7 @@ const cards: TimelineCard[] = [
       'Hill chart engine complete. Scope cards rendering but drag-to-reorder has a z-index issue we need to debug. Timebox tape looks great in compact mode.',
     needleSnapshot: { progress: 0.5, zone: 'some_risk' },
     scopesMoved: 2,
+    slackFailed: true,
   },
   {
     id: 'u1',
@@ -44,6 +46,7 @@ const cards: TimelineCard[] = [
       'Kicked off the cycle. Needle engine and gauge are done. Starting hill chart work this week.',
     needleSnapshot: { progress: 0.2, zone: 'concerned' },
     scopesMoved: 0,
+    slackFailed: false,
   },
 ]
 
@@ -65,5 +68,13 @@ export const SingleUpdate: Story = {
   args: {
     cards: [cards[0]],
     channelName: 'eng-team',
+  },
+}
+
+export const WithRetryBanner: Story = {
+  args: {
+    cards,
+    channelName: 'product-general',
+    onRetrySlack: () => {},
   },
 }

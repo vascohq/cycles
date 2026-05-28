@@ -50,6 +50,7 @@ export type ScopeMapViewProps = {
   userName?: string
   channelName?: string
   timelineCards?: TimelineCard[]
+  onRetrySlack?: (updateId: string) => void
 }
 
 export function ScopeMapView({
@@ -74,6 +75,7 @@ export function ScopeMapView({
   userName = 'You',
   channelName = 'general',
   timelineCards = [],
+  onRetrySlack,
 }: ScopeMapViewProps) {
   const isDone = pitch.stage === 'done'
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
@@ -88,6 +90,12 @@ export function ScopeMapView({
   )
   const totalWeeks = Math.ceil(totalDays / 7)
   const currentWeek = weekOfTimebox(pitch.timebox_start, pitch.timebox_end, today)
+  const elapsedDays = Math.round(
+    (new Date(today + 'T00:00:00').getTime() -
+      new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
+      86_400_000
+  )
+  const daysLeft = Math.max(0, totalDays - elapsedDays)
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
@@ -133,6 +141,10 @@ export function ScopeMapView({
                   dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   userName={userName}
                   channelName={channelName}
+                  pitchTitle={pitch.title}
+                  tasksDone={totalProgress.done}
+                  tasksTotal={totalProgress.total}
+                  daysLeft={daysLeft}
                   onPost={onPostUpdate}
                 />
               )}
@@ -176,7 +188,7 @@ export function ScopeMapView({
         />
       </section>
 
-      <UpdatesTimeline cards={timelineCards} channelName={channelName} />
+      <UpdatesTimeline cards={timelineCards} channelName={channelName} onRetrySlack={onRetrySlack} />
 
       <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
         scope map · drag dots on the hill · check tasks · move the needle
