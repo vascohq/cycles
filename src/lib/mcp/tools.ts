@@ -3,6 +3,16 @@ import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-read
 import { parseSlugPath } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
 import { derivePitchCards } from '@/lib/mission-control-helpers'
+import {
+  upsertPitch,
+  upsertScope,
+  upsertTask,
+  upsertParkingItem,
+  deletePitch,
+  deleteScope,
+  deleteTask,
+  deleteParkingItem,
+} from './liveblocks-writer'
 
 const orgArg = {
   org: z
@@ -124,6 +134,54 @@ export async function handleGetPitchUpdates(
   }
 }
 
+// ── Write tool handlers ──
+
+type BatchOp = { tool: string; params: Record<string, unknown> }
+type BatchResult = { ok: true; tool: string; id?: string; created?: boolean } | { ok: false; tool: string; error: string }
+
+const WRITE_TOOLS: Record<
+  string,
+  (roomId: string, params: any) => Promise<{ created: boolean; id: string } | void>
+> = {
+  upsert_pitch: upsertPitch,
+  upsert_scope: upsertScope,
+  upsert_task: upsertTask,
+  upsert_parking_item: upsertParkingItem,
+  delete_pitch: (roomId, p) => deletePitch(roomId, p.id).then(() => undefined),
+  delete_scope: (roomId, p) => deleteScope(roomId, p.id).then(() => undefined),
+  delete_task: (roomId, p) => deleteTask(roomId, p.id).then(() => undefined),
+  delete_parking_item: (roomId, p) => deleteParkingItem(roomId, p.id).then(() => undefined),
+}
+
+export async function handleBatch(
+  orgId: string,
+  cycleSlug: string,
+  operations: BatchOp[]
+): Promise<ToolResult> {
+  const roomId = `${orgId}:cycle:${cycleSlug}`
+  const results: BatchResult[] = []
+
+  for (const op of operations) {
+    const handler = WRITE_TOOLS[op.tool]
+    if (!handler) {
+      results.push({ ok: false, tool: op.tool, error: `Unknown tool: "${op.tool}"` })
+      continue
+    }
+    try {
+      const result = await handler(roomId, op.params)
+      if (result) {
+        results.push({ ok: true, tool: op.tool, id: result.id, created: result.created })
+      } else {
+        results.push({ ok: true, tool: op.tool })
+      }
+    } catch (err) {
+      results.push({ ok: false, tool: op.tool, error: (err as Error).message })
+    }
+  }
+
+  return jsonResult({ results })
+}
+
 export function registerCyclesTools(server: any): void {
   server.tool(
     'list_cycles',
@@ -191,6 +249,233 @@ export function registerCyclesTools(server: any): void {
         return errorResult('slug_path must include both cycle and pitch slug: "cycle-slug/pitch-slug"')
       }
       return handleGetPitchUpdates(resolved.org.id, parsed.cycleSlug, parsed.pitchSlug)
+    }
+  )
+
+  // ── Write tools ──
+
+  const cycleSlugArg = {
+    cycle_slug: z.string().describe('Cycle slug, e.g. "2026-q2-build"'),
+  }
+
+  server.tool(
+    'upsert_pitch',
+    'Create or update a pitch. Omit id to create (returns generated id). Provide id to update.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().optional().describe('Pitch id. Omit to create.'),
+      title: z.string(),
+      stage: z.enum(['framing', 'shaping', 'building', 'done']),
+      frame_problem: z.string().default(''),
+      frame_outcome: z.string().default(''),
+      timebox_start: z.string().default(''),
+      timebox_end: z.string().default(''),
+    },
+    async (
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
+      try {
+        const result = await upsertPitch(roomId, params)
+        return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'upsert_scope',
+    'Create or update a scope under a pitch. Omit id to create.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().optional(),
+      pitchId: z.string().describe('Parent pitch id'),
+      title: z.string(),
+      tier: z.enum(['must', 'should', 'could']),
+      litmus_text: z.string().default(''),
+      hill_progress: z.number().min(0).max(1).default(0),
+    },
+    async (
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text: string; hill_progress: number },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
+      try {
+        const result = await upsertScope(roomId, params)
+        return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'upsert_task',
+    'Create or update a task under a scope. Omit id to create.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().optional(),
+      scopeId: z.string().describe('Parent scope id'),
+      title: z.string(),
+      done: z.boolean().default(false),
+    },
+    async (
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done: boolean },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
+      try {
+        const result = await upsertTask(roomId, params)
+        return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'upsert_parking_item',
+    'Create or update a parking lot item under a pitch. Omit id to create.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().optional(),
+      pitchId: z.string().describe('Parent pitch id'),
+      text: z.string(),
+      resolved: z.boolean().default(false),
+    },
+    async (
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; text: string; resolved: boolean },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved2 = resolveOrg(memberships, org)
+      if (!resolved2.ok) return errorResult(resolved2.error)
+      const roomId = `${resolved2.org.id}:cycle:${cycle_slug}`
+      try {
+        const result = await upsertParkingItem(roomId, params)
+        return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'delete_pitch',
+    'Delete a pitch by id',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Pitch id to delete') },
+    async (
+      { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      try {
+        await deletePitch(`${resolved.org.id}:cycle:${cycle_slug}`, id)
+        return jsonResult({ deleted: true })
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'delete_scope',
+    'Delete a scope and its tasks by id',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Scope id to delete') },
+    async (
+      { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      try {
+        await deleteScope(`${resolved.org.id}:cycle:${cycle_slug}`, id)
+        return jsonResult({ deleted: true })
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'delete_task',
+    'Delete a task by id',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Task id to delete') },
+    async (
+      { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      try {
+        await deleteTask(`${resolved.org.id}:cycle:${cycle_slug}`, id)
+        return jsonResult({ deleted: true })
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'delete_parking_item',
+    'Delete a parking lot item by id',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Parking item id to delete') },
+    async (
+      { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      try {
+        await deleteParkingItem(`${resolved.org.id}:cycle:${cycle_slug}`, id)
+        return jsonResult({ deleted: true })
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  server.tool(
+    'batch',
+    'Execute multiple write operations sequentially. Each operation specifies a tool and params. Returns results for all operations — successful ops persist even if others fail.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      operations: z.array(
+        z.object({
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, delete_pitch, delete_scope, delete_task, delete_parking_item'),
+          params: z.record(z.unknown()).describe('Tool parameters'),
+        })
+      ),
+    },
+    async (
+      { org, cycle_slug, operations }: { org?: string; cycle_slug: string; operations: BatchOp[] },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleBatch(resolved.org.id, cycle_slug, operations)
     }
   )
 }
