@@ -48,8 +48,9 @@ describe('formatSlackMessage', () => {
     expect(formatSlackMessage({ ...BASE_PARAMS, zone: 'concerned' }).text).toContain('🔴')
   })
 
-  it('formats time from ISO string', () => {
+  it('uses Slack date token for timezone-aware display', () => {
     const msg = formatSlackMessage(BASE_PARAMS)
-    expect(msg.text).toContain('2:30 PM')
+    const epoch = Math.floor(new Date('2026-06-10T14:30:00Z').getTime() / 1000)
+    expect(msg.text).toContain(`<!date^${epoch}^{date_short_pretty} at {time}|`)
   })
 })

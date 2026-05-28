@@ -19,6 +19,7 @@ describe('buildUpdate', () => {
         { scopeId: 's2', done: true },
         { scopeId: 's2', done: true },
       ],
+      timebox: { daysLeft: 20, currentWeek: 3, totalWeeks: 6 },
     })
 
     expect(update.pitchId).toBe('p1')
@@ -33,6 +34,7 @@ describe('buildUpdate', () => {
       { scopeId: 's1', done: 1, total: 2 },
       { scopeId: 's2', done: 2, total: 2 },
     ])
+    expect(update.timebox_snapshot).toEqual({ daysLeft: 20, currentWeek: 3, totalWeeks: 6 })
     expect(update.id).toBeTruthy()
     expect(update.posted_at).toBeTruthy()
   })

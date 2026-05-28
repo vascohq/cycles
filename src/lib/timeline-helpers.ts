@@ -57,7 +57,7 @@ export function deriveTimelineCards(
       narrative: update.narrative,
       needleSnapshot: update.needle_snapshot,
       scopesMoved,
-      slackFailed: !update.slack_delivered_at,
+      slackFailed: !!update.slack_attempted && !update.slack_delivered_at,
     }
   })
 }

@@ -15,10 +15,11 @@ type BuildUpdateParams = {
   currentNeedle: Needle | null
   scopes: { id: string; hill_progress: number }[]
   tasks: { scopeId: string; done: boolean }[]
+  timebox: { daysLeft: number; currentWeek: number; totalWeeks: number }
 }
 
 export function buildUpdate(params: BuildUpdateParams): PitchUpdate {
-  const { pitchId, userId, zone, narrative, scopes, tasks } = params
+  const { pitchId, userId, zone, narrative, scopes, tasks, timebox } = params
 
   const hill_snapshot: HillSnapshot[] = scopes.map((s) => ({
     scopeId: s.id,
@@ -44,5 +45,6 @@ export function buildUpdate(params: BuildUpdateParams): PitchUpdate {
     needle_snapshot: { progress: snapForZone(zone), zone },
     hill_snapshot,
     task_snapshot,
+    timebox_snapshot: timebox,
   }
 }

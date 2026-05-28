@@ -48,6 +48,7 @@ const updates: PitchUpdate[] = [
     needle_snapshot: { progress: 0.6, zone: 'on_track' },
     hill_snapshot: [],
     task_snapshot: [],
+    timebox_snapshot: { daysLeft: 20, currentWeek: 3, totalWeeks: 6 },
   },
 ]
 

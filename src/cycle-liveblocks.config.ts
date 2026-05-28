@@ -58,6 +58,8 @@ export type PitchUpdate = {
   needle_snapshot: NeedleSnapshot
   hill_snapshot: HillSnapshot[]
   task_snapshot: { scopeId: string; done: number; total: number }[]
+  timebox_snapshot: { daysLeft: number; currentWeek: number; totalWeeks: number }
+  slack_attempted?: boolean
   slack_delivered_at?: string
 }
 

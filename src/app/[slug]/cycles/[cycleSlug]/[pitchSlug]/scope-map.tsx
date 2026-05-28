@@ -197,6 +197,19 @@ function ScopeMapWired({
     []
   )
 
+  const markSlackAttempted = useCycleMutation(
+    ({ storage }, updateId: string) => {
+      const updates = storage.get('updates')
+      for (let i = 0; i < updates.length; i++) {
+        if (updates.get(i)!.get('id') === updateId) {
+          updates.get(i)!.set('slack_attempted', true)
+          break
+        }
+      }
+    },
+    []
+  )
+
   const markSlackDelivered = useCycleMutation(
     ({ storage }, updateId: string, deliveredAt: string) => {
       const updates = storage.get('updates')
@@ -222,8 +235,8 @@ function ScopeMapWired({
           const { delivered_at } = (await res.json()) as { delivered_at: string }
           markSlackDelivered(updateId, delivered_at)
         }
-      } catch {
-        // Slack delivery failed — retry banner will show
+      } catch (err) {
+        console.warn('Slack delivery failed', err)
       }
     },
     [markSlackDelivered]
@@ -265,9 +278,11 @@ function ScopeMapWired({
         currentNeedle: pitch.needle,
         scopes: pitchScopes.map((s) => ({ id: s.id, hill_progress: s.hill_progress })),
         tasks: pitchTasks.map((t) => ({ scopeId: t.scopeId, done: t.done })),
+        timebox: { daysLeft: timebox.daysLeft, currentWeek: timebox.currentWeek, totalWeeks: timebox.totalWeeks },
       })
       pushUpdate(built)
       if (!slackEnabled) return
+      markSlackAttempted(built.id)
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
@@ -284,33 +299,34 @@ function ScopeMapWired({
         built.id
       )
     },
-    [pushUpdate, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, timebox, totalProgress, pitchUrl, slackEnabled]
+    [pushUpdate, markSlackAttempted, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, timebox, totalProgress, pitchUrl, slackEnabled]
   )
 
   const onRetrySlack = useCallback(
     async (updateId: string) => {
-      if (!pitch || !timebox) return
+      if (!pitch) return
       const update = pitchUpdates.find((u) => u.id === updateId)
       if (!update) return
       const snapshotDone = update.task_snapshot.reduce((sum, s) => sum + s.done, 0)
       const snapshotTotal = update.task_snapshot.reduce((sum, s) => sum + s.total, 0)
+      const tb = update.timebox_snapshot
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
-          weekNumber: timebox.currentWeek,
-          totalWeeks: timebox.totalWeeks,
+          weekNumber: tb.currentWeek,
+          totalWeeks: tb.totalWeeks,
           zone: update.needle_snapshot.zone,
           narrative: update.narrative,
           tasksDone: snapshotDone,
           tasksTotal: snapshotTotal,
-          daysLeft: timebox.daysLeft,
+          daysLeft: tb.daysLeft,
           pitchUrl,
           postedAt: update.posted_at,
         },
         updateId
       )
     },
-    [deliverToSlack, pitchUpdates, pitch, timebox, pitchUrl]
+    [deliverToSlack, pitchUpdates, pitch, pitchUrl]
   )
 
   if (!pitch) {
