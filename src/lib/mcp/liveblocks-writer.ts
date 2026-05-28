@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid'
+import { LiveObject } from '@liveblocks/node'
 import { liveblocks } from '@/lib/liveblocks'
 import type {
   CyclePitch,
@@ -8,6 +9,13 @@ import type {
 } from '@/cycle-liveblocks.config'
 
 type UpsertResult = { created: boolean; id: string }
+
+// Items pushed correctly are LiveObjects (use .get/.set).
+// If a list also contains plain objects pushed by buggy older code, treat them
+// as read-only and access fields directly so iteration doesn't crash.
+function getField(item: any, key: string): any {
+  return typeof item?.get === 'function' ? item.get(key) : item?.[key]
+}
 
 
 // ── Pitch ──
@@ -42,9 +50,9 @@ export async function upsertPitch(
         timebox_start: params.timebox_start,
         timebox_end: params.timebox_end,
       }
-      pitches.push(pitch)
+      pitches.push(new LiveObject(pitch))
     } else {
-      const existing = pitches.find((p: any) => p.get('id') === id)
+      const existing = pitches.find((p: any) => getField(p, 'id') === id)
       if (!existing) {
         notFound = true
         return
@@ -86,7 +94,7 @@ export async function upsertScope(
 
     if (created) {
       const pitchExists = pitches.find(
-        (p: any) => p.get('id') === params.pitchId
+        (p: any) => getField(p, 'id') === params.pitchId
       )
       if (!pitchExists) {
         pitchMissing = true
@@ -100,9 +108,9 @@ export async function upsertScope(
         litmus_text: params.litmus_text,
         hill_progress: params.hill_progress,
       }
-      scopes.push(scope)
+      scopes.push(new LiveObject(scope))
     } else {
-      const existing = scopes.find((s: any) => s.get('id') === id)
+      const existing = scopes.find((s: any) => getField(s, 'id') === id)
       if (!existing) {
         notFound = true
         return
@@ -141,7 +149,7 @@ export async function upsertTask(
 
     if (created) {
       const scopeExists = scopes.find(
-        (s: any) => s.get('id') === params.scopeId
+        (s: any) => getField(s, 'id') === params.scopeId
       )
       if (!scopeExists) {
         scopeMissing = true
@@ -153,9 +161,9 @@ export async function upsertTask(
         title: params.title,
         done: params.done,
       }
-      tasks.push(task)
+      tasks.push(new LiveObject(task))
     } else {
-      const existing = tasks.find((t: any) => t.get('id') === id)
+      const existing = tasks.find((t: any) => getField(t, 'id') === id)
       if (!existing) {
         notFound = true
         return
@@ -192,7 +200,7 @@ export async function upsertParkingItem(
 
     if (created) {
       const pitchExists = pitches.find(
-        (p: any) => p.get('id') === params.pitchId
+        (p: any) => getField(p, 'id') === params.pitchId
       )
       if (!pitchExists) {
         pitchMissing = true
@@ -204,9 +212,9 @@ export async function upsertParkingItem(
         text: params.text,
         resolved: params.resolved,
       }
-      parkingItems.push(item)
+      parkingItems.push(new LiveObject(item))
     } else {
-      const existing = parkingItems.find((p: any) => p.get('id') === id)
+      const existing = parkingItems.find((p: any) => getField(p, 'id') === id)
       if (!existing) {
         notFound = true
         return
@@ -228,7 +236,7 @@ export async function deletePitch(roomId: string, pitchId: string): Promise<void
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const pitches = root.get('pitches')
-    const idx = pitches.findIndex((p: any) => p.get('id') === pitchId)
+    const idx = pitches.findIndex((p: any) => getField(p, 'id') === pitchId)
     if (idx === -1) {
       notFound = true
       return
@@ -246,7 +254,7 @@ export async function deleteScope(roomId: string, scopeId: string): Promise<void
     const scopes = root.get('scopes')
     const tasks = root.get('tasks')
 
-    const idx = scopes.findIndex((s: any) => s.get('id') === scopeId)
+    const idx = scopes.findIndex((s: any) => getField(s, 'id') === scopeId)
     if (idx === -1) {
       notFound = true
       return
@@ -256,7 +264,7 @@ export async function deleteScope(roomId: string, scopeId: string): Promise<void
     // Cascade delete tasks belonging to this scope
     const taskArray = [...tasks]
     for (let i = taskArray.length - 1; i >= 0; i--) {
-      if (taskArray[i].get('scopeId') === scopeId) {
+      if (getField(taskArray[i], 'scopeId') === scopeId) {
         tasks.delete(i)
       }
     }
@@ -270,7 +278,7 @@ export async function deleteTask(roomId: string, taskId: string): Promise<void> 
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const tasks = root.get('tasks')
-    const idx = tasks.findIndex((t: any) => t.get('id') === taskId)
+    const idx = tasks.findIndex((t: any) => getField(t, 'id') === taskId)
     if (idx === -1) {
       notFound = true
       return
@@ -289,7 +297,7 @@ export async function deleteParkingItem(
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const parkingItems = root.get('parkingItems')
-    const idx = parkingItems.findIndex((p: any) => p.get('id') === itemId)
+    const idx = parkingItems.findIndex((p: any) => getField(p, 'id') === itemId)
     if (idx === -1) {
       notFound = true
       return

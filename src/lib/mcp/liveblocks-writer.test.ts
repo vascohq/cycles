@@ -39,9 +39,31 @@ function makeMockItem(data: Record<string, unknown>): MockItem {
   }
 }
 
+// Mirror real Liveblocks semantics: a LiveList<LiveObject<X>> only stores items
+// as proper LiveObjects when pushed via `new LiveObject(...)`. A plain JS object
+// would be wrapped in an opaque LiveRegister, and the writer's later .get('id')
+// reads would crash. The previous lenient mock accepted plain objects, hiding
+// that bug — so reject anything that isn't a LiveObject-shaped instance.
+function toMockItem(item: unknown): MockItem {
+  if (
+    !item ||
+    typeof item !== 'object' ||
+    typeof (item as { get?: unknown }).get !== 'function' ||
+    typeof (item as { keys?: unknown }).keys !== 'function'
+  ) {
+    throw new Error(
+      'LiveList items must be wrapped in `new LiveObject(...)` before pushing'
+    )
+  }
+  const live = item as { get: (k: string) => unknown; keys: () => Iterable<string> }
+  const data: Record<string, unknown> = {}
+  for (const key of live.keys()) data[key] = live.get(key)
+  return makeMockItem(data)
+}
+
 function makeMockList(items: MockItem[]) {
   return {
-    push: (item: unknown) => items.push(item as MockItem),
+    push: (item: unknown) => items.push(toMockItem(item)),
     find: (fn: (item: MockItem) => boolean) => items.find(fn),
     filter: (fn: (item: MockItem) => boolean) => items.filter(fn),
     toArray: () => items,
