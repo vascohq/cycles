@@ -58,7 +58,6 @@ export type PitchUpdate = {
   needle_snapshot: NeedleSnapshot
   hill_snapshot: HillSnapshot[]
   task_snapshot: { scopeId: string; done: number; total: number }[]
-  slack_message_ts?: string
   slack_delivered_at?: string
 }
 

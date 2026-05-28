@@ -7,22 +7,25 @@ import { cn } from '@/lib/utils'
 
 export type UpdatesTimelineProps = {
   cards: TimelineCard[]
+  slackEnabled?: boolean
   onRetrySlack?: (updateId: string) => void
 }
 
-export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
+export function UpdatesTimeline({ cards, slackEnabled = false, onRetrySlack }: UpdatesTimelineProps) {
   return (
     <section className="flex flex-col gap-4">
       <div>
         <h2 className="font-gloria text-[32px]">Updates</h2>
-        <p className="text-xs font-mono text-muted-foreground">
-          Posted Tuesdays to Slack
-        </p>
+        {slackEnabled && (
+          <p className="text-xs font-mono text-muted-foreground">
+            Posted to Slack
+          </p>
+        )}
       </div>
 
       {cards.length === 0 ? (
         <div className="border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">
-          No updates yet — post the first one when Tuesday rolls around
+          No updates yet — click &ldquo;Move the needle&rdquo; to post the first one
         </div>
       ) : (
         <div className="flex flex-col gap-3">

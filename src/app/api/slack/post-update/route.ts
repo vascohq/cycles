@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { formatSlackMessage, type SlackMessageParams } from '@/lib/slack-message'
+import { formatSlackMessage, slackMessageSchema } from '@/lib/slack-message'
 
 export async function POST(request: Request) {
   const { userId } = await auth()
@@ -16,8 +16,15 @@ export async function POST(request: Request) {
     )
   }
 
-  const body = (await request.json()) as SlackMessageParams
-  const payload = formatSlackMessage(body)
+  const parsed = slackMessageSchema.safeParse(await request.json())
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      { status: 400 }
+    )
+  }
+
+  const payload = formatSlackMessage(parsed.data)
 
   const slackRes = await fetch(webhookUrl, {
     method: 'POST',

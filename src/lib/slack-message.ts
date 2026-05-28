@@ -1,17 +1,20 @@
+import { z } from 'zod'
 import type { Zone } from '@/cycle-liveblocks.config'
 
-export type SlackMessageParams = {
-  pitchTitle: string
-  weekNumber: number
-  totalWeeks: number
-  zone: Zone
-  narrative: string
-  tasksDone: number
-  tasksTotal: number
-  daysLeft: number
-  pitchUrl: string
-  postedAt: string
-}
+export const slackMessageSchema = z.object({
+  pitchTitle: z.string(),
+  weekNumber: z.number(),
+  totalWeeks: z.number(),
+  zone: z.enum(['on_track', 'some_risk', 'concerned']),
+  narrative: z.string(),
+  tasksDone: z.number(),
+  tasksTotal: z.number(),
+  daysLeft: z.number(),
+  pitchUrl: z.string().url(),
+  postedAt: z.string(),
+})
+
+export type SlackMessageParams = z.infer<typeof slackMessageSchema>
 
 const ZONE_EMOJI: Record<Zone, string> = {
   on_track: '🟢',

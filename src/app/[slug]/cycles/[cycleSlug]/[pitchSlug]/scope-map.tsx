@@ -19,10 +19,11 @@ import {
 } from '@/lib/scope-map-helpers'
 import { deriveGhost } from '@/lib/needle-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
-import { buildUpdate, weekOfTimebox } from '@/lib/update-engine'
+import { buildUpdate } from '@/lib/update-engine'
+import { computeTimebox } from '@/lib/timebox-engine'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage, Zone } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useCallback } from 'react'
@@ -34,6 +35,7 @@ type ScopeMapProps = {
   cycleTitle: string
   slug: string
   organizationUsers: OrganizationUser[]
+  slackEnabled: boolean
 }
 
 export function ScopeMap({
@@ -43,6 +45,7 @@ export function ScopeMap({
   cycleTitle,
   slug,
   organizationUsers,
+  slackEnabled,
 }: ScopeMapProps) {
   return (
     <TooltipProvider>
@@ -65,6 +68,7 @@ export function ScopeMap({
                 cycleSlug={cycleSlug}
                 cycleTitle={cycleTitle}
                 slug={slug}
+                slackEnabled={slackEnabled}
               />
             )}
           </ClientSideSuspense>
@@ -79,11 +83,13 @@ function ScopeMapWired({
   cycleSlug,
   cycleTitle,
   slug,
+  slackEnabled,
 }: {
   pitchSlug: string
   cycleSlug: string
   cycleTitle: string
   slug: string
+  slackEnabled: boolean
 }) {
   const { userId } = useAuth()
   const { user } = useUser()
@@ -185,13 +191,11 @@ function ScopeMapWired({
     []
   )
 
-  const persistUpdate = useCycleMutation(
-    ({ storage }, update: Parameters<typeof buildUpdate>[0]) => {
-      const built = buildUpdate(update)
+  const pushUpdate = useCycleMutation(
+    ({ storage }, built: PitchUpdate) => {
       storage.get('updates').push(new LiveObject(built))
-      const p = storage.get('pitches').find((x) => x.get('id') === update.pitchId)
+      const p = storage.get('pitches').find((x) => x.get('id') === built.pitchId)
       if (p) p.set('needle', { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone })
-      return built
     },
     []
   )
@@ -243,23 +247,9 @@ function ScopeMapWired({
 
   const pitchScopes = allScopes.filter((s) => s.pitchId === pitchId)
   const pitchTasks = allTasks.filter((t) => pitchScopes.some((s) => s.id === t.scopeId))
-  const currentWeek = pitch ? weekOfTimebox(pitch.timebox_start, pitch.timebox_end, today) : 1
-  const totalDays = pitch
-    ? Math.round(
-        (new Date(pitch.timebox_end + 'T00:00:00').getTime() -
-          new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
-          86_400_000
-      )
-    : 42
-  const totalWeeks = Math.ceil(totalDays / 7)
-  const elapsedDays = pitch
-    ? Math.round(
-        (new Date(today + 'T00:00:00').getTime() -
-          new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
-          86_400_000
-      )
-    : 0
-  const daysLeft = Math.max(0, totalDays - elapsedDays)
+  const timebox = pitch
+    ? computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
+    : null
 
   const pitchUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/${slug}/cycles/${cycleSlug}/${pitchSlug}`
@@ -269,8 +259,8 @@ function ScopeMapWired({
 
   const onPostUpdate = useCallback(
     async (zone: Zone, narrative: string) => {
-      if (!pitch || !userId) return
-      const built = persistUpdate({
+      if (!pitch || !userId || !timebox) return
+      const built = buildUpdate({
         pitchId,
         userId,
         zone,
@@ -279,49 +269,51 @@ function ScopeMapWired({
         scopes: pitchScopes.map((s) => ({ id: s.id, hill_progress: s.hill_progress })),
         tasks: pitchTasks.map((t) => ({ scopeId: t.scopeId, done: t.done })),
       })
-      if (built) {
-        await deliverToSlack(
-          {
-            pitchTitle: pitch.title,
-            weekNumber: currentWeek,
-            totalWeeks,
-            zone,
-            narrative,
-            tasksDone: totalProgress.done,
-            tasksTotal: totalProgress.total,
-            daysLeft,
-            pitchUrl,
-            postedAt: built.posted_at,
-          },
-          built.id
-        )
-      }
+      pushUpdate(built)
+      if (!slackEnabled) return
+      await deliverToSlack(
+        {
+          pitchTitle: pitch.title,
+          weekNumber: timebox.currentWeek,
+          totalWeeks: timebox.totalWeeks,
+          zone,
+          narrative,
+          tasksDone: totalProgress.done,
+          tasksTotal: totalProgress.total,
+          daysLeft: timebox.daysLeft,
+          pitchUrl,
+          postedAt: built.posted_at,
+        },
+        built.id
+      )
     },
-    [persistUpdate, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, currentWeek, totalWeeks, totalProgress, daysLeft, pitchUrl]
+    [pushUpdate, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, timebox, totalProgress, pitchUrl, slackEnabled]
   )
 
   const onRetrySlack = useCallback(
     async (updateId: string) => {
-      if (!pitch) return
+      if (!pitch || !timebox) return
       const update = pitchUpdates.find((u) => u.id === updateId)
       if (!update) return
+      const snapshotDone = update.task_snapshot.reduce((sum, s) => sum + s.done, 0)
+      const snapshotTotal = update.task_snapshot.reduce((sum, s) => sum + s.total, 0)
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
-          weekNumber: currentWeek,
-          totalWeeks,
+          weekNumber: timebox.currentWeek,
+          totalWeeks: timebox.totalWeeks,
           zone: update.needle_snapshot.zone,
           narrative: update.narrative,
-          tasksDone: totalProgress.done,
-          tasksTotal: totalProgress.total,
-          daysLeft,
+          tasksDone: snapshotDone,
+          tasksTotal: snapshotTotal,
+          daysLeft: timebox.daysLeft,
           pitchUrl,
           postedAt: update.posted_at,
         },
         updateId
       )
     },
-    [deliverToSlack, pitchUpdates, pitch, currentWeek, totalWeeks, totalProgress, daysLeft, pitchUrl]
+    [deliverToSlack, pitchUpdates, pitch, timebox, pitchUrl]
   )
 
   if (!pitch) {
@@ -353,8 +345,9 @@ function ScopeMapWired({
       onParkingToggle={onParkingToggle}
       onPostUpdate={onPostUpdate}
       userName={userName}
+      slackEnabled={slackEnabled}
       timelineCards={timelineCards}
-      onRetrySlack={onRetrySlack}
+      onRetrySlack={slackEnabled ? onRetrySlack : undefined}
     />
   )
 }

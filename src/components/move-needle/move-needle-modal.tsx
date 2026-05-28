@@ -29,6 +29,7 @@ export type MoveNeedleModalProps = {
   tasksDone: number
   tasksTotal: number
   daysLeft: number
+  slackEnabled?: boolean
   onPost: (zone: Zone, narrative: string) => void | Promise<void>
 }
 
@@ -42,6 +43,7 @@ export function MoveNeedleModal({
   tasksDone,
   tasksTotal,
   daysLeft,
+  slackEnabled = false,
   onPost,
 }: MoveNeedleModalProps) {
   const [zone, setZone] = useState<Zone | null>(null)
@@ -126,15 +128,17 @@ export function MoveNeedleModal({
             />
           </div>
 
-          <SlackPreview
-            pitchTitle={pitchTitle}
-            weekLabel={weekLabel}
-            zone={zone}
-            narrative={narrative}
-            tasksDone={tasksDone}
-            tasksTotal={tasksTotal}
-            daysLeft={daysLeft}
-          />
+          {slackEnabled && (
+            <SlackPreview
+              pitchTitle={pitchTitle}
+              weekLabel={weekLabel}
+              zone={zone}
+              narrative={narrative}
+              tasksDone={tasksDone}
+              tasksTotal={tasksTotal}
+              daysLeft={daysLeft}
+            />
+          )}
         </div>
 
         <DialogFooter className="gap-2">
@@ -149,7 +153,7 @@ export function MoveNeedleModal({
             disabled={!canPost}
             className="px-4 py-2 text-sm rounded-lg bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
           >
-            {posting ? 'Posting…' : 'Post to Slack'}
+            {posting ? 'Posting…' : slackEnabled ? 'Post to Slack' : 'Post update'}
           </button>
         </DialogFooter>
       </DialogContent>

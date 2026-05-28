@@ -14,8 +14,7 @@ import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
-import { isTuesday, weekOfTimebox } from '@/lib/update-engine'
-import { cn } from '@/lib/utils'
+import { computeTimebox } from '@/lib/timebox-engine'
 
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
@@ -48,6 +47,7 @@ export type ScopeMapViewProps = {
   onParkingToggle?: (itemId: string, resolved: boolean) => void
   onPostUpdate?: (zone: Zone, narrative: string) => void | Promise<void>
   userName?: string
+  slackEnabled?: boolean
   timelineCards?: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
 }
@@ -72,6 +72,7 @@ export function ScopeMapView({
   onParkingToggle,
   onPostUpdate,
   userName = 'You',
+  slackEnabled = false,
   timelineCards = [],
   onRetrySlack,
 }: ScopeMapViewProps) {
@@ -80,20 +81,7 @@ export function ScopeMapView({
     null
   )
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
-  const tuesday = !isDone && isTuesday(today)
-  const totalDays = Math.round(
-    (new Date(pitch.timebox_end + 'T00:00:00').getTime() -
-      new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
-      86_400_000
-  )
-  const totalWeeks = Math.ceil(totalDays / 7)
-  const currentWeek = weekOfTimebox(pitch.timebox_start, pitch.timebox_end, today)
-  const elapsedDays = Math.round(
-    (new Date(today + 'T00:00:00').getTime() -
-      new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
-      86_400_000
-  )
-  const daysLeft = Math.max(0, totalDays - elapsedDays)
+  const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
@@ -124,10 +112,7 @@ export function ScopeMapView({
             <>
               <button
                 onClick={() => setMoveNeedleOpen(true)}
-                className={cn(
-                  'text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5',
-                  tuesday && 'animate-pulse'
-                )}
+                className="text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5"
               >
                 Move the needle
               </button>
@@ -135,13 +120,14 @@ export function ScopeMapView({
                 <MoveNeedleModal
                   open={moveNeedleOpen}
                   onOpenChange={setMoveNeedleOpen}
-                  weekLabel={`Week ${currentWeek} of ${totalWeeks}`}
+                  weekLabel={`Week ${timebox.currentWeek} of ${timebox.totalWeeks}`}
                   dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   userName={userName}
                   pitchTitle={pitch.title}
                   tasksDone={totalProgress.done}
                   tasksTotal={totalProgress.total}
-                  daysLeft={daysLeft}
+                  daysLeft={timebox.daysLeft}
+                  slackEnabled={slackEnabled}
                   onPost={onPostUpdate}
                 />
               )}
@@ -185,7 +171,7 @@ export function ScopeMapView({
         />
       </section>
 
-      <UpdatesTimeline cards={timelineCards} onRetrySlack={onRetrySlack} />
+      <UpdatesTimeline cards={timelineCards} slackEnabled={slackEnabled} onRetrySlack={onRetrySlack} />
 
       <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
         scope map · drag dots on the hill · check tasks · move the needle

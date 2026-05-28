@@ -44,6 +44,8 @@ export default async function ScopeMapPage({ params }: PageParams) {
 
   const users = await getOrganizationUsers(orgId)
 
+  const slackEnabled = !!process.env.SLACK_WEBHOOK_URL
+
   return (
     <ScopeMap
       roomId={roomId}
@@ -52,6 +54,7 @@ export default async function ScopeMapPage({ params }: PageParams) {
       cycleTitle={cycleTitle!}
       slug={slug}
       organizationUsers={users}
+      slackEnabled={slackEnabled}
     />
   )
 }

@@ -43,6 +43,7 @@ export default async function MissionControlPage({ params }: PageParams) {
   }
 
   const users = await getOrganizationUsers(orgId)
+  const slackEnabled = !!process.env.SLACK_WEBHOOK_URL
 
   return (
     <MissionControl
@@ -51,6 +52,7 @@ export default async function MissionControlPage({ params }: PageParams) {
       cycleTitle={cycleTitle!}
       slug={slug}
       organizationUsers={users}
+      slackEnabled={slackEnabled}
     />
   )
 }

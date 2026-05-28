@@ -39,6 +39,7 @@ export type MissionControlViewProps = {
   cycleSlug: string
   cycleTitle: string
   today: string
+  slackEnabled?: boolean
   inFlight: PitchCard[]
   done: PitchCard[]
   onCreatePitch?: (title: string) => void
@@ -48,6 +49,7 @@ export function MissionControlView({
   slug,
   cycleSlug,
   today,
+  slackEnabled = false,
   inFlight,
   done,
   onCreatePitch,
@@ -60,15 +62,17 @@ export function MissionControlView({
         <h1 className="font-gloria text-4xl md:text-[56px] leading-tight">
           Mission Control
         </h1>
-        <p className="text-sm font-mono text-muted-foreground">
-          Updates posted Tuesdays to Slack
-        </p>
+        {slackEnabled && (
+          <p className="text-sm font-mono text-muted-foreground">
+            Updates posted to Slack
+          </p>
+        )}
       </header>
 
       <Section
         title="In flight"
         count={inFlight.length}
-        subtitle="Updates posted Tuesdays to Slack"
+        subtitle={slackEnabled ? 'Updates posted to Slack' : undefined}
         action={
           onCreatePitch && (
             <button

@@ -64,7 +64,7 @@ export const WithGhost: Story = {
   args: {
     needle: { progress: 0.7, zone: 'on_track' },
     ghost: { progress: 0.4, zone: 'some_risk' },
-    timestamp: 'Updated Tuesday',
+    timestamp: 'Updated 2d ago',
   },
 }
 

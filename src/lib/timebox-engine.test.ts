@@ -40,6 +40,22 @@ describe('computeTimebox', () => {
     expect(info.dayNumber).toBe(14)
     expect(info.daysLeft).toBe(1)
   })
+
+  it('computes totalWeeks and currentWeek for a 6-week timebox', () => {
+    const info = computeTimebox('2025-01-06', '2025-02-14', '2025-01-20')
+    expect(info.totalWeeks).toBe(6)
+    expect(info.currentWeek).toBe(3)
+  })
+
+  it('returns currentWeek 0 before start', () => {
+    const info = computeTimebox('2026-06-01', '2026-06-15', '2026-05-28')
+    expect(info.currentWeek).toBe(0)
+  })
+
+  it('returns currentWeek equal to totalWeeks after end', () => {
+    const info = computeTimebox('2026-06-01', '2026-06-15', '2026-06-20')
+    expect(info.currentWeek).toBe(info.totalWeeks)
+  })
 })
 
 describe('dayTicks', () => {
