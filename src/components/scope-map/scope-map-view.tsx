@@ -13,6 +13,7 @@ import { UpdatesTimeline } from '@/components/updates-timeline'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
+import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
 import { isTuesday, weekOfTimebox } from '@/lib/update-engine'
 import { cn } from '@/lib/utils'
 
@@ -74,11 +75,12 @@ export function ScopeMapView({
   channelName = 'general',
   timelineCards = [],
 }: ScopeMapViewProps) {
+  const isDone = pitch.stage === 'done'
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
   )
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
-  const tuesday = isTuesday(today)
+  const tuesday = !isDone && isTuesday(today)
   const totalDays = Math.round(
     (new Date(pitch.timebox_end + 'T00:00:00').getTime() -
       new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
@@ -101,34 +103,40 @@ export function ScopeMapView({
         pitch={pitch}
         today={today}
         onStageChange={onStageChange}
+        isDone={isDone}
       />
 
       <section className="grid grid-cols-1 gap-6 mc-row">
         <div className="flex flex-col items-center gap-3">
           <NeedleGauge
-            needle={pitch.needle}
-            ghost={ghost}
-            onProgressChange={onNeedleProgressChange}
+            needle={isDone ? SHIPPED_NEEDLE : pitch.needle}
+            ghost={isDone ? null : ghost}
+            onProgressChange={isDone ? undefined : onNeedleProgressChange}
+            label={isDone ? 'Shipped' : undefined}
           />
-          <button
-            onClick={() => setMoveNeedleOpen(true)}
-            className={cn(
-              'text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5',
-              tuesday && 'animate-pulse'
-            )}
-          >
-            Move the needle
-          </button>
-          {onPostUpdate && (
-            <MoveNeedleModal
-              open={moveNeedleOpen}
-              onOpenChange={setMoveNeedleOpen}
-              weekLabel={`Week ${currentWeek} of ${totalWeeks}`}
-              dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              userName={userName}
-              channelName={channelName}
-              onPost={onPostUpdate}
-            />
+          {!isDone && (
+            <>
+              <button
+                onClick={() => setMoveNeedleOpen(true)}
+                className={cn(
+                  'text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5',
+                  tuesday && 'animate-pulse'
+                )}
+              >
+                Move the needle
+              </button>
+              {onPostUpdate && (
+                <MoveNeedleModal
+                  open={moveNeedleOpen}
+                  onOpenChange={setMoveNeedleOpen}
+                  weekLabel={`Week ${currentWeek} of ${totalWeeks}`}
+                  dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  userName={userName}
+                  channelName={channelName}
+                  onPost={onPostUpdate}
+                />
+              )}
+            </>
           )}
         </div>
 
@@ -137,7 +145,7 @@ export function ScopeMapView({
             scopes={hillScopes}
             highlightedScopeId={highlightedScopeId}
             onScopeHover={setHighlightedScopeId}
-            onHillProgressChange={onHillProgressChange}
+            onHillProgressChange={isDone ? undefined : onHillProgressChange}
           />
         </div>
       </section>
@@ -145,20 +153,27 @@ export function ScopeMapView({
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="font-gloria text-lg">Scopes</h2>
-          <span className="text-xs text-muted-foreground/50 font-mono">
-            drag to reorder
-          </span>
+          {!isDone && (
+            <span className="text-xs text-muted-foreground/50 font-mono">
+              drag to reorder
+            </span>
+          )}
         </div>
         <ScopeGrid
           scopes={scopeGridItems}
-          onReorder={onScopeReorder}
-          onTaskToggle={onTaskToggle}
-          onReset={onScopeReset}
+          onReorder={isDone ? undefined : onScopeReorder}
+          onTaskToggle={isDone ? undefined : onTaskToggle}
+          onReset={isDone ? undefined : onScopeReset}
+          readOnly={isDone}
         />
       </section>
 
       <section>
-        <ParkingLot items={parkingLotItems} onToggleResolved={onParkingToggle} />
+        <ParkingLot
+          items={parkingLotItems}
+          onToggleResolved={isDone ? undefined : onParkingToggle}
+          readOnly={isDone}
+        />
       </section>
 
       <UpdatesTimeline cards={timelineCards} channelName={channelName} />
@@ -213,6 +228,7 @@ function HeroCard({
   pitch,
   today,
   onStageChange,
+  isDone,
 }: {
   pitch: {
     title: string
@@ -224,6 +240,7 @@ function HeroCard({
   }
   today: string
   onStageChange?: (stage: Stage) => void
+  isDone?: boolean
 }) {
   const stageIndex = STAGES.indexOf(pitch.stage)
 
@@ -250,6 +267,7 @@ function HeroCard({
         start={pitch.timebox_start}
         end={pitch.timebox_end}
         today={today}
+        done={isDone}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
