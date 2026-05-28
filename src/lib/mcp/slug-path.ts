@@ -4,6 +4,13 @@ export type SlugPath =
 
 const SEGMENT_RE = /^[a-z0-9][a-z0-9_-]*$/
 
+// A slug segment must be lowercase letters/digits, optionally with hyphens or
+// underscores, starting with an alphanumeric. This keeps cycles addressable via
+// the same slug paths the read tools accept.
+export function isValidSlugSegment(seg: string): boolean {
+  return SEGMENT_RE.test(seg)
+}
+
 export function parseSlugPath(path: string): SlugPath {
   const trimmed = path.replace(/^\/+|\/+$/g, '')
   if (!trimmed) throw new Error('Slug path must not be empty')

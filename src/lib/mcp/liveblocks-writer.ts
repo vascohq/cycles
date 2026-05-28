@@ -10,6 +10,70 @@ import type {
 
 type UpsertResult = { created: boolean; id: string }
 
+async function roomExists(roomId: string): Promise<boolean> {
+  try {
+    await liveblocks.getRoom(roomId)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ── Cycle ──
+
+// Mirrors the createCycleRoom server action: creates the Liveblocks room and
+// initializes its empty storage document. Idempotent — returns created:false if
+// a room with this id already exists rather than clobbering it.
+export async function createCycle(
+  roomId: string,
+  userId: string,
+  params: {
+    name: string
+    type: string
+    start_date: string
+    end_date: string
+    slack_channel: string
+  }
+): Promise<{ created: boolean }> {
+  if (await roomExists(roomId)) return { created: false }
+
+  await liveblocks.createRoom(roomId, {
+    metadata: {
+      title: params.name,
+      createdOn: new Date().toISOString(),
+      createdBy: userId,
+      type: params.type,
+      start_date: params.start_date,
+      end_date: params.end_date,
+      slack_channel: params.slack_channel,
+    },
+    defaultAccesses: ['room:write'],
+  })
+
+  await liveblocks.initializeStorageDocument(roomId, {
+    liveblocksType: 'LiveObject',
+    data: {
+      cycle: {
+        liveblocksType: 'LiveObject',
+        data: {
+          name: params.name,
+          type: params.type,
+          start_date: params.start_date,
+          end_date: params.end_date,
+          slack_channel: params.slack_channel,
+        },
+      },
+      pitches: { liveblocksType: 'LiveList', data: [] },
+      scopes: { liveblocksType: 'LiveList', data: [] },
+      tasks: { liveblocksType: 'LiveList', data: [] },
+      updates: { liveblocksType: 'LiveList', data: [] },
+      parkingItems: { liveblocksType: 'LiveList', data: [] },
+    },
+  })
+
+  return { created: true }
+}
+
 // Items pushed correctly are LiveObjects (use .get/.set).
 // If a list also contains plain objects pushed by buggy older code, treat them
 // as read-only and access fields directly so iteration doesn't crash.

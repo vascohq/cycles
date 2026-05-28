@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { parseSlugPath } from './slug-path'
+import { parseSlugPath, isValidSlugSegment } from './slug-path'
+
+describe('isValidSlugSegment', () => {
+  it('accepts lowercase alphanumeric slugs with hyphens and underscores', () => {
+    expect(isValidSlugSegment('2026-q3-build')).toBe(true)
+    expect(isValidSlugSegment('my_cycle-1')).toBe(true)
+    expect(isValidSlugSegment('34')).toBe(true)
+  })
+
+  it('rejects uppercase, spaces, slashes, and empty strings', () => {
+    expect(isValidSlugSegment('UPPER')).toBe(false)
+    expect(isValidSlugSegment('hello world')).toBe(false)
+    expect(isValidSlugSegment('a/b')).toBe(false)
+    expect(isValidSlugSegment('')).toBe(false)
+    expect(isValidSlugSegment('-leading')).toBe(false)
+  })
+})
 
 describe('parseSlugPath', () => {
   it('parses a single segment as a cycle slug', () => {
