@@ -260,7 +260,7 @@ export function registerCyclesTools(server: any): void {
 
   server.tool(
     'upsert_pitch',
-    'Create or update a pitch. Omit id to create (returns generated id). Provide id to update.',
+    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update.',
     {
       ...orgArg,
       ...cycleSlugArg,
