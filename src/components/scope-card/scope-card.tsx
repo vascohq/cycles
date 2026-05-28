@@ -3,7 +3,13 @@
 import { forwardRef, useState } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { TIER_COLORS } from '@/components/hill-chart/tier-colors'
-import { Check, Plus } from 'lucide-react'
+import { Check, Plus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export type ScopeCardTask = {
   id: string
@@ -21,6 +27,8 @@ export type ScopeCardProps = {
   onTaskToggle?: (taskId: string, done: boolean) => void
   onAddTask?: (title: string) => void
   onReset?: () => void
+  onEdit?: () => void
+  onDelete?: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
   isDragging?: boolean
   readOnly?: boolean
@@ -37,6 +45,8 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       onTaskToggle,
       onAddTask,
       onReset,
+      onEdit,
+      onDelete,
       dragHandleProps,
       isDragging,
       readOnly,
@@ -74,6 +84,9 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
               </p>
             )}
           </div>
+          {!readOnly && (onEdit || onDelete) && (
+            <ScopeActions onEdit={onEdit} onDelete={onDelete} />
+          )}
         </div>
 
         {tasks.length > 0 && (
@@ -136,6 +149,45 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     )
   }
 )
+
+function ScopeActions({
+  onEdit,
+  onDelete,
+}: {
+  onEdit?: () => void
+  onDelete?: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Scope actions"
+          className="flex-shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-36">
+        {onEdit && (
+          <DropdownMenuItem onClick={onEdit}>
+            <Pencil className="w-3.5 h-3.5 mr-2" />
+            Edit
+          </DropdownMenuItem>
+        )}
+        {onDelete && (
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
   const [value, setValue] = useState('')

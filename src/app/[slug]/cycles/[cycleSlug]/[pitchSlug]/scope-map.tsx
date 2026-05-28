@@ -203,6 +203,35 @@ function ScopeMapWired({
     []
   )
 
+  const onEditScope = useCycleMutation(
+    ({ storage }, scopeId: string, newTitle: string, newTier: string) => {
+      const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
+      if (!scope) return
+      scope.set('title', newTitle)
+      scope.set('tier', newTier as CycleScope['tier'])
+    },
+    []
+  )
+
+  const onDeleteScope = useCycleMutation(
+    ({ storage }, scopeId: string) => {
+      const tasksList = storage.get('tasks')
+      for (let i = tasksList.length - 1; i >= 0; i--) {
+        if (tasksList.get(i)!.get('scopeId') === scopeId) {
+          tasksList.delete(i)
+        }
+      }
+      const scopesList = storage.get('scopes')
+      for (let i = scopesList.length - 1; i >= 0; i--) {
+        if (scopesList.get(i)!.get('id') === scopeId) {
+          scopesList.delete(i)
+          break
+        }
+      }
+    },
+    []
+  )
+
   const onParkingToggle = useCycleMutation(
     ({ storage }, itemId: string, resolved: boolean) => {
       const item = storage
@@ -380,6 +409,8 @@ function ScopeMapWired({
       onTaskToggle={onTaskToggle}
       onAddTask={onAddTask}
       onAddScope={onAddScope}
+      onEditScope={onEditScope}
+      onDeleteScope={onDeleteScope}
       onScopeReorder={onScopeReorder}
       onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}

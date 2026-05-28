@@ -157,6 +157,116 @@ test.describe('Scope Map view assembly', () => {
   })
 })
 
+test.describe('Scope management', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/e2e/scope-map')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('add scope via modal', async ({ page }) => {
+    await page.getByRole('button', { name: /add scope/ }).click()
+
+    // Modal should appear
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: 'New scope' })).toBeVisible()
+
+    // Fill in title and select tier
+    await dialog.getByPlaceholder('Scope name').fill('Fresh scope')
+    await dialog.locator('select').selectOption('should')
+
+    // Submit
+    await dialog.getByRole('button', { name: 'Add scope' }).click()
+
+    // Modal should close and new scope should appear
+    await expect(dialog).not.toBeVisible()
+    await expect(page.getByText('Fresh scope')).toBeVisible()
+  })
+
+  test('edit scope via modal changes title and tier', async ({ page }) => {
+    // Open ⋯ menu on first scope
+    const firstActions = page.getByLabel('Scope actions').first()
+    await firstActions.click()
+
+    // Click Edit
+    await page.getByRole('menuitem', { name: 'Edit' }).click()
+
+    // Modal should show with current title
+    await expect(page.getByRole('heading', { name: 'Edit scope' })).toBeVisible()
+    const input = page.getByPlaceholder('Scope name')
+    await expect(input).toHaveValue('Needle engine & gauge')
+
+    // Change title
+    await input.clear()
+    await input.fill('Needle engine v2')
+
+    // Change tier to should
+    await page.locator('select').selectOption('should')
+
+    // Save
+    await page.getByRole('button', { name: 'Save' }).click()
+
+    // Modal should close and title should be updated
+    await expect(page.getByRole('heading', { name: 'Edit scope' })).not.toBeVisible()
+    await expect(page.getByText('Needle engine v2')).toBeVisible()
+  })
+
+  test('delete scope via modal with confirmation', async ({ page }) => {
+    // Open ⋯ menu on the last scope (Parking lot)
+    const actions = page.getByLabel('Scope actions').last()
+    await actions.click()
+
+    // Click Delete
+    await page.getByRole('menuitem', { name: 'Delete' }).click()
+
+    // Confirmation dialog should appear
+    await expect(page.getByRole('heading', { name: 'Delete scope' })).toBeVisible()
+    await expect(page.getByText(/Delete.*Parking lot/)).toBeVisible()
+    await expect(page.getByText(/2 tasks/)).toBeVisible()
+
+    // Confirm delete
+    await page.getByRole('button', { name: 'Delete' }).click()
+
+    // Dialog should close and scope should be gone
+    await expect(page.getByRole('heading', { name: 'Delete scope' })).not.toBeVisible()
+    // The "Parking lot" section heading still exists, but the scope card is gone
+    // Verify the scope card's task count is gone
+    await expect(page.getByText('Resolve toggle')).not.toBeVisible()
+  })
+
+  test('cancel delete does not remove scope', async ({ page }) => {
+    const firstActions = page.getByLabel('Scope actions').first()
+    await firstActions.click()
+    await page.getByRole('menuitem', { name: 'Delete' }).click()
+
+    // Cancel
+    await page.getByRole('button', { name: 'Cancel' }).click()
+
+    // Scope should still exist
+    await expect(page.getByText('Needle engine & gauge')).toBeVisible()
+  })
+
+  test('add scope modal can be cancelled', async ({ page }) => {
+    await page.getByRole('button', { name: /add scope/ }).click()
+    await expect(page.getByRole('heading', { name: 'New scope' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Cancel' }).click()
+
+    await expect(page.getByRole('heading', { name: 'New scope' })).not.toBeVisible()
+  })
+
+  test('scope actions menu is hidden in done state', async ({ page }) => {
+    // Transition to done
+    await page.getByRole('button', { name: /done →/ }).click()
+
+    // No actions triggers should be visible
+    await expect(page.getByLabel('Scope actions')).toHaveCount(0)
+
+    // Add scope button should also be hidden
+    await expect(page.getByRole('button', { name: /add scope/ })).toHaveCount(0)
+  })
+})
+
 test.describe('Done state lockdown', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/e2e/scope-map')

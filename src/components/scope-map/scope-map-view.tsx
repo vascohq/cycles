@@ -10,6 +10,13 @@ import { ScopeGrid } from '@/components/scope-card'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
 import { MoveNeedleModal } from '@/components/move-needle'
 import { UpdatesTimeline } from '@/components/updates-timeline'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
@@ -45,6 +52,8 @@ export type ScopeMapViewProps = {
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
   onAddTask?: (scopeId: string, title: string) => void
   onAddScope?: (title: string, tier: string) => void
+  onEditScope?: (scopeId: string, title: string, tier: string) => void
+  onDeleteScope?: (scopeId: string) => void
   onScopeReorder?: (activeId: string, overId: string) => void
   onScopeReset?: (scopeId: string) => void
   onParkingToggle?: (itemId: string, resolved: boolean) => void
@@ -71,6 +80,8 @@ export function ScopeMapView({
   onTaskToggle,
   onAddTask,
   onAddScope,
+  onEditScope,
+  onDeleteScope,
   onScopeReorder,
   onScopeReset,
   onParkingToggle,
@@ -84,7 +95,18 @@ export function ScopeMapView({
     null
   )
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
+  const [addScopeOpen, setAddScopeOpen] = useState(false)
+  const [editingScopeId, setEditingScopeId] = useState<string | null>(null)
+  const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
+
+  const editingScope = editingScopeId
+    ? scopeGridItems.find((s) => s.id === editingScopeId) ?? null
+    : null
+
+  const deletingScope = deletingScopeId
+    ? scopeGridItems.find((s) => s.id === deletingScopeId) ?? null
+    : null
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
@@ -156,7 +178,14 @@ export function ScopeMapView({
             </span>
           )}
           {!isDone && onAddScope && (
-            <AddScopeButton onAddScope={onAddScope} />
+            <button
+              type="button"
+              onClick={() => setAddScopeOpen(true)}
+              className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-auto"
+            >
+              <Plus className="w-3 h-3" />
+              add scope
+            </button>
           )}
         </div>
         <ScopeGrid
@@ -165,8 +194,39 @@ export function ScopeMapView({
           onTaskToggle={isDone ? undefined : onTaskToggle}
           onAddTask={isDone ? undefined : onAddTask}
           onReset={isDone ? undefined : onScopeReset}
+          onEditScope={!isDone && onEditScope ? (id) => setEditingScopeId(id) : undefined}
+          onDeleteScope={!isDone && onDeleteScope ? (id) => setDeletingScopeId(id) : undefined}
           readOnly={isDone}
         />
+        {onAddScope && (
+          <ScopeDialog
+            open={addScopeOpen}
+            onOpenChange={setAddScopeOpen}
+            title="New scope"
+            submitLabel="Add scope"
+            onSubmit={(t, tier) => { onAddScope(t, tier); setAddScopeOpen(false) }}
+          />
+        )}
+        {onEditScope && editingScope && (
+          <ScopeDialog
+            open={!!editingScopeId}
+            onOpenChange={(open) => { if (!open) setEditingScopeId(null) }}
+            title="Edit scope"
+            submitLabel="Save"
+            initialTitle={editingScope.title}
+            initialTier={editingScope.tier}
+            onSubmit={(t, tier) => { onEditScope(editingScopeId!, t, tier); setEditingScopeId(null) }}
+          />
+        )}
+        {onDeleteScope && deletingScope && (
+          <DeleteScopeDialog
+            open={!!deletingScopeId}
+            onOpenChange={(open) => { if (!open) setDeletingScopeId(null) }}
+            scopeTitle={deletingScope.title}
+            taskCount={deletingScope.tasks.length}
+            onConfirm={() => { onDeleteScope(deletingScopeId!); setDeletingScopeId(null) }}
+          />
+        )}
       </section>
 
       <section>
@@ -326,74 +386,136 @@ function StageButtons({
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 
-function AddScopeButton({
-  onAddScope,
+function ScopeDialog({
+  open,
+  onOpenChange,
+  title: dialogTitle,
+  submitLabel,
+  initialTitle = '',
+  initialTier = 'must',
+  onSubmit,
 }: {
-  onAddScope: (title: string, tier: string) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  submitLabel: string
+  initialTitle?: string
+  initialTier?: Tier
+  onSubmit: (title: string, tier: string) => void
 }) {
-  const [active, setActive] = useState(false)
-  const [title, setTitle] = useState('')
-  const [tier, setTier] = useState<Tier>('must')
+  const [title, setTitle] = useState(initialTitle)
+  const [tier, setTier] = useState<Tier>(initialTier)
+
+  // Sync initial values when the dialog opens with new scope data
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (open && !prevOpen) {
+    setTitle(initialTitle)
+    setTier(initialTier)
+  }
+  if (open !== prevOpen) setPrevOpen(open)
 
   function handleSubmit() {
     const trimmed = title.trim()
     if (!trimmed) return
-    onAddScope(trimmed, tier)
-    setTitle('')
-    setTier('must')
-    setActive(false)
+    onSubmit(trimmed, tier)
   }
 
-  if (!active) {
-    return (
-      <button
-        type="button"
-        onClick={() => setActive(true)}
-        className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-auto"
-      >
-        <Plus className="w-3 h-3" />
-        add scope
-      </button>
-    )
+  function handleOpenChange(next: boolean) {
+    if (!next) { setTitle(initialTitle); setTier(initialTier) }
+    onOpenChange(next)
   }
 
   return (
-    <div className="flex items-center gap-2 ml-auto">
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') handleSubmit()
-          if (e.key === 'Escape') { setTitle(''); setActive(false) }
-        }}
-        placeholder="Scope name…"
-        className="text-xs bg-transparent border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring w-36"
-        autoFocus
-      />
-      <select
-        value={tier}
-        onChange={(e) => setTier(e.target.value as Tier)}
-        className="text-xs bg-transparent border rounded px-1 py-1 outline-none"
-      >
-        {TIERS.map((t) => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={!title.trim()}
-        className="text-xs px-2 py-1 rounded bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
-      >
-        Add
-      </button>
-      <button
-        type="button"
-        onClick={() => { setTitle(''); setActive(false) }}
-        className="text-xs text-muted-foreground hover:text-foreground"
-      >
-        ✕
-      </button>
-    </div>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-gloria text-xl">
+            {dialogTitle}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            placeholder="Scope name…"
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            autoFocus
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Tier</span>
+            <select
+              value={tier}
+              onChange={(e) => setTier(e.target.value as Tier)}
+              className="text-sm bg-background border rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-ring"
+            >
+              {TIERS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <button
+            onClick={() => handleOpenChange(false)}
+            className="px-4 py-2 text-sm rounded-lg border hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!title.trim()}
+            className="px-4 py-2 text-sm rounded-lg bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
+          >
+            {submitLabel}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeleteScopeDialog({
+  open,
+  onOpenChange,
+  scopeTitle,
+  taskCount,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  scopeTitle: string
+  taskCount: number
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-gloria text-xl">
+            Delete scope
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Delete <strong>{scopeTitle}</strong>
+          {taskCount > 0 && ` and its ${taskCount} task${taskCount === 1 ? '' : 's'}`}?
+          This can&apos;t be undone.
+        </p>
+        <DialogFooter className="gap-2">
+          <button
+            onClick={() => onOpenChange(false)}
+            className="px-4 py-2 text-sm rounded-lg border hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground font-medium transition-opacity"
+          >
+            Delete
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
