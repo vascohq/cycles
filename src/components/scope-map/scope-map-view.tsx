@@ -9,6 +9,8 @@ import { TimeboxTape } from '@/components/timebox'
 import { ScopeGrid } from '@/components/scope-card'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
 import { MoveNeedleModal } from '@/components/move-needle'
+import { UpdatesTimeline } from '@/components/updates-timeline'
+import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { isTuesday, weekOfTimebox } from '@/lib/update-engine'
@@ -46,6 +48,7 @@ export type ScopeMapViewProps = {
   onPostUpdate?: (zone: Zone, narrative: string) => void | Promise<void>
   userName?: string
   channelName?: string
+  timelineCards?: TimelineCard[]
 }
 
 export function ScopeMapView({
@@ -69,6 +72,7 @@ export function ScopeMapView({
   onPostUpdate,
   userName = 'You',
   channelName = 'general',
+  timelineCards = [],
 }: ScopeMapViewProps) {
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
@@ -156,6 +160,8 @@ export function ScopeMapView({
       <section>
         <ParkingLot items={parkingLotItems} onToggleResolved={onParkingToggle} />
       </section>
+
+      <UpdatesTimeline cards={timelineCards} channelName={channelName} />
 
       <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
         scope map · drag dots on the hill · check tasks · move the needle
