@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/liveblocks', () => ({
   liveblocks: {
     mutateStorage: vi.fn(),
+    getRoom: vi.fn(),
     createRoom: vi.fn(),
     initializeStorageDocument: vi.fn(),
     deleteRoom: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock('@/lib/liveblocks', () => ({
 
 import { liveblocks } from '@/lib/liveblocks'
 import {
+  createCycle,
   upsertPitch,
   upsertScope,
   upsertTask,
@@ -20,6 +22,10 @@ import {
   deleteTask,
   deleteParkingItem,
 } from './liveblocks-writer'
+
+const mockGetRoom = vi.mocked(liveblocks.getRoom)
+const mockCreateRoom = vi.mocked(liveblocks.createRoom)
+const mockInitStorage = vi.mocked(liveblocks.initializeStorageDocument)
 
 const mockMutateStorage = vi.mocked(liveblocks.mutateStorage)
 
@@ -99,6 +105,47 @@ function setupStorage(data: StorageData = {}) {
 }
 
 const ROOM = 'org_1:cycle:q2-build'
+
+const CYCLE_PARAMS = {
+  name: 'Q3 Build',
+  type: 'build',
+  start_date: '2026-07-06',
+  end_date: '2026-08-14',
+  slack_channel: '#product-general',
+}
+
+describe('createCycle', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('creates the room and initializes storage when it does not exist', async () => {
+    mockGetRoom.mockRejectedValue(new Error('Room not found'))
+
+    const result = await createCycle(ROOM, 'user_1', CYCLE_PARAMS)
+
+    expect(result.created).toBe(true)
+    expect(mockCreateRoom).toHaveBeenCalledTimes(1)
+    const [roomId, opts] = mockCreateRoom.mock.calls[0]
+    expect(roomId).toBe(ROOM)
+    expect((opts as any).metadata.title).toBe('Q3 Build')
+    expect((opts as any).metadata.createdBy).toBe('user_1')
+    expect((opts as any).metadata.type).toBe('build')
+
+    expect(mockInitStorage).toHaveBeenCalledTimes(1)
+    const [, doc] = mockInitStorage.mock.calls[0]
+    expect((doc as any).data.cycle.data.name).toBe('Q3 Build')
+    expect((doc as any).data.pitches).toEqual({ liveblocksType: 'LiveList', data: [] })
+  })
+
+  it('is idempotent — returns created:false and does not clobber an existing room', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+
+    const result = await createCycle(ROOM, 'user_1', CYCLE_PARAMS)
+
+    expect(result.created).toBe(false)
+    expect(mockCreateRoom).not.toHaveBeenCalled()
+    expect(mockInitStorage).not.toHaveBeenCalled()
+  })
+})
 
 describe('upsertPitch', () => {
   beforeEach(() => vi.clearAllMocks())

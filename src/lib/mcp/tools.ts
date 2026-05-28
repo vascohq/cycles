@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
-import { parseSlugPath } from './slug-path'
+import { parseSlugPath, isValidSlugSegment } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
+import { slugify } from '@/lib/slugify'
 import { derivePitchCards } from '@/lib/mission-control-helpers'
 import {
+  createCycle,
   upsertPitch,
   upsertScope,
   upsertTask,
@@ -50,6 +52,46 @@ function getMemberships(extra: ToolExtra): OrgMembership[] {
     throw new Error('Missing org memberships in authInfo')
   }
   return memberships as OrgMembership[]
+}
+
+function getUserId(extra: ToolExtra): string {
+  const userId = extra.authInfo?.extra?.userId
+  if (typeof userId !== 'string' || !userId) {
+    throw new Error('Missing userId in authInfo')
+  }
+  return userId
+}
+
+export async function handleCreateCycle(
+  orgId: string,
+  userId: string,
+  slugInput: string | undefined,
+  params: {
+    name: string
+    type: string
+    start_date: string
+    end_date: string
+    slack_channel: string
+  }
+): Promise<ToolResult> {
+  // Use an explicit slug if given, otherwise derive one from the name.
+  const slug = slugInput?.trim() ? slugInput.trim() : slugify(params.name)
+  if (!isValidSlugSegment(slug)) {
+    return errorResult(
+      `Could not derive a valid cycle slug from "${slugInput ?? params.name}". ` +
+        'Pass a "slug" of lowercase letters, digits, "-" or "_".'
+    )
+  }
+  const roomId = `${orgId}:cycle:${slug}`
+  try {
+    const result = await createCycle(roomId, userId, params)
+    if (!result.created) {
+      return errorResult(`Cycle already exists: "${slug}"`)
+    }
+    return jsonResult({ created: true, slug, name: params.name })
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
 }
 
 export async function handleListCycles(orgId: string): Promise<ToolResult> {
@@ -195,6 +237,44 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleListCycles(resolved.org.id)
+    }
+  )
+
+  server.tool(
+    'create_cycle',
+    'Create a new cycle (a Liveblocks room). The slug is how the cycle is addressed by the other tools — omit it to derive one from the name (e.g. "2026 Q3 Build" → "2026-q3-build"), or pass an explicit slug of lowercase letters, digits, "-" or "_". Fails if a cycle with that slug already exists. After creating, use upsert_pitch to add pitches.',
+    {
+      ...orgArg,
+      name: z.string().describe('Human-readable cycle name, e.g. "2026 Q3 Build".'),
+      slug: z
+        .string()
+        .optional()
+        .describe('Optional cycle slug (lowercase letters, digits, "-" or "_"). Defaults to a slug derived from the name.'),
+      type: z.enum(['build', 'cooldown']).default('build'),
+      start_date: z.string().default('').describe('ISO date (YYYY-MM-DD), or empty.'),
+      end_date: z.string().default('').describe('ISO date (YYYY-MM-DD), or empty.'),
+      slack_channel: z.string().default('#product-general'),
+    },
+    async (
+      {
+        org,
+        slug,
+        ...params
+      }: {
+        org?: string
+        slug?: string
+        name: string
+        type: string
+        start_date: string
+        end_date: string
+        slack_channel: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleCreateCycle(resolved.org.id, getUserId(extra), slug, params)
     }
   )
 

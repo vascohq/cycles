@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates, handleBatch } from './tools'
+import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates, handleBatch, handleCreateCycle } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -10,6 +10,7 @@ vi.mock('./liveblocks-reader', () => ({
 }))
 
 vi.mock('./liveblocks-writer', () => ({
+  createCycle: vi.fn(),
   upsertPitch: vi.fn(),
   upsertScope: vi.fn(),
   upsertTask: vi.fn(),
@@ -151,14 +152,87 @@ describe('handleGetPitchUpdates', () => {
 })
 
 import {
+  createCycle,
   upsertPitch,
   upsertScope,
   upsertTask,
 } from './liveblocks-writer'
 
+const mockCreateCycle = vi.mocked(createCycle)
 const mockUpsertPitch = vi.mocked(upsertPitch)
 const mockUpsertScope = vi.mocked(upsertScope)
 const mockUpsertTask = vi.mocked(upsertTask)
+
+const CYCLE_PARAMS = {
+  name: '2026 Q3 Build',
+  type: 'build',
+  start_date: '2026-07-06',
+  end_date: '2026-08-14',
+  slack_channel: '#product-general',
+}
+
+describe('handleCreateCycle', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('creates a cycle with an explicit slug and returns created:true', async () => {
+    mockCreateCycle.mockResolvedValue({ created: true })
+
+    const result = await handleCreateCycle(ORG_ID, 'user_1', '2026-q3-build', CYCLE_PARAMS)
+
+    expect(result.isError).toBeUndefined()
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.created).toBe(true)
+    expect(data.slug).toBe('2026-q3-build')
+    expect(mockCreateCycle).toHaveBeenCalledWith(
+      `${ORG_ID}:cycle:2026-q3-build`,
+      'user_1',
+      CYCLE_PARAMS
+    )
+  })
+
+  it('derives the slug from the name when none is given', async () => {
+    mockCreateCycle.mockResolvedValue({ created: true })
+
+    const result = await handleCreateCycle(ORG_ID, 'user_1', undefined, CYCLE_PARAMS)
+
+    expect(result.isError).toBeUndefined()
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.slug).toBe('2026-q3-build')
+    expect(mockCreateCycle).toHaveBeenCalledWith(
+      `${ORG_ID}:cycle:2026-q3-build`,
+      'user_1',
+      CYCLE_PARAMS
+    )
+  })
+
+  it('rejects an unusable slug without touching storage', async () => {
+    const result = await handleCreateCycle(ORG_ID, 'user_1', 'Bad Slug', CYCLE_PARAMS)
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('Could not derive a valid cycle slug')
+    expect(mockCreateCycle).not.toHaveBeenCalled()
+  })
+
+  it('returns an error when a name slugifies to nothing', async () => {
+    const result = await handleCreateCycle(ORG_ID, 'user_1', undefined, {
+      ...CYCLE_PARAMS,
+      name: '!!!',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('Could not derive a valid cycle slug')
+    expect(mockCreateCycle).not.toHaveBeenCalled()
+  })
+
+  it('returns an error when the cycle already exists', async () => {
+    mockCreateCycle.mockResolvedValue({ created: false })
+
+    const result = await handleCreateCycle(ORG_ID, 'user_1', '2026-q3-build', CYCLE_PARAMS)
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('already exists')
+  })
+})
 
 describe('handleBatch', () => {
   beforeEach(() => vi.clearAllMocks())
