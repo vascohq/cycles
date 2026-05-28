@@ -28,12 +28,12 @@ export default function OrgLayout({
           <SignedIn>
             <div className="flex gap-2">
               <Button variant="link" asChild>
-                <Link href="/">Boards</Link>
+                <Link href="/">Cycles</Link>
               </Button>
               <div className="flex items-center [&_.cl-organizationPreviewMainIdentifier]:text-foreground">
                 <OrganizationSwitcher
-                  afterSelectOrganizationUrl="/:slug/boards"
-                  afterSelectPersonalUrl="/me/boards"
+                  afterSelectOrganizationUrl="/:slug/cycles"
+                  afterSelectPersonalUrl="/me/cycles"
                   appearance={{
                     elements: {
                       organizationSwitcherPopoverActionButton__createOrganization:
@@ -49,7 +49,7 @@ export default function OrgLayout({
           </SignedIn>
           <ThemeSelector />
           <Button variant="ghost" size="icon" className="-ml-2" asChild>
-            <a href="https://github.com/scastiel/cycles" target="_blank">
+            <a href="https://github.com/vascohq/cycles" target="_blank">
               <MarkGithubIcon className="size-4" />
             </a>
           </Button>
