@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import {
   progressToPoint,
@@ -50,12 +50,23 @@ export function HillChart({
 }: HillChartProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dragProgress, setDragProgress] = useState<number | null>(null)
+  const [pendingDrag, setPendingDrag] = useState<{
+    scopeId: string
+    progress: number
+  } | null>(null)
   const [tooltip, setTooltip] = useState<{
     x: number
     y: number
     text: string
   } | null>(null)
+
+  useEffect(() => {
+    if (!pendingDrag) return
+    const scope = scopes.find((s) => s.id === pendingDrag.scopeId)
+    if (scope && scope.hill_progress === pendingDrag.progress) {
+      setPendingDrag(null)
+    }
+  }, [scopes, pendingDrag])
 
   const svgXFromEvent = useCallback(
     (e: MouseEvent | TouchEvent) => {
@@ -79,15 +90,16 @@ export function HillChart({
         const x = svgXFromEvent(ev)
         const progress = clampHillProgress(pointToProgress(x))
         latestProgress = progress
-        setDragProgress(progress)
+        setPendingDrag({ scopeId, progress })
       }
 
       const handleUp = () => {
+        setDraggingId(null)
         if (latestProgress !== null) {
           onHillProgressChange(scopeId, latestProgress)
+        } else {
+          setPendingDrag(null)
         }
-        setDraggingId(null)
-        setDragProgress(null)
         window.removeEventListener('mousemove', handleMove)
         window.removeEventListener('mouseup', handleUp)
         window.removeEventListener('touchmove', handleMove)
@@ -188,8 +200,8 @@ export function HillChart({
         {scopes.map((scope) => {
           const isDragging = draggingId === scope.id
           const progress =
-            isDragging && dragProgress !== null
-              ? dragProgress
+            pendingDrag?.scopeId === scope.id
+              ? pendingDrag.progress
               : scope.hill_progress
           const pt = progressToPoint(progress)
           const cx = pt.x + SVG_PAD
