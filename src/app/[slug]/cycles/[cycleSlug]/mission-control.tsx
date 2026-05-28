@@ -10,6 +10,7 @@ import {
 import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MissionControlView } from '@/components/mission-control'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { derivePitchCards, partitionByStage } from '@/lib/mission-control-helpers'
 import { nanoid } from 'nanoid'
 import { LiveObject } from '@liveblocks/client'
@@ -20,7 +21,6 @@ type MissionControlProps = {
   cycleTitle: string
   slug: string
   organizationUsers: OrganizationUser[]
-  slackEnabled: boolean
 }
 
 export function MissionControl({
@@ -29,7 +29,6 @@ export function MissionControl({
   cycleTitle,
   slug,
   organizationUsers,
-  slackEnabled,
 }: MissionControlProps) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -50,7 +49,6 @@ export function MissionControl({
               cycleSlug={cycleSlug}
               cycleTitle={cycleTitle}
               slug={slug}
-              slackEnabled={slackEnabled}
             />
           )}
         </ClientSideSuspense>
@@ -63,12 +61,10 @@ function MissionControlWired({
   cycleSlug,
   cycleTitle,
   slug,
-  slackEnabled,
 }: {
   cycleSlug: string
   cycleTitle: string
   slug: string
-  slackEnabled: boolean
 }) {
   const pitches = useCycleStorage((root) => [...root.pitches])
   const scopes = useCycleStorage((root) => [...root.scopes])
@@ -108,7 +104,6 @@ function MissionControlWired({
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
       today={today}
-      slackEnabled={slackEnabled}
       inFlight={inFlight}
       done={done}
       onCreatePitch={onCreatePitch}

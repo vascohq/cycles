@@ -11,6 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { SlackPreview } from './slack-preview'
 
 const ZONES: { value: Zone; label: string }[] = [
@@ -29,7 +30,6 @@ export type MoveNeedleModalProps = {
   tasksDone: number
   tasksTotal: number
   daysLeft: number
-  slackEnabled?: boolean
   onPost: (zone: Zone, narrative: string) => void | Promise<void>
 }
 
@@ -43,9 +43,9 @@ export function MoveNeedleModal({
   tasksDone,
   tasksTotal,
   daysLeft,
-  slackEnabled = false,
   onPost,
 }: MoveNeedleModalProps) {
+  const slackEnabled = useSlackEnabled()
   const [zone, setZone] = useState<Zone | null>(null)
   const [narrative, setNarrative] = useState('')
   const [posting, setPosting] = useState(false)

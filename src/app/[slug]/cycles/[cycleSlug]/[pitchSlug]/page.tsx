@@ -1,4 +1,5 @@
 import { ScopeMap } from './scope-map'
+import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
@@ -44,17 +45,16 @@ export default async function ScopeMapPage({ params }: PageParams) {
 
   const users = await getOrganizationUsers(orgId)
 
-  const slackEnabled = !!process.env.SLACK_WEBHOOK_URL
-
   return (
-    <ScopeMap
-      roomId={roomId}
-      pitchSlug={pitchSlug}
-      cycleSlug={cycleSlug}
-      cycleTitle={cycleTitle!}
-      slug={slug}
-      organizationUsers={users}
-      slackEnabled={slackEnabled}
-    />
+    <SlackConfigProvider enabled={!!process.env.SLACK_WEBHOOK_URL}>
+      <ScopeMap
+        roomId={roomId}
+        pitchSlug={pitchSlug}
+        cycleSlug={cycleSlug}
+        cycleTitle={cycleTitle!}
+        slug={slug}
+        organizationUsers={users}
+      />
+    </SlackConfigProvider>
   )
 }

@@ -47,7 +47,6 @@ export type ScopeMapViewProps = {
   onParkingToggle?: (itemId: string, resolved: boolean) => void
   onPostUpdate?: (zone: Zone, narrative: string) => void | Promise<void>
   userName?: string
-  slackEnabled?: boolean
   timelineCards?: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
 }
@@ -72,7 +71,6 @@ export function ScopeMapView({
   onParkingToggle,
   onPostUpdate,
   userName = 'You',
-  slackEnabled = false,
   timelineCards = [],
   onRetrySlack,
 }: ScopeMapViewProps) {
@@ -127,7 +125,6 @@ export function ScopeMapView({
                   tasksDone={totalProgress.done}
                   tasksTotal={totalProgress.total}
                   daysLeft={timebox.daysLeft}
-                  slackEnabled={slackEnabled}
                   onPost={onPostUpdate}
                 />
               )}
@@ -171,7 +168,7 @@ export function ScopeMapView({
         />
       </section>
 
-      <UpdatesTimeline cards={timelineCards} slackEnabled={slackEnabled} onRetrySlack={onRetrySlack} />
+      <UpdatesTimeline cards={timelineCards} onRetrySlack={onRetrySlack} />
 
       <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
         scope map · drag dots on the hill · check tasks · move the needle

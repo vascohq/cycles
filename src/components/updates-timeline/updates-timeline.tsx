@@ -3,15 +3,16 @@
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import type { TimelineCard } from '@/lib/timeline-helpers'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
 
 export type UpdatesTimelineProps = {
   cards: TimelineCard[]
-  slackEnabled?: boolean
   onRetrySlack?: (updateId: string) => void
 }
 
-export function UpdatesTimeline({ cards, slackEnabled = false, onRetrySlack }: UpdatesTimelineProps) {
+export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
+  const slackEnabled = useSlackEnabled()
   return (
     <section className="flex flex-col gap-4">
       <div>

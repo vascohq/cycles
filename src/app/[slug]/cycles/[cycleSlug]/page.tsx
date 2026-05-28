@@ -1,4 +1,5 @@
 import { MissionControl } from './mission-control'
+import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
@@ -43,16 +44,16 @@ export default async function MissionControlPage({ params }: PageParams) {
   }
 
   const users = await getOrganizationUsers(orgId)
-  const slackEnabled = !!process.env.SLACK_WEBHOOK_URL
 
   return (
-    <MissionControl
-      roomId={roomId}
-      cycleSlug={cycleSlug}
-      cycleTitle={cycleTitle!}
-      slug={slug}
-      organizationUsers={users}
-      slackEnabled={slackEnabled}
-    />
+    <SlackConfigProvider enabled={!!process.env.SLACK_WEBHOOK_URL}>
+      <MissionControl
+        roomId={roomId}
+        cycleSlug={cycleSlug}
+        cycleTitle={cycleTitle!}
+        slug={slug}
+        organizationUsers={users}
+      />
+    </SlackConfigProvider>
   )
 }

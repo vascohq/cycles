@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import type { PitchCard } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
 
 const STAGE_BADGE_STYLES: Record<Stage, string> = {
@@ -39,7 +40,6 @@ export type MissionControlViewProps = {
   cycleSlug: string
   cycleTitle: string
   today: string
-  slackEnabled?: boolean
   inFlight: PitchCard[]
   done: PitchCard[]
   onCreatePitch?: (title: string) => void
@@ -49,12 +49,12 @@ export function MissionControlView({
   slug,
   cycleSlug,
   today,
-  slackEnabled = false,
   inFlight,
   done,
   onCreatePitch,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
+  const slackEnabled = useSlackEnabled()
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">

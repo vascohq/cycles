@@ -26,6 +26,7 @@ import { useOrganizationUsers } from '@/components/organization-users-context'
 import type { Stage, Zone, PitchUpdate } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
 import { useAuth, useUser } from '@clerk/nextjs'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { useCallback } from 'react'
 
 type ScopeMapProps = {
@@ -35,7 +36,6 @@ type ScopeMapProps = {
   cycleTitle: string
   slug: string
   organizationUsers: OrganizationUser[]
-  slackEnabled: boolean
 }
 
 export function ScopeMap({
@@ -45,7 +45,6 @@ export function ScopeMap({
   cycleTitle,
   slug,
   organizationUsers,
-  slackEnabled,
 }: ScopeMapProps) {
   return (
     <TooltipProvider>
@@ -68,7 +67,6 @@ export function ScopeMap({
                 cycleSlug={cycleSlug}
                 cycleTitle={cycleTitle}
                 slug={slug}
-                slackEnabled={slackEnabled}
               />
             )}
           </ClientSideSuspense>
@@ -83,16 +81,15 @@ function ScopeMapWired({
   cycleSlug,
   cycleTitle,
   slug,
-  slackEnabled,
 }: {
   pitchSlug: string
   cycleSlug: string
   cycleTitle: string
   slug: string
-  slackEnabled: boolean
 }) {
   const { userId } = useAuth()
   const { user } = useUser()
+  const slackEnabled = useSlackEnabled()
   const pitch = useCycleStorage((root) => {
     const bySlug = root.pitches.find(
       (p) =>
@@ -345,7 +342,6 @@ function ScopeMapWired({
       onParkingToggle={onParkingToggle}
       onPostUpdate={onPostUpdate}
       userName={userName}
-      slackEnabled={slackEnabled}
       timelineCards={timelineCards}
       onRetrySlack={slackEnabled ? onRetrySlack : undefined}
     />

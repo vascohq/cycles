@@ -68,6 +68,7 @@ Real-time state lives in Liveblocks (accessed via hooks from `src/liveblocks.con
 - Slug validation: `/^[a-zA-Z0-9_-]+$/` (no slashes, dots, or encoded characters — prevents open redirects)
 - Room IDs: `{orgPrefix}:{slug}` where orgPrefix is orgId or userId
 - CSS theming via HSL CSS variables; dark mode via class strategy
+- **No prop drilling for cross-cutting concerns.** Use React Context providers or hooks (e.g. Clerk's `useAuth()`, `useSlackEnabled()`) instead of threading props through intermediate components. Server-only values (env vars) go in a context provider at the page boundary; auth data comes from Clerk hooks.
 
 ## Agent skills
 
