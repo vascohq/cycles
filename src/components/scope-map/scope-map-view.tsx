@@ -8,8 +8,11 @@ import { HillChart, type HillScope } from '@/components/hill-chart'
 import { TimeboxTape } from '@/components/timebox'
 import { ScopeGrid } from '@/components/scope-card'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
-import type { Stage, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
+import { MoveNeedleModal } from '@/components/move-needle'
+import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
+import { isTuesday, weekOfTimebox } from '@/lib/update-engine'
+import { cn } from '@/lib/utils'
 
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
@@ -40,6 +43,9 @@ export type ScopeMapViewProps = {
   onScopeReorder?: (activeId: string, overId: string) => void
   onScopeReset?: (scopeId: string) => void
   onParkingToggle?: (itemId: string, resolved: boolean) => void
+  onPostUpdate?: (zone: Zone, narrative: string) => void | Promise<void>
+  userName?: string
+  channelName?: string
 }
 
 export function ScopeMapView({
@@ -60,10 +66,22 @@ export function ScopeMapView({
   onScopeReorder,
   onScopeReset,
   onParkingToggle,
+  onPostUpdate,
+  userName = 'You',
+  channelName = 'general',
 }: ScopeMapViewProps) {
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
   )
+  const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
+  const tuesday = isTuesday(today)
+  const totalDays = Math.round(
+    (new Date(pitch.timebox_end + 'T00:00:00').getTime() -
+      new Date(pitch.timebox_start + 'T00:00:00').getTime()) /
+      86_400_000
+  )
+  const totalWeeks = Math.ceil(totalDays / 7)
+  const currentWeek = weekOfTimebox(pitch.timebox_start, pitch.timebox_end, today)
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
@@ -88,9 +106,26 @@ export function ScopeMapView({
             ghost={ghost}
             onProgressChange={onNeedleProgressChange}
           />
-          <button className="text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5">
+          <button
+            onClick={() => setMoveNeedleOpen(true)}
+            className={cn(
+              'text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5',
+              tuesday && 'animate-pulse'
+            )}
+          >
             Move the needle
           </button>
+          {onPostUpdate && (
+            <MoveNeedleModal
+              open={moveNeedleOpen}
+              onOpenChange={setMoveNeedleOpen}
+              weekLabel={`Week ${currentWeek} of ${totalWeeks}`}
+              dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              userName={userName}
+              channelName={channelName}
+              onPost={onPostUpdate}
+            />
+          )}
         </div>
 
         <div>
