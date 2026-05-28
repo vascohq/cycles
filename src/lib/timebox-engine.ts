@@ -5,6 +5,8 @@ export type TimeboxInfo = {
   dayNumber: number
   daysLeft: number
   totalDays: number
+  totalWeeks: number
+  currentWeek: number
   phase: TimeboxPhase
 }
 
@@ -30,13 +32,14 @@ export function dayTicks(totalDays: number): DayTick[] {
 export function computeTimebox(start: string, end: string, today: string): TimeboxInfo {
   const totalDays = daysBetween(start, end)
   const elapsed = daysBetween(start, today)
+  const totalWeeks = Math.ceil(totalDays / 7)
 
   if (elapsed < 0) {
-    return { fractionElapsed: 0, dayNumber: 0, daysLeft: totalDays, totalDays, phase: 'before' }
+    return { fractionElapsed: 0, dayNumber: 0, daysLeft: totalDays, totalDays, totalWeeks, currentWeek: 0, phase: 'before' }
   }
 
   if (elapsed >= totalDays) {
-    return { fractionElapsed: 1, dayNumber: totalDays, daysLeft: 0, totalDays, phase: 'after' }
+    return { fractionElapsed: 1, dayNumber: totalDays, daysLeft: 0, totalDays, totalWeeks, currentWeek: totalWeeks, phase: 'after' }
   }
 
   return {
@@ -44,6 +47,8 @@ export function computeTimebox(start: string, end: string, today: string): Timeb
     dayNumber: elapsed + 1,
     daysLeft: totalDays - elapsed,
     totalDays,
+    totalWeeks,
+    currentWeek: Math.min(Math.floor(elapsed / 7) + 1, totalWeeks),
     phase: 'active',
   }
 }

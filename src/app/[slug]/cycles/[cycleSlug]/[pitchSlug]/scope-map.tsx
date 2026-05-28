@@ -19,8 +19,15 @@ import {
 } from '@/lib/scope-map-helpers'
 import { deriveGhost } from '@/lib/needle-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
+import { buildUpdate } from '@/lib/update-engine'
+import { computeTimebox } from '@/lib/timebox-engine'
+import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate } from '@/cycle-liveblocks.config'
+import { LiveObject } from '@liveblocks/client'
+import { useAuth, useUser } from '@clerk/nextjs'
+import { useSlackEnabled } from '@/components/slack-config-context'
+import { useCallback } from 'react'
 
 type ScopeMapProps = {
   roomId: string
@@ -80,6 +87,9 @@ function ScopeMapWired({
   cycleTitle: string
   slug: string
 }) {
+  const { userId } = useAuth()
+  const { user } = useUser()
+  const slackEnabled = useSlackEnabled()
   const pitch = useCycleStorage((root) => {
     const bySlug = root.pitches.find(
       (p) =>
@@ -92,6 +102,10 @@ function ScopeMapWired({
   const allTasks = useCycleStorage((root) => [...root.tasks])
   const allUpdates = useCycleStorage((root) => [...root.updates])
   const allParkingItems = useCycleStorage((root) => [...root.parkingItems])
+  const cycle = useCycleStorage((root) => ({
+    start_date: root.cycle.start_date,
+    end_date: root.cycle.end_date,
+  }))
   const orgUsers = useOrganizationUsers()
 
   const pitchId = pitch?.id ?? ''
@@ -174,13 +188,59 @@ function ScopeMapWired({
     []
   )
 
-  if (!pitch) {
-    return (
-      <main className="mt-16 w-full max-w-screen-lg mx-auto px-6">
-        <p className="text-muted-foreground">Pitch not found.</p>
-      </main>
-    )
-  }
+  const pushUpdate = useCycleMutation(
+    ({ storage }, built: PitchUpdate) => {
+      storage.get('updates').push(new LiveObject(built))
+      const p = storage.get('pitches').find((x) => x.get('id') === built.pitchId)
+      if (p) p.set('needle', { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone })
+    },
+    []
+  )
+
+  const markSlackAttempted = useCycleMutation(
+    ({ storage }, updateId: string) => {
+      const updates = storage.get('updates')
+      for (let i = 0; i < updates.length; i++) {
+        if (updates.get(i)!.get('id') === updateId) {
+          updates.get(i)!.set('slack_attempted', true)
+          break
+        }
+      }
+    },
+    []
+  )
+
+  const markSlackDelivered = useCycleMutation(
+    ({ storage }, updateId: string, deliveredAt: string) => {
+      const updates = storage.get('updates')
+      for (let i = 0; i < updates.length; i++) {
+        if (updates.get(i)!.get('id') === updateId) {
+          updates.get(i)!.set('slack_delivered_at', deliveredAt)
+          break
+        }
+      }
+    },
+    []
+  )
+
+  const deliverToSlack = useCallback(
+    async (params: SlackMessageParams, updateId: string) => {
+      try {
+        const res = await fetch('/api/slack/post-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        })
+        if (res.ok) {
+          const { delivered_at } = (await res.json()) as { delivered_at: string }
+          markSlackDelivered(updateId, delivered_at)
+        }
+      } catch (err) {
+        console.warn('Slack delivery failed', err)
+      }
+    },
+    [markSlackDelivered]
+  )
 
   const usersMap = new Map(
     (orgUsers ?? []).map((u) => [u.userId, { name: u.name, initials: u.initials }])
@@ -194,6 +254,88 @@ function ScopeMapWired({
   const ghost = deriveGhost(pitchUpdates)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
   const today = new Date().toISOString().slice(0, 10)
+
+  const pitchScopes = allScopes.filter((s) => s.pitchId === pitchId)
+  const pitchTasks = allTasks.filter((t) => pitchScopes.some((s) => s.id === t.scopeId))
+  const timebox = pitch
+    ? computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
+    : null
+
+  const pitchUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/${slug}/cycles/${cycleSlug}/${pitchSlug}`
+    : ''
+
+  const userName = user?.firstName ?? usersMap.get(userId ?? '')?.name ?? 'You'
+
+  const onPostUpdate = useCallback(
+    async (zone: Zone, narrative: string) => {
+      if (!pitch || !userId || !timebox) return
+      const built = buildUpdate({
+        pitchId,
+        userId,
+        zone,
+        narrative,
+        currentNeedle: pitch.needle,
+        scopes: pitchScopes.map((s) => ({ id: s.id, hill_progress: s.hill_progress })),
+        tasks: pitchTasks.map((t) => ({ scopeId: t.scopeId, done: t.done })),
+        timebox: { daysLeft: timebox.daysLeft, currentWeek: timebox.currentWeek, totalWeeks: timebox.totalWeeks },
+      })
+      pushUpdate(built)
+      if (!slackEnabled) return
+      markSlackAttempted(built.id)
+      await deliverToSlack(
+        {
+          pitchTitle: pitch.title,
+          weekNumber: timebox.currentWeek,
+          totalWeeks: timebox.totalWeeks,
+          zone,
+          narrative,
+          tasksDone: totalProgress.done,
+          tasksTotal: totalProgress.total,
+          daysLeft: timebox.daysLeft,
+          pitchUrl,
+          postedAt: built.posted_at,
+        },
+        built.id
+      )
+    },
+    [pushUpdate, markSlackAttempted, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, timebox, totalProgress, pitchUrl, slackEnabled]
+  )
+
+  const onRetrySlack = useCallback(
+    async (updateId: string) => {
+      if (!pitch) return
+      const update = pitchUpdates.find((u) => u.id === updateId)
+      if (!update) return
+      const snapshotDone = update.task_snapshot.reduce((sum, s) => sum + s.done, 0)
+      const snapshotTotal = update.task_snapshot.reduce((sum, s) => sum + s.total, 0)
+      const tb = update.timebox_snapshot
+      await deliverToSlack(
+        {
+          pitchTitle: pitch.title,
+          weekNumber: tb.currentWeek,
+          totalWeeks: tb.totalWeeks,
+          zone: update.needle_snapshot.zone,
+          narrative: update.narrative,
+          tasksDone: snapshotDone,
+          tasksTotal: snapshotTotal,
+          daysLeft: tb.daysLeft,
+          pitchUrl,
+          postedAt: update.posted_at,
+        },
+        updateId
+      )
+    },
+    [deliverToSlack, pitchUpdates, pitch, pitchUrl]
+  )
+
+  if (!pitch) {
+    return (
+      <main className="mt-16 w-full max-w-screen-lg mx-auto px-6">
+        <p className="text-muted-foreground">Pitch not found.</p>
+      </main>
+    )
+  }
 
   return (
     <ScopeMapView
@@ -214,7 +356,10 @@ function ScopeMapWired({
       onScopeReorder={onScopeReorder}
       onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}
+      onPostUpdate={onPostUpdate}
+      userName={userName}
       timelineCards={timelineCards}
+      onRetrySlack={slackEnabled ? onRetrySlack : undefined}
     />
   )
 }

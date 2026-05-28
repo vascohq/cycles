@@ -56,6 +56,7 @@ describe('deriveGhost', () => {
         needle_snapshot: { progress: 0.3, zone: 'concerned' },
         hill_snapshot: [],
         task_snapshot: [],
+        timebox_snapshot: { daysLeft: 30, currentWeek: 2, totalWeeks: 6 },
       },
       {
         id: 'u2',
@@ -66,6 +67,7 @@ describe('deriveGhost', () => {
         needle_snapshot: { progress: 0.7, zone: 'on_track' },
         hill_snapshot: [],
         task_snapshot: [],
+        timebox_snapshot: { daysLeft: 23, currentWeek: 3, totalWeeks: 6 },
       },
     ]
 
@@ -83,6 +85,7 @@ describe('deriveGhost', () => {
         needle_snapshot: { progress: 0.8, zone: 'on_track' },
         hill_snapshot: [],
         task_snapshot: [],
+        timebox_snapshot: { daysLeft: 23, currentWeek: 3, totalWeeks: 6 },
       },
       {
         id: 'u1',
@@ -93,6 +96,7 @@ describe('deriveGhost', () => {
         needle_snapshot: { progress: 0.2, zone: 'concerned' },
         hill_snapshot: [],
         task_snapshot: [],
+        timebox_snapshot: { daysLeft: 30, currentWeek: 2, totalWeeks: 6 },
       },
     ]
 

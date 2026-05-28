@@ -11,6 +11,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { useSlackEnabled } from '@/components/slack-config-context'
+import { SlackPreview } from './slack-preview'
 
 const ZONES: { value: Zone; label: string }[] = [
   { value: 'on_track', label: 'On track' },
@@ -24,7 +26,10 @@ export type MoveNeedleModalProps = {
   weekLabel: string
   dateLabel: string
   userName: string
-  channelName: string
+  pitchTitle: string
+  tasksDone: number
+  tasksTotal: number
+  daysLeft: number
   onPost: (zone: Zone, narrative: string) => void | Promise<void>
 }
 
@@ -34,9 +39,13 @@ export function MoveNeedleModal({
   weekLabel,
   dateLabel,
   userName,
-  channelName,
+  pitchTitle,
+  tasksDone,
+  tasksTotal,
+  daysLeft,
   onPost,
 }: MoveNeedleModalProps) {
+  const slackEnabled = useSlackEnabled()
   const [zone, setZone] = useState<Zone | null>(null)
   const [narrative, setNarrative] = useState('')
   const [posting, setPosting] = useState(false)
@@ -118,6 +127,18 @@ export function MoveNeedleModal({
               className="w-full min-h-[100px] rounded-lg border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+
+          {slackEnabled && (
+            <SlackPreview
+              pitchTitle={pitchTitle}
+              weekLabel={weekLabel}
+              zone={zone}
+              narrative={narrative}
+              tasksDone={tasksDone}
+              tasksTotal={tasksTotal}
+              daysLeft={daysLeft}
+            />
+          )}
         </div>
 
         <DialogFooter className="gap-2">
@@ -132,7 +153,7 @@ export function MoveNeedleModal({
             disabled={!canPost}
             className="px-4 py-2 text-sm rounded-lg bg-foreground text-background font-medium transition-opacity disabled:opacity-40"
           >
-            {posting ? 'Posting...' : `Post to #${channelName}`}
+            {posting ? 'Posting…' : slackEnabled ? 'Post to Slack' : 'Post update'}
           </button>
         </DialogFooter>
       </DialogContent>

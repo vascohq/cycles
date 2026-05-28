@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildUpdate, weekOfTimebox, isTuesday } from './update-engine'
+import { buildUpdate } from './update-engine'
 
 describe('buildUpdate', () => {
   it('produces a PitchUpdate with correct snapshots from current state', () => {
@@ -19,6 +19,7 @@ describe('buildUpdate', () => {
         { scopeId: 's2', done: true },
         { scopeId: 's2', done: true },
       ],
+      timebox: { daysLeft: 20, currentWeek: 3, totalWeeks: 6 },
     })
 
     expect(update.pitchId).toBe('p1')
@@ -33,31 +34,9 @@ describe('buildUpdate', () => {
       { scopeId: 's1', done: 1, total: 2 },
       { scopeId: 's2', done: 2, total: 2 },
     ])
+    expect(update.timebox_snapshot).toEqual({ daysLeft: 20, currentWeek: 3, totalWeeks: 6 })
     expect(update.id).toBeTruthy()
     expect(update.posted_at).toBeTruthy()
   })
 })
 
-describe('weekOfTimebox', () => {
-  it('returns week 1 on the first day of a 6-week cycle', () => {
-    expect(weekOfTimebox('2025-01-06', '2025-02-14', '2025-01-06')).toBe(1)
-  })
-
-  it('returns correct week number mid-cycle', () => {
-    expect(weekOfTimebox('2025-01-06', '2025-02-14', '2025-01-20')).toBe(3)
-  })
-
-  it('returns the last week at end of cycle', () => {
-    expect(weekOfTimebox('2025-01-06', '2025-02-14', '2025-02-14')).toBe(6)
-  })
-})
-
-describe('isTuesday', () => {
-  it('returns true on a Tuesday', () => {
-    expect(isTuesday('2025-01-07')).toBe(true)
-  })
-
-  it('returns false on a Wednesday', () => {
-    expect(isTuesday('2025-01-08')).toBe(false)
-  })
-})

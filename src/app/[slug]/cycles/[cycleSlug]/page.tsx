@@ -1,4 +1,5 @@
 import { MissionControl } from './mission-control'
+import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
@@ -35,11 +36,9 @@ export default async function MissionControlPage({ params }: PageParams) {
   const roomId = `${roomPrefix}:cycle:${cycleSlug}`
 
   let cycleTitle: string
-  let channelName: string
   try {
     const room = await liveblocks.getRoom(roomId)
     cycleTitle = String(room.metadata.title)
-    channelName = String(room.metadata.slack_channel || 'general')
   } catch {
     notFound()
   }
@@ -47,13 +46,14 @@ export default async function MissionControlPage({ params }: PageParams) {
   const users = await getOrganizationUsers(orgId)
 
   return (
-    <MissionControl
-      roomId={roomId}
-      cycleSlug={cycleSlug}
-      cycleTitle={cycleTitle!}
-      channelName={channelName!}
-      slug={slug}
-      organizationUsers={users}
-    />
+    <SlackConfigProvider enabled={!!process.env.SLACK_WEBHOOK_URL}>
+      <MissionControl
+        roomId={roomId}
+        cycleSlug={cycleSlug}
+        cycleTitle={cycleTitle!}
+        slug={slug}
+        organizationUsers={users}
+      />
+    </SlackConfigProvider>
   )
 }

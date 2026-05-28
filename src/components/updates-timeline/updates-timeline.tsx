@@ -3,31 +3,40 @@
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import type { TimelineCard } from '@/lib/timeline-helpers'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
 
 export type UpdatesTimelineProps = {
   cards: TimelineCard[]
-  channelName: string
+  onRetrySlack?: (updateId: string) => void
 }
 
-export function UpdatesTimeline({ cards, channelName }: UpdatesTimelineProps) {
+export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
+  const slackEnabled = useSlackEnabled()
   return (
     <section className="flex flex-col gap-4">
       <div>
         <h2 className="font-gloria text-[32px]">Updates</h2>
-        <p className="text-xs font-mono text-muted-foreground">
-          Posted Tuesdays to #{channelName}
-        </p>
+        {slackEnabled && (
+          <p className="text-xs font-mono text-muted-foreground">
+            Posted to Slack
+          </p>
+        )}
       </div>
 
       {cards.length === 0 ? (
         <div className="border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">
-          No updates yet — post the first one when Tuesday rolls around
+          No updates yet — click &ldquo;Move the needle&rdquo; to post the first one
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {cards.map((card, i) => (
-            <UpdateCard key={card.id} card={card} isNewest={i === 0} />
+            <UpdateCard
+              key={card.id}
+              card={card}
+              isNewest={i === 0}
+              onRetrySlack={onRetrySlack}
+            />
           ))}
         </div>
       )}
@@ -38,9 +47,11 @@ export function UpdatesTimeline({ cards, channelName }: UpdatesTimelineProps) {
 function UpdateCard({
   card,
   isNewest,
+  onRetrySlack,
 }: {
   card: TimelineCard
   isNewest: boolean
+  onRetrySlack?: (updateId: string) => void
 }) {
   const zoneLabel = card.needleSnapshot.zone.replace('_', ' ')
   const zoneColor = ZONE_COLORS[card.needleSnapshot.zone]
@@ -84,6 +95,15 @@ function UpdateCard({
         </div>
 
         <p className="text-[13.5px] leading-relaxed">{card.narrative}</p>
+
+        {card.slackFailed && onRetrySlack && (
+          <button
+            onClick={() => onRetrySlack(card.id)}
+            className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 font-mono transition-colors"
+          >
+            Slack post failed — retry?
+          </button>
+        )}
       </div>
     </div>
   )

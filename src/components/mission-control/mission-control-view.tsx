@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import type { PitchCard } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
+import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
 
 const STAGE_BADGE_STYLES: Record<Stage, string> = {
@@ -38,7 +39,6 @@ export type MissionControlViewProps = {
   slug: string
   cycleSlug: string
   cycleTitle: string
-  channelName: string
   today: string
   inFlight: PitchCard[]
   done: PitchCard[]
@@ -48,13 +48,13 @@ export type MissionControlViewProps = {
 export function MissionControlView({
   slug,
   cycleSlug,
-  channelName,
   today,
   inFlight,
   done,
   onCreatePitch,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
+  const slackEnabled = useSlackEnabled()
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
@@ -62,15 +62,17 @@ export function MissionControlView({
         <h1 className="font-gloria text-4xl md:text-[56px] leading-tight">
           Mission Control
         </h1>
-        <p className="text-sm font-mono text-muted-foreground">
-          Updates posted Tuesdays to #{channelName}
-        </p>
+        {slackEnabled && (
+          <p className="text-sm font-mono text-muted-foreground">
+            Updates posted to Slack
+          </p>
+        )}
       </header>
 
       <Section
         title="In flight"
         count={inFlight.length}
-        subtitle={`Updates posted Tuesdays to #${channelName}`}
+        subtitle={slackEnabled ? 'Updates posted to Slack' : undefined}
         action={
           onCreatePitch && (
             <button

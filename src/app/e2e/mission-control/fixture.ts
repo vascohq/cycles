@@ -66,7 +66,6 @@ export const FIXTURE: MissionControlViewProps = {
   slug: 'vasco',
   cycleSlug: 'cycle-34',
   cycleTitle: 'Cycle 34',
-  channelName: 'product-general',
   today: '2026-06-10',
   inFlight,
   done,

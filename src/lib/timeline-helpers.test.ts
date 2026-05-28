@@ -25,6 +25,7 @@ describe('deriveTimelineCards', () => {
       needle_snapshot: { progress: 0.5, zone: 'some_risk' },
       hill_snapshot: [{ scopeId: 's1', hill_progress: 0.3 }],
       task_snapshot: [{ scopeId: 's1', done: 1, total: 3 }],
+      timebox_snapshot: { daysLeft: 25, currentWeek: 2, totalWeeks: 6 },
     },
     {
       id: 'u2',
@@ -35,6 +36,7 @@ describe('deriveTimelineCards', () => {
       needle_snapshot: { progress: 0.85, zone: 'on_track' },
       hill_snapshot: [{ scopeId: 's1', hill_progress: 0.7 }],
       task_snapshot: [{ scopeId: 's1', done: 2, total: 3 }],
+      timebox_snapshot: { daysLeft: 18, currentWeek: 3, totalWeeks: 6 },
     },
   ]
 
@@ -66,5 +68,27 @@ describe('deriveTimelineCards', () => {
 
   it('returns empty array for no updates', () => {
     expect(deriveTimelineCards([], users)).toEqual([])
+  })
+
+  it('marks cards without slack_attempted as not slackFailed', () => {
+    const cards = deriveTimelineCards(updates, users)
+    expect(cards[0].slackFailed).toBe(false)
+    expect(cards[1].slackFailed).toBe(false)
+  })
+
+  it('marks cards with slack_attempted but no delivery as slackFailed', () => {
+    const attempted: PitchUpdate[] = [
+      { ...updates[0], slack_attempted: true },
+    ]
+    const cards = deriveTimelineCards(attempted, users)
+    expect(cards[0].slackFailed).toBe(true)
+  })
+
+  it('marks cards with slack_delivered_at as not slackFailed', () => {
+    const delivered: PitchUpdate[] = [
+      { ...updates[0], slack_attempted: true, slack_delivered_at: '2025-06-03T14:31:00Z' },
+    ]
+    const cards = deriveTimelineCards(delivered, users)
+    expect(cards[0].slackFailed).toBe(false)
   })
 })
