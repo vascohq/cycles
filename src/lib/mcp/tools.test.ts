@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates } from './tools'
+import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates, handleBatch } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -7,6 +7,17 @@ vi.mock('./liveblocks-reader', () => ({
   getCycleStorage: vi.fn(),
   resolvePitch: vi.fn(),
   slugify: vi.fn((t: string) => t.toLowerCase().replace(/\s+/g, '-')),
+}))
+
+vi.mock('./liveblocks-writer', () => ({
+  upsertPitch: vi.fn(),
+  upsertScope: vi.fn(),
+  upsertTask: vi.fn(),
+  upsertParkingItem: vi.fn(),
+  deletePitch: vi.fn(),
+  deleteScope: vi.fn(),
+  deleteTask: vi.fn(),
+  deleteParkingItem: vi.fn(),
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
@@ -136,5 +147,101 @@ describe('handleGetPitchUpdates', () => {
     expect(data.updates).toHaveLength(2)
     expect(data.updates[0].id).toBe('u2')
     expect(data.updates[1].id).toBe('u1')
+  })
+})
+
+import {
+  upsertPitch,
+  upsertScope,
+  upsertTask,
+} from './liveblocks-writer'
+
+const mockUpsertPitch = vi.mocked(upsertPitch)
+const mockUpsertScope = vi.mocked(upsertScope)
+const mockUpsertTask = vi.mocked(upsertTask)
+
+describe('handleBatch', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('executes operations sequentially and returns all results', async () => {
+    mockUpsertPitch.mockResolvedValue({ created: true, id: 'p1' })
+    mockUpsertScope.mockResolvedValue({ created: true, id: 's1' })
+    mockUpsertTask.mockResolvedValue({ created: true, id: 't1' })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      {
+        tool: 'upsert_pitch',
+        params: {
+          title: 'New Pitch',
+          stage: 'framing',
+          frame_problem: '',
+          frame_outcome: '',
+          timebox_start: '2026-04-06',
+          timebox_end: '2026-05-15',
+        },
+      },
+      {
+        tool: 'upsert_scope',
+        params: { pitchId: 'p1', title: 'Scope A', tier: 'must', litmus_text: '', hill_progress: 0 },
+      },
+      {
+        tool: 'upsert_task',
+        params: { scopeId: 's1', title: 'Task 1', done: false },
+      },
+    ])
+
+    expect(result.isError).toBeUndefined()
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results).toHaveLength(3)
+    expect(data.results[0].ok).toBe(true)
+    expect(data.results[0].id).toBe('p1')
+    expect(data.results[1].ok).toBe(true)
+    expect(data.results[2].ok).toBe(true)
+  })
+
+  it('returns partial failure — successful ops persist, failed ones return errors', async () => {
+    mockUpsertPitch.mockResolvedValue({ created: true, id: 'p1' })
+    mockUpsertScope.mockRejectedValue(new Error('Pitch not found: "bad"'))
+    mockUpsertTask.mockResolvedValue({ created: true, id: 't1' })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      {
+        tool: 'upsert_pitch',
+        params: {
+          title: 'Good Pitch',
+          stage: 'framing',
+          frame_problem: '',
+          frame_outcome: '',
+          timebox_start: '',
+          timebox_end: '',
+        },
+      },
+      {
+        tool: 'upsert_scope',
+        params: { pitchId: 'bad', title: 'X', tier: 'must', litmus_text: '', hill_progress: 0 },
+      },
+      {
+        tool: 'upsert_task',
+        params: { scopeId: 's1', title: 'Task', done: false },
+      },
+    ])
+
+    expect(result.isError).toBeUndefined()
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results).toHaveLength(3)
+    expect(data.results[0].ok).toBe(true)
+    expect(data.results[1].ok).toBe(false)
+    expect(data.results[1].error).toContain('Pitch not found')
+    expect(data.results[2].ok).toBe(true)
+  })
+
+  it('rejects unknown tool names', async () => {
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'unknown_tool', params: {} },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0].ok).toBe(false)
+    expect(data.results[0].error).toContain('Unknown tool')
   })
 })
