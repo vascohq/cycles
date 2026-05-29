@@ -10,11 +10,13 @@ const CY = 26
 const RX = 20
 const RY = 18
 
+const round = (n: number) => Math.round(n * 1000) / 1000
+
 function arcPoint(t: number) {
   const angle = Math.PI + t * Math.PI
   return {
-    x: CX + RX * Math.cos(angle),
-    y: CY + RY * Math.sin(angle),
+    x: round(CX + RX * Math.cos(angle)),
+    y: round(CY + RY * Math.sin(angle)),
   }
 }
 
@@ -33,8 +35,8 @@ export function MiniNeedle({ needle }: MiniNeedleProps) {
   const progress = needle?.progress ?? 0
   const tipPoint = arcPoint(progress)
   const arcD = arcPath()
-  const totalLength = Math.PI * Math.sqrt((RX * RX + RY * RY) / 2)
-  const fillLength = progress * totalLength
+  const totalLength = round(Math.PI * Math.sqrt((RX * RX + RY * RY) / 2))
+  const fillLength = round(progress * totalLength)
 
   return (
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width={WIDTH} height={HEIGHT}>

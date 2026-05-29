@@ -1,5 +1,6 @@
 'use client'
 
+import { Skeleton } from 'boneyard-js/react'
 import { ScopeMapView } from '@/components/scope-map'
 import { FIXTURE } from './fixture'
 import { useState } from 'react'
@@ -17,6 +18,11 @@ export default function ScopeMapE2EPage() {
   }
 
   return (
+    <Skeleton
+      name="scope-map"
+      loading={false}
+      className="w-full max-w-screen-lg mx-auto"
+    >
     <ScopeMapView
       {...FIXTURE}
       pitch={pitch}
@@ -66,5 +72,6 @@ export default function ScopeMapE2EPage() {
         )
       }
     />
+    </Skeleton>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { ChevronRight, Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape } from '@/components/timebox'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
@@ -49,6 +49,7 @@ export type MissionControlViewProps = {
 export function MissionControlView({
   slug,
   cycleSlug,
+  cycleTitle,
   today,
   inFlight,
   done,
@@ -59,15 +60,27 @@ export function MissionControlView({
 
   return (
     <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
-      <header className="text-center flex flex-col gap-2">
-        <h1 className="font-gloria text-4xl md:text-[56px] leading-tight">
-          Mission Control
-        </h1>
-        {slackEnabled && (
-          <p className="text-sm font-mono text-muted-foreground">
-            Updates posted to Slack
-          </p>
-        )}
+      <header className="flex flex-col gap-4">
+        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Link
+            href={`/${slug}/cycles`}
+            className="hover:text-foreground transition-colors"
+          >
+            Cycles
+          </Link>
+          <ChevronRight className="w-3 h-3" />
+          <span className="text-foreground font-medium">{cycleTitle}</span>
+        </nav>
+        <div className="flex items-end justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Mission Control
+          </h1>
+          {slackEnabled && (
+            <span className="text-xs font-mono text-muted-foreground">
+              Updates posted to Slack
+            </span>
+          )}
+        </div>
       </header>
 
       <Section
@@ -136,7 +149,7 @@ function Section({
   return (
     <section>
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="font-gloria text-lg">{title}</h2>
+        <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
         <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded-full">
           {count}
         </span>
@@ -210,9 +223,9 @@ function PitchCardItem({
     <Link
       href={`/${slug}/cycles/${cycleSlug}/${pitchSlug}`}
       className={cn(
-        'rounded-xl border bg-card p-4 flex flex-col gap-3',
-        'hover:shadow-[5px_5px_0_0_hsl(var(--foreground))] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all',
-        'animate-in fade-in slide-in-from-bottom-2'
+        'rounded-lg border bg-card p-4 flex flex-col gap-3',
+        'transition-colors hover:border-foreground/25 hover:bg-muted/40',
+        'animate-in fade-in slide-in-from-bottom-1'
       )}
       style={{ animationDelay: `${delay}s`, animationFillMode: 'backwards' }}
     >
@@ -230,14 +243,16 @@ function PitchCardItem({
 
       {zoneLabel && (
         <span
-          className="text-xs font-gloria self-start"
+          className="text-xs font-medium self-start"
           style={{ color: zoneColor }}
         >
           {zoneLabel.charAt(0).toUpperCase() + zoneLabel.slice(1)}
         </span>
       )}
 
-      <h3 className="font-gloria text-base leading-snug">{card.title}</h3>
+      <h3 className="text-sm font-semibold leading-snug tracking-tight">
+        {card.title}
+      </h3>
 
       <TimeboxTape
         start={card.timebox_start}
@@ -286,7 +301,7 @@ function CreatePitchDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-gloria text-xl">
+          <DialogTitle className="text-base font-semibold tracking-tight">
             New pitch
           </DialogTitle>
         </DialogHeader>

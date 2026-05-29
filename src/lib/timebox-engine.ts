@@ -32,6 +32,11 @@ export function dayTicks(totalDays: number): DayTick[] {
 export function computeTimebox(start: string, end: string, today: string): TimeboxInfo {
   const totalDays = daysBetween(start, end)
   const elapsed = daysBetween(start, today)
+
+  if (!Number.isFinite(totalDays) || !Number.isFinite(elapsed) || totalDays <= 0) {
+    return { fractionElapsed: 0, dayNumber: 0, daysLeft: 0, totalDays: 0, totalWeeks: 0, currentWeek: 0, phase: 'before' }
+  }
+
   const totalWeeks = Math.ceil(totalDays / 7)
 
   if (elapsed < 0) {

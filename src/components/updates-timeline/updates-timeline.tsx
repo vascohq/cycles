@@ -16,7 +16,7 @@ export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <h2 className="font-gloria text-[32px]">Updates</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Updates</h2>
         {slackEnabled && (
           <p className="text-xs font-mono text-muted-foreground">
             Posted to Slack
@@ -68,7 +68,7 @@ function UpdateCard({
         className="w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0"
         style={{ border: '1.5px solid hsl(var(--foreground))' }}
       >
-        <span className="font-gloria text-sm">{card.authorInitials}</span>
+        <span className="text-xs font-semibold">{card.authorInitials}</span>
       </div>
 
       <div className="flex flex-col gap-2 min-w-0">
@@ -82,7 +82,7 @@ function UpdateCard({
         <div className="flex items-center gap-3">
           <MiniNeedle needle={card.needleSnapshot} />
           <span
-            className="text-xs font-gloria"
+            className="text-xs font-medium"
             style={{ color: zoneColor }}
           >
             {zoneLabel.charAt(0).toUpperCase() + zoneLabel.slice(1)}

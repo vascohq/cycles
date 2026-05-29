@@ -31,13 +31,15 @@ const SVG_PAD = 20
 const VIEW_W = WIDTH + SVG_PAD * 2
 const VIEW_H = HEIGHT + SVG_PAD * 2 + 20
 
+const round = (n: number) => Math.round(n * 1000) / 1000
+
 function hillPath(): string {
   const steps = 100
   const pts: string[] = []
   for (let i = 0; i <= steps; i++) {
     const t = i / steps
     const { x, y } = progressToPoint(t)
-    pts.push(`${x + SVG_PAD},${y + SVG_PAD}`)
+    pts.push(`${round(x + SVG_PAD)},${round(y + SVG_PAD)}`)
   }
   return `M ${pts.join(' L ')}`
 }
@@ -103,7 +105,7 @@ export function HillChart({
   )
 
   const path = hillPath()
-  const centerX = progressToPoint(0.5).x + SVG_PAD
+  const centerX = round(progressToPoint(0.5).x + SVG_PAD)
 
   return (
     <div className="flex flex-col gap-2">
@@ -113,25 +115,7 @@ export function HillChart({
         className="w-full select-none"
         style={{ maxWidth: VIEW_W }}
       >
-        <defs>
-          <filter id="hill-hand-drawn">
-            <feTurbulence
-              type="turbulence"
-              baseFrequency="0.04"
-              numOctaves={4}
-              result="turbulence"
-            />
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="turbulence"
-              scale={1.5}
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-          </filter>
-        </defs>
-
-        <g filter="url(#hill-hand-drawn)">
+        <g>
           <path
             d={path}
             fill="none"
@@ -166,10 +150,11 @@ export function HillChart({
           x={SVG_PAD + WIDTH * 0.2}
           y={BASELINE_Y + SVG_PAD + 16}
           textAnchor="middle"
-          fontSize={10}
-          className="font-gloria"
+          fontSize={9}
+          fontWeight={500}
+          letterSpacing={0.5}
           fill="currentColor"
-          opacity={0.25}
+          opacity={0.35}
         >
           UNKNOWN
         </text>
@@ -177,10 +162,11 @@ export function HillChart({
           x={SVG_PAD + WIDTH * 0.8}
           y={BASELINE_Y + SVG_PAD + 16}
           textAnchor="middle"
-          fontSize={10}
-          className="font-gloria"
+          fontSize={9}
+          fontWeight={500}
+          letterSpacing={0.5}
           fill="currentColor"
-          opacity={0.25}
+          opacity={0.35}
         >
           KNOWN
         </text>
@@ -192,8 +178,8 @@ export function HillChart({
               ? dragProgress
               : scope.hill_progress
           const pt = progressToPoint(progress)
-          const cx = pt.x + SVG_PAD
-          const cy = pt.y + SVG_PAD
+          const cx = round(pt.x + SVG_PAD)
+          const cy = round(pt.y + SVG_PAD)
           const isHighlighted = highlightedScopeId === scope.id
           const r = isHighlighted || isDragging ? 17 : 13
           const sw = isHighlighted || isDragging ? 2.5 : 1.5
@@ -244,16 +230,15 @@ export function HillChart({
               y={tooltip.y - 18}
               width={100}
               height={20}
-              rx={4}
+              rx={6}
               fill="hsl(var(--foreground))"
-              opacity={0.9}
             />
             <text
               x={tooltip.x}
               y={tooltip.y - 6}
               textAnchor="middle"
               fontSize={10}
-              className="font-gloria"
+              fontWeight={500}
               fill="hsl(var(--background))"
             >
               {tooltip.text.length > 16
@@ -263,7 +248,6 @@ export function HillChart({
             <polygon
               points={`${tooltip.x - 4},${tooltip.y + 2} ${tooltip.x + 4},${tooltip.y + 2} ${tooltip.x},${tooltip.y + 7}`}
               fill="hsl(var(--foreground))"
-              opacity={0.9}
             />
           </g>
         )}

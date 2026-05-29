@@ -8,8 +8,8 @@ export default function ScopeMapError({
   reset: () => void
 }) {
   return (
-    <main className="mt-16 w-full max-w-screen-lg mx-auto px-6">
-      <h2 className="text-lg font-bold mb-2">Failed to load Scope Map</h2>
+    <main className="w-full max-w-screen-lg mx-auto px-6 py-8">
+      <h2 className="text-lg font-semibold tracking-tight mb-2">Failed to load Scope Map</h2>
       <p className="text-muted-foreground text-sm mb-4">
         Something went wrong while loading this pitch.
       </p>

@@ -351,6 +351,11 @@
   resolved "https://registry.yarnpkg.com/@bcoe/v8-coverage/-/v8-coverage-1.0.2.tgz#bbe12dca5b4ef983a0d0af4b07b9bc90ea0ababa"
   integrity sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==
 
+"@chenglou/pretext@^0.0.5":
+  version "0.0.5"
+  resolved "https://registry.yarnpkg.com/@chenglou/pretext/-/pretext-0.0.5.tgz#1a6734df005c951c6aecaa0decced0d2a82034f2"
+  integrity sha512-A8GZN10REdFGsyuiUgLV8jjPDDFMg5GmgxGWV0I3igxBOnzj+jgz2VMmVD7g+SFyoctfeqHFxbNatKSzVRWtRg==
+
 "@chromatic-com/storybook@^5.2.1":
   version "5.2.1"
   resolved "https://registry.yarnpkg.com/@chromatic-com/storybook/-/storybook-5.2.1.tgz#ecfbcb93e19b7e3f995dfea8313c9357171ffc7a"
@@ -3190,6 +3195,15 @@ body-parser@^2.2.1:
     raw-body "^3.0.1"
     type-is "^2.0.1"
 
+boneyard-js@^1.8.1:
+  version "1.8.1"
+  resolved "https://registry.yarnpkg.com/boneyard-js/-/boneyard-js-1.8.1.tgz#d754f766000c4e2dcda11bacaf18c116796484c5"
+  integrity sha512-tnffA34xFgGSKpQ6QXebalkz2g/rMRAUIh3S0OBoPTK+OgYR3QEQvD3fHGKNQDbCTjn3W7dgNfiBhZGpnqlcNg==
+  dependencies:
+    playwright "^1.58.2"
+  optionalDependencies:
+    "@chenglou/pretext" "^0.0.5"
+
 brace-expansion@^1.1.7:
   version "1.1.12"
   resolved "https://registry.yarnpkg.com/brace-expansion/-/brace-expansion-1.1.12.tgz#ab9b454466e5a8cc3a187beaad580412a9c5b843"
@@ -5717,7 +5731,7 @@ playwright-core@1.60.0:
   resolved "https://registry.yarnpkg.com/playwright-core/-/playwright-core-1.60.0.tgz#24e0d9cc4730713db5dffcace29b5e4696b1907a"
   integrity sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==
 
-playwright@1.60.0, playwright@^1.60.0:
+playwright@1.60.0, playwright@^1.58.2, playwright@^1.60.0:
   version "1.60.0"
   resolved "https://registry.yarnpkg.com/playwright/-/playwright-1.60.0.tgz#89710863a51f21112633ef8b6b182594d3bfd7b5"
   integrity sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==
