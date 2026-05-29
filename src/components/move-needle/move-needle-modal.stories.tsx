@@ -39,7 +39,7 @@ export const Interactive: Story = {
       <div className="flex flex-col items-center gap-4">
         <button
           onClick={() => setOpen(true)}
-          className="text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5"
+          className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5"
         >
           Move the needle
         </button>

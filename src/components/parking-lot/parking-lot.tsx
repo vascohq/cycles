@@ -20,7 +20,7 @@ export function ParkingLot({ items, onToggleResolved, readOnly }: ParkingLotProp
       <div className="flex items-center gap-2 mb-4">
         <CircleHelp className="w-4 h-4 text-muted-foreground" />
         <div>
-          <h3 className="font-gloria text-sm font-semibold leading-tight">
+          <h3 className="text-sm font-semibold leading-tight tracking-tight">
             Parking lot
           </h3>
           <p className="text-[10px] text-muted-foreground/60 font-mono">

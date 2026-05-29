@@ -13,11 +13,13 @@ const CY = 130
 const RX = 100
 const RY = 90
 
+const round = (n: number) => Math.round(n * 1000) / 1000
+
 function arcPoint(t: number) {
   const angle = Math.PI + t * Math.PI
   return {
-    x: CX + RX * Math.cos(angle),
-    y: CY + RY * Math.sin(angle),
+    x: round(CX + RX * Math.cos(angle)),
+    y: round(CY + RY * Math.sin(angle)),
   }
 }
 
@@ -33,8 +35,8 @@ function hashMarks() {
     const t = i / 10
     const inner = arcPoint(t)
     const angle = Math.PI + t * Math.PI
-    const outerX = CX + (RX + 8) * Math.cos(angle)
-    const outerY = CY + (RY + 8) * Math.sin(angle)
+    const outerX = round(CX + (RX + 8) * Math.cos(angle))
+    const outerY = round(CY + (RY + 8) * Math.sin(angle))
     marks.push(
       <line
         key={i}
@@ -45,7 +47,6 @@ function hashMarks() {
         stroke="currentColor"
         strokeWidth={1.5}
         opacity={0.4}
-        className="hand-drawn"
       />
     )
   }
@@ -107,8 +108,8 @@ export function NeedleGauge({
       : (label ?? needle.zone.replace(/_/g, ' '))
 
   const arcD = arcPath()
-  const totalLength = Math.PI * Math.sqrt((RX * RX + RY * RY) / 2)
-  const fillLength = progress * totalLength
+  const totalLength = round(Math.PI * Math.sqrt((RX * RX + RY * RY) / 2))
+  const fillLength = round(progress * totalLength)
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -120,25 +121,7 @@ export function NeedleGauge({
         onClick={handleClick}
         className={onProgressChange ? 'cursor-pointer' : ''}
       >
-        <defs>
-          <filter id="hand-drawn">
-            <feTurbulence
-              type="turbulence"
-              baseFrequency="0.04"
-              numOctaves={4}
-              result="turbulence"
-            />
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="turbulence"
-              scale={1.5}
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-          </filter>
-        </defs>
-
-        <g filter="url(#hand-drawn)">
+        <g>
           <path
             d={arcD}
             fill="none"
@@ -180,9 +163,9 @@ export function NeedleGauge({
           x={CX}
           y={CY - 15}
           textAnchor="middle"
-          fontSize={14}
+          fontSize={13}
+          fontWeight={500}
           fill={color}
-          className="font-gloria"
         >
           {zoneLabel}
         </text>

@@ -1,6 +1,7 @@
 'use client'
 
 import { ClientSideSuspense } from '@liveblocks/react'
+import { ScopeMapSkeleton } from '@/components/scope-map'
 import {
   CycleRoomProvider,
   useCycleStorage,
@@ -56,13 +57,7 @@ export function ScopeMap({
           initialPresence={{}}
           initialStorage={cycleInitialStorage()}
         >
-          <ClientSideSuspense
-            fallback={
-              <main className="mt-16 w-full max-w-screen-lg mx-auto px-6">
-                Loading…
-              </main>
-            }
-          >
+          <ClientSideSuspense fallback={<ScopeMapSkeleton />}>
             {() => (
               <ScopeMapWired
                 pitchSlug={pitchSlug}
@@ -385,8 +380,8 @@ function ScopeMapWired({
 
   if (!pitch) {
     return (
-      <main className="mt-16 w-full max-w-screen-lg mx-auto px-6">
-        <p className="text-muted-foreground">Pitch not found.</p>
+      <main className="w-full max-w-screen-lg mx-auto px-6 py-8">
+        <p className="text-sm text-muted-foreground">Pitch not found.</p>
       </main>
     )
   }

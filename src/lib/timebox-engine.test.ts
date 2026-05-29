@@ -56,6 +56,19 @@ describe('computeTimebox', () => {
     const info = computeTimebox('2026-06-01', '2026-06-15', '2026-06-20')
     expect(info.currentWeek).toBe(info.totalWeeks)
   })
+
+  it('returns a safe zero state when dates are missing or invalid', () => {
+    for (const info of [
+      computeTimebox('', '', ''),
+      computeTimebox('not-a-date', '2026-06-15', '2026-06-08'),
+      computeTimebox('2026-06-01', '2026-06-01', '2026-06-01'),
+    ]) {
+      expect(info.phase).toBe('before')
+      expect(info.fractionElapsed).toBe(0)
+      expect(Number.isFinite(info.fractionElapsed)).toBe(true)
+      expect(info.totalDays).toBe(0)
+    }
+  })
 })
 
 describe('dayTicks', () => {

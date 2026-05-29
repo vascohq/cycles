@@ -72,7 +72,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
             {order}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-gloria text-sm font-semibold leading-tight truncate">
+            <h3 className="text-sm font-semibold leading-tight tracking-tight truncate">
               {title}
             </h3>
             {litmus_text && (

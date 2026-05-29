@@ -43,9 +43,9 @@ export default async function CyclesPage({
   const usersById = new Map(uniqueUserIds.map((id, i) => [id, users[i]]))
 
   return (
-    <main className="mt-16 w-full max-w-screen-md mx-auto">
+    <main className="w-full max-w-screen-md mx-auto px-6 py-8">
       <div className="mb-4 flex justify-between items-center">
-        <h1 className="font-bold">Cycles</h1>
+        <h1 className="text-2xl font-display">Cycles</h1>
         <CreateCycleDialog>
           <CreateCycleForm />
         </CreateCycleDialog>

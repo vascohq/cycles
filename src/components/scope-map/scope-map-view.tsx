@@ -137,7 +137,7 @@ export function ScopeMapView({
             <>
               <button
                 onClick={() => setMoveNeedleOpen(true)}
-                className="text-xs font-gloria text-muted-foreground hover:text-foreground transition-colors border rounded-full px-4 py-1.5"
+                className="text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border rounded-full px-4 py-1.5"
               >
                 Move the needle
               </button>
@@ -171,7 +171,7 @@ export function ScopeMapView({
 
       <section>
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="font-gloria text-lg">Scopes</h2>
+          <h2 className="text-sm font-semibold tracking-tight">Scopes</h2>
           {!isDone && (
             <span className="text-xs text-muted-foreground/50 font-mono">
               drag to reorder
@@ -276,7 +276,7 @@ function AppBar({
           {cycleTitle}
         </Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-semibold">{pitchTitle}</span>
+        <span className="text-foreground font-medium">{pitchTitle}</span>
       </div>
       <div className="text-xs font-mono text-muted-foreground">
         {totalProgress.done} / {totalProgress.total} tasks
@@ -306,9 +306,9 @@ function HeroCard({
   const stageIndex = STAGES.indexOf(pitch.stage)
 
   return (
-    <section className="rounded-xl border bg-card p-6 flex flex-col gap-5 hover:shadow-[4px_4px_0_0_hsl(var(--foreground))] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all">
+    <section className="rounded-lg border bg-card p-6 flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
-        <h1 className="font-gloria text-3xl md:text-[44px] leading-tight">
+        <h1 className="text-2xl md:text-3xl font-display leading-tight">
           {pitch.title}
         </h1>
         {onStageChange && (
@@ -333,7 +333,7 @@ function HeroCard({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <h3 className="font-gloria text-xs text-muted-foreground mb-2">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
             Problem
           </h3>
           <p className="text-sm">
@@ -341,7 +341,7 @@ function HeroCard({
           </p>
         </div>
         <div>
-          <h3 className="font-gloria text-xs text-muted-foreground mb-2">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
             Outcome
           </h3>
           <p className="text-sm">
@@ -429,7 +429,7 @@ function ScopeDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-gloria text-xl">
+          <DialogTitle className="text-base font-semibold tracking-tight">
             {dialogTitle}
           </DialogTitle>
         </DialogHeader>
@@ -492,7 +492,7 @@ function DeleteScopeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-gloria text-xl">
+          <DialogTitle className="text-base font-semibold tracking-tight">
             Delete scope
           </DialogTitle>
         </DialogHeader>

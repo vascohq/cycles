@@ -1,6 +1,7 @@
 'use client'
 
 import { ClientSideSuspense } from '@liveblocks/react'
+import { MissionControlSkeleton } from '@/components/mission-control'
 import {
   CycleRoomProvider,
   useCycleStorage,
@@ -37,13 +38,7 @@ export function MissionControl({
         initialPresence={{}}
         initialStorage={cycleInitialStorage()}
       >
-        <ClientSideSuspense
-          fallback={
-            <main className="mt-16 w-full max-w-screen-lg mx-auto px-6 text-center">
-              Loading…
-            </main>
-          }
-        >
+        <ClientSideSuspense fallback={<MissionControlSkeleton />}>
           {() => (
             <MissionControlWired
               cycleSlug={cycleSlug}

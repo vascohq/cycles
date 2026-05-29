@@ -114,7 +114,7 @@ export function TimeboxTape({ start, end, today, compact = false, done = false }
                 y={trackY + pad - 8}
                 textAnchor="middle"
                 fontSize={8}
-                className="font-gloria"
+                fontWeight={500}
                 fill="currentColor"
                 opacity={0.6}
               >
@@ -152,7 +152,7 @@ export function TimeboxTape({ start, end, today, compact = false, done = false }
             y={trackY + pad - 4}
             textAnchor="end"
             fontSize={9}
-            className="font-gloria"
+            fontWeight={500}
             fill="currentColor"
             opacity={0.5}
           >

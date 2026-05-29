@@ -76,9 +76,9 @@ export function MoveNeedleModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="border-[1.5px] border-foreground rounded-[14px] shadow-[8px_8px_0_0_hsl(var(--foreground))] max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-gloria text-[28px]">
+          <DialogTitle className="text-lg font-semibold tracking-tight">
             Move the needle
           </DialogTitle>
           <DialogDescription className="font-mono text-xs">
@@ -88,7 +88,7 @@ export function MoveNeedleModal({
 
         <div className="flex flex-col gap-5 py-2">
           <div>
-            <h3 className="font-gloria text-sm mb-3">
+            <h3 className="text-sm font-medium mb-3">
               How&apos;s the team feeling?
             </h3>
             <div className="flex gap-2">
@@ -117,7 +117,7 @@ export function MoveNeedleModal({
           </div>
 
           <div>
-            <h3 className="font-gloria text-sm mb-2">
+            <h3 className="text-sm font-medium mb-2">
               What changed this week?
             </h3>
             <textarea

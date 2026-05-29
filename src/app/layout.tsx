@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
-import { Gloria_Hallelujah, JetBrains_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 
-const gloria = Gloria_Hallelujah({ weight: '400', subsets: ['latin'], variable: '--font-gloria' })
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ export default function RootLayout({
   return (
     <ClerkProvider dynamic>
       <html lang="en" suppressHydrationWarning>
-        <body className={`flex flex-col min-h-[100dvh] ${gloria.variable} ${jetbrainsMono.variable}`}>
+        <body className={`flex flex-col min-h-[100dvh] font-sans antialiased ${inter.variable} ${jetbrainsMono.variable}`}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"
