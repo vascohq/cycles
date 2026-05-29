@@ -32,14 +32,18 @@ const VIEW_H = HEIGHT + SVG_PAD * 2 + 20
 
 // Progress is discrete: scopes move along the hill in fixed steps rather than
 // a continuous slider. Each step is a slot from "unknown" (0) to "done".
-const STEP_COUNT = 10
+const STEP_COUNT = 14
 const snapToStep = (p: number) =>
   Math.round(clamp(p, 0, 1) * STEP_COUNT) / STEP_COUNT
 const stepIndexOf = (p: number) => Math.round(clamp(p, 0, 1) * STEP_COUNT)
 
+// Dot radius (resting / hovered).
+const DOT_R = 10
+const DOT_R_ACTIVE = 13
+
 // When several scopes share a step they stack; hovering fans them out on an
 // arc so each one is individually visible and draggable.
-const FAN_RADIUS = 46
+const FAN_RADIUS = 38
 const DECK_DX = 3
 const DECK_DY = -3
 
@@ -153,6 +157,7 @@ export function HillChart({
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         className="w-full select-none"
+        style={{ overflow: 'visible' }}
       >
         <g>
           <path
@@ -259,7 +264,7 @@ export function HillChart({
               {members.map((scope, k) => {
                 const isDragging = draggingId === scope.id
                 const isHighlighted = highlightedScopeId === scope.id
-                const r = isHighlighted || isDragging ? 17 : 13
+                const r = isHighlighted || isDragging ? DOT_R_ACTIVE : DOT_R
                 const sw = isHighlighted || isDragging ? 2.5 : 1.5
 
                 const progress =
@@ -288,33 +293,45 @@ export function HillChart({
                   <g
                     key={scope.id}
                     data-scope-dot={scope.id}
+                    transform={`translate(${cx} ${cy})`}
                     onMouseDown={(e) => handlePointerDown(scope.id, e)}
                     onTouchStart={(e) => handlePointerDown(scope.id, e)}
                     onMouseEnter={() => {
                       onScopeHover?.(scope.id)
-                      setTooltip({ x: cx, y: cy - r - 8, text: scope.title })
+                      setTooltip({
+                        x: clamp(cx, 54, VIEW_W - 54),
+                        y: cy - r - 8,
+                        text: scope.title,
+                      })
                     }}
                     onMouseLeave={() => {
                       onScopeHover?.(null)
                       setTooltip(null)
                     }}
-                    className={onHillProgressChange ? 'cursor-grab' : ''}
-                    style={isDragging ? { cursor: 'grabbing' } : undefined}
+                    style={{
+                      cursor: onHillProgressChange
+                        ? isDragging
+                          ? 'grabbing'
+                          : 'grab'
+                        : 'default',
+                      transition: isDragging ? 'none' : 'transform 160ms ease',
+                    }}
                   >
                     <circle
-                      cx={cx}
-                      cy={cy}
+                      cx={0}
+                      cy={0}
                       r={r}
                       fill={TIER_COLORS[scope.tier]}
                       stroke="white"
                       strokeWidth={sw}
+                      style={{ transition: 'r 120ms ease' }}
                     />
                     <text
-                      x={cx}
-                      y={cy + 1}
+                      x={0}
+                      y={1}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fontSize={11}
+                      fontSize={10}
                       fontWeight="bold"
                       fill="white"
                     >
