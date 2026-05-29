@@ -5,7 +5,6 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import {
   progressToPoint,
   pointToProgress,
-  clampHillProgress,
   WIDTH,
   HEIGHT,
   BASELINE_Y,
@@ -31,7 +30,47 @@ const SVG_PAD = 20
 const VIEW_W = WIDTH + SVG_PAD * 2
 const VIEW_H = HEIGHT + SVG_PAD * 2 + 20
 
+// Progress is discrete: scopes move along the hill in fixed steps rather than
+// a continuous slider. Each step is a slot from "unknown" (0) to "done".
+const STEP_COUNT = 14
+const snapToStep = (p: number) =>
+  Math.round(clamp(p, 0, 1) * STEP_COUNT) / STEP_COUNT
+const stepIndexOf = (p: number) => Math.round(clamp(p, 0, 1) * STEP_COUNT)
+
+// Dot radius (resting / hovered).
+const DOT_R = 10
+const DOT_R_ACTIVE = 13
+
+// When several scopes share a step they stack; hovering fans them out on an
+// arc so each one is individually visible and draggable.
+const FAN_RADIUS = 38
+const DECK_DX = 3
+const DECK_DY = -3
+
 const round = (n: number) => Math.round(n * 1000) / 1000
+function clamp(n: number, min: number, max: number) {
+  return Math.min(Math.max(n, min), max)
+}
+
+// Arc offset for member k of an n-scope stack at viewBox x `baseX`. Angles are
+// measured from straight up (+ = right). The fan opens within the angular
+// window that keeps every dot on-canvas, so edge stacks fan inward instead of
+// squishing against the border.
+const MAX_FAN = (82 * Math.PI) / 180
+function fanOffset(baseX: number, k: number, n: number) {
+  const R = FAN_RADIUS
+  const maxA = Math.min(
+    Math.asin(clamp((VIEW_W - DOT_R - baseX) / R, -1, 1)),
+    MAX_FAN
+  )
+  const minA = Math.max(
+    Math.asin(clamp((DOT_R - baseX) / R, -1, 1)),
+    -MAX_FAN
+  )
+  const t = n > 1 ? k / (n - 1) : 0.5
+  const a = minA + t * (maxA - minA)
+  return { dx: R * Math.sin(a), dy: -R * Math.cos(a) }
+}
 
 function hillPath(): string {
   const steps = 100
@@ -53,10 +92,11 @@ export function HillChart({
   const svgRef = useRef<SVGSVGElement>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragProgress, setDragProgress] = useState<number | null>(null)
-  const [tooltip, setTooltip] = useState<{
+  const [expandedStep, setExpandedStep] = useState<number | null>(null)
+  const [hovered, setHovered] = useState<{
     x: number
     y: number
-    text: string
+    title: string
   } | null>(null)
 
   const svgXFromEvent = useCallback(
@@ -75,11 +115,12 @@ export function HillChart({
       e.preventDefault()
       if (!onHillProgressChange) return
       setDraggingId(scopeId)
+      setHovered(null)
       let latestProgress: number | null = null
 
       const handleMove = (ev: MouseEvent | TouchEvent) => {
         const x = svgXFromEvent(ev)
-        const progress = clampHillProgress(pointToProgress(x))
+        const progress = snapToStep(pointToProgress(x))
         latestProgress = progress
         setDragProgress(progress)
       }
@@ -107,13 +148,27 @@ export function HillChart({
   const path = hillPath()
   const centerX = round(progressToPoint(0.5).x + SVG_PAD)
 
+  // Group scopes by step. Each group renders as a stack that fans on hover.
+  const clusters = new Map<number, HillScope[]>()
+  for (const scope of scopes) {
+    const key = stepIndexOf(scope.hill_progress)
+    const arr = clusters.get(key) ?? []
+    arr.push(scope)
+    clusters.set(key, arr)
+  }
+  // Render the expanded stack last so its fanned dots sit above neighbours.
+  const clusterEntries = [...clusters.entries()].sort((a, b) =>
+    a[0] === expandedStep ? 1 : b[0] === expandedStep ? -1 : 0
+  )
+
   return (
     <div className="flex flex-col gap-2">
+      <div className="relative">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         className="w-full select-none"
-        style={{ maxWidth: VIEW_W }}
+        style={{ overflow: 'visible' }}
       >
         <g>
           <path
@@ -144,6 +199,21 @@ export function HillChart({
             strokeWidth={1}
             opacity={0.15}
           />
+
+          {/* step markers along the curve */}
+          {Array.from({ length: STEP_COUNT + 1 }, (_, i) => {
+            const p = progressToPoint(i / STEP_COUNT)
+            return (
+              <circle
+                key={`step-${i}`}
+                cx={round(p.x + SVG_PAD)}
+                cy={round(p.y + SVG_PAD)}
+                r={2}
+                fill="currentColor"
+                opacity={0.2}
+              />
+            )
+          })}
         </g>
 
         <text
@@ -171,87 +241,126 @@ export function HillChart({
           KNOWN
         </text>
 
-        {scopes.map((scope) => {
-          const isDragging = draggingId === scope.id
-          const progress =
-            isDragging && dragProgress !== null
-              ? dragProgress
-              : scope.hill_progress
-          const pt = progressToPoint(progress)
-          const cx = round(pt.x + SVG_PAD)
-          const cy = round(pt.y + SVG_PAD)
-          const isHighlighted = highlightedScopeId === scope.id
-          const r = isHighlighted || isDragging ? 17 : 13
-          const sw = isHighlighted || isDragging ? 2.5 : 1.5
+        {clusterEntries.map(([step, members]) => {
+          const n = members.length
+          const expanded = expandedStep === step && n > 1
+          const base = progressToPoint(step / STEP_COUNT)
+          const cbx = round(base.x + SVG_PAD)
+          const cby = round(base.y + SVG_PAD)
 
           return (
             <g
-              key={scope.id}
-              onMouseDown={(e) => handlePointerDown(scope.id, e)}
-              onTouchStart={(e) => handlePointerDown(scope.id, e)}
-              onMouseEnter={() => {
-                onScopeHover?.(scope.id)
-                setTooltip({ x: cx, y: cy - r - 8, text: scope.title })
-              }}
+              key={`cluster-${step}`}
+              onMouseEnter={n > 1 ? () => setExpandedStep(step) : undefined}
               onMouseLeave={() => {
+                if (n > 1) setExpandedStep((s) => (s === step ? null : s))
+                setHovered(null)
                 onScopeHover?.(null)
-                setTooltip(null)
               }}
-              className={onHillProgressChange ? 'cursor-grab' : ''}
-              style={isDragging ? { cursor: 'grabbing' } : undefined}
             >
+              {/* Transparent backdrop keeps the stack "hovered" while the
+                  pointer crosses the gaps between fanned dots. Always mounted
+                  (toggled via radius) so expanding doesn't reflow the dots
+                  mid-animation. */}
               <circle
-                cx={cx}
-                cy={cy}
-                r={r}
-                fill={TIER_COLORS[scope.tier]}
-                stroke="white"
-                strokeWidth={sw}
+                cx={cbx}
+                cy={cby}
+                r={expanded ? FAN_RADIUS + 18 : 0}
+                fill="transparent"
+                style={{ pointerEvents: expanded ? 'all' : 'none' }}
               />
-              <text
-                x={cx}
-                y={cy + 1}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={11}
-                fontWeight="bold"
-                fill="white"
-              >
-                {scope.order}
-              </text>
+
+              {members.map((scope, k) => {
+                const isDragging = draggingId === scope.id
+                const isHighlighted = highlightedScopeId === scope.id
+                const r = isHighlighted || isDragging ? DOT_R_ACTIVE : DOT_R
+                const sw = isHighlighted || isDragging ? 2.5 : 1.5
+
+                const progress =
+                  isDragging && dragProgress !== null
+                    ? dragProgress
+                    : snapToStep(scope.hill_progress)
+                const pt = progressToPoint(progress)
+                let x = pt.x + SVG_PAD
+                let y = pt.y + SVG_PAD
+
+                if (!isDragging && n > 1) {
+                  if (expanded) {
+                    const { dx, dy } = fanOffset(x, k, n)
+                    x += dx
+                    y += dy
+                  } else {
+                    x += k * DECK_DX
+                    y += k * DECK_DY
+                  }
+                }
+
+                const cx = round(clamp(x, r, VIEW_W - r))
+                const cy = round(clamp(y, r, VIEW_H - r))
+
+                return (
+                  <g
+                    key={scope.id}
+                    data-scope-dot={scope.id}
+                    onMouseDown={(e) => handlePointerDown(scope.id, e)}
+                    onTouchStart={(e) => handlePointerDown(scope.id, e)}
+                    onMouseEnter={() => {
+                      onScopeHover?.(scope.id)
+                      setHovered({ x: cx, y: cy - r, title: scope.title })
+                    }}
+                    style={{
+                      transform: `translate(${cx}px, ${cy}px)`,
+                      cursor: onHillProgressChange
+                        ? isDragging
+                          ? 'grabbing'
+                          : 'grab'
+                        : 'default',
+                      transition: isDragging ? 'none' : 'transform 160ms ease',
+                    }}
+                  >
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={r}
+                      fill={TIER_COLORS[scope.tier]}
+                      stroke="white"
+                      strokeWidth={sw}
+                      style={{ transition: 'r 120ms ease' }}
+                    />
+                    <text
+                      x={0}
+                      y={1}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={10}
+                      fontWeight="bold"
+                      fill="white"
+                    >
+                      {scope.order}
+                    </text>
+                  </g>
+                )
+              })}
             </g>
           )
         })}
 
-        {tooltip && (
-          <g>
-            <rect
-              x={tooltip.x - 50}
-              y={tooltip.y - 18}
-              width={100}
-              height={20}
-              rx={6}
-              fill="hsl(var(--foreground))"
-            />
-            <text
-              x={tooltip.x}
-              y={tooltip.y - 6}
-              textAnchor="middle"
-              fontSize={10}
-              fontWeight={500}
-              fill="hsl(var(--background))"
-            >
-              {tooltip.text.length > 16
-                ? tooltip.text.slice(0, 14) + '…'
-                : tooltip.text}
-            </text>
-            <polygon
-              points={`${tooltip.x - 4},${tooltip.y + 2} ${tooltip.x + 4},${tooltip.y + 2} ${tooltip.x},${tooltip.y + 7}`}
-              fill="hsl(var(--foreground))"
-            />
-          </g>
-        )}
       </svg>
+
+      {hovered && (
+        <div
+          className="pointer-events-none absolute z-10 max-w-[180px] truncate rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-md"
+          style={{
+            left: `${(hovered.x / VIEW_W) * 100}%`,
+            top: `${(hovered.y / VIEW_H) * 100}%`,
+            transform: 'translate(-50%, calc(-100% - 8px))',
+            transition: 'left 160ms ease, top 160ms ease',
+          }}
+        >
+          {hovered.title}
+        </div>
+      )}
+      </div>
 
       <div className="flex gap-4 justify-center text-xs text-muted-foreground">
         <span className="flex items-center gap-1">

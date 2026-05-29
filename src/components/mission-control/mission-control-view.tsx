@@ -59,7 +59,7 @@ export function MissionControlView({
   const slackEnabled = useSlackEnabled()
 
   return (
-    <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
       <header className="flex flex-col gap-4">
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link

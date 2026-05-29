@@ -380,7 +380,7 @@ function ScopeMapWired({
 
   if (!pitch) {
     return (
-      <main className="w-full max-w-screen-lg mx-auto px-6 py-8">
+      <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
         <p className="text-sm text-muted-foreground">Pitch not found.</p>
       </main>
     )

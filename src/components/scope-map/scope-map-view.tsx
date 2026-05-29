@@ -109,7 +109,7 @@ export function ScopeMapView({
     : null
 
   return (
-    <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
       <AppBar
         slug={slug}
         cycleSlug={cycleSlug}
@@ -336,20 +336,40 @@ function HeroCard({
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
             Problem
           </h3>
-          <p className="text-sm">
-            {pitch.frame_problem || 'Not yet defined'}
-          </p>
+          <FramingList text={pitch.frame_problem} />
         </div>
         <div>
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
             Outcome
           </h3>
-          <p className="text-sm">
-            {pitch.frame_outcome || 'Not yet defined'}
-          </p>
+          <FramingList text={pitch.frame_outcome} />
         </div>
       </div>
     </section>
+  )
+}
+
+// Problem & outcome are always shown as bullets. Each non-empty line becomes a
+// list item; any existing leading marker ("1.", "-", "•", "*") is stripped so
+// the list renders consistently regardless of how the text was authored.
+function FramingList({ text }: { text: string }) {
+  const items = text
+    .split('\n')
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean)
+
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground">Not yet defined</p>
+  }
+
+  return (
+    <ul className="text-sm flex flex-col gap-1.5 list-disc pl-4 marker:text-muted-foreground/40">
+      {items.map((item, i) => (
+        <li key={i} className="leading-snug">
+          {item}
+        </li>
+      ))}
+    </ul>
   )
 }
 

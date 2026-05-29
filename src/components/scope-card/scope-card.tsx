@@ -59,11 +59,11 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     return (
       <div
         ref={ref}
-        className={`rounded-lg border bg-card p-4 flex flex-col gap-3 transition-shadow ${
+        className={`rounded-lg border bg-card p-4 flex flex-col gap-3 h-64 transition-shadow ${
           isDragging ? 'shadow-lg opacity-75' : ''
         }`}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 flex-shrink-0">
           <div
             {...(readOnly ? {} : dragHandleProps)}
             className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
@@ -76,7 +76,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
               {title}
             </h3>
             {litmus_text && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                 <span className="font-mono text-[10px] opacity-50 mr-1">
                   if only this ships:
                 </span>
@@ -89,15 +89,17 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
           )}
         </div>
 
-        {tasks.length > 0 && (
-          <div className="flex flex-col gap-1">
+        {/* Tasks scroll within the fixed-height card so it never grows; a
+            bottom fade hints at more when the list overflows. */}
+        <div className="relative flex-1 min-h-0">
+          <div className="h-full overflow-y-auto flex flex-col gap-1 pr-1">
             {tasks.map((task) => {
               const Tag = readOnly ? 'div' : 'button'
               return (
                 <Tag
                   key={task.id}
                   {...(!readOnly && { type: 'button' as const, onClick: () => onTaskToggle?.(task.id, !task.done) })}
-                  className={`flex items-center gap-2 text-xs text-left py-0.5 ${readOnly ? '' : 'group'}`}
+                  className={`flex items-center gap-2 text-xs text-left py-0.5 flex-shrink-0 ${readOnly ? '' : 'group'}`}
                 >
                   <span
                     className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
@@ -124,14 +126,15 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
                 </Tag>
               )
             })}
+
+            {onAddTask && !readOnly && (
+              <AddTaskInput onAddTask={onAddTask} />
+            )}
           </div>
-        )}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-card to-transparent" />
+        </div>
 
-        {onAddTask && !readOnly && (
-          <AddTaskInput onAddTask={onAddTask} />
-        )}
-
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-xs text-muted-foreground flex-shrink-0">
           <span>
             {doneCount}/{totalCount} done
           </span>
