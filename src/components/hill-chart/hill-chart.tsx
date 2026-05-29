@@ -52,15 +52,24 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(Math.max(n, min), max)
 }
 
-// Arc offset for member k of an n-scope stack at viewBox x `baseX`. The fan
-// tilts away from the chart edges so dots near the corners stay on-canvas.
+// Arc offset for member k of an n-scope stack at viewBox x `baseX`. Angles are
+// measured from straight up (+ = right). The fan opens within the angular
+// window that keeps every dot on-canvas, so edge stacks fan inward instead of
+// squishing against the border.
+const MAX_FAN = (82 * Math.PI) / 180
 function fanOffset(baseX: number, k: number, n: number) {
-  const norm = baseX / VIEW_W
-  const center = (0.5 - norm) * 110
-  const spread = Math.min(200, (n - 1) * 36)
-  const angle = center - spread / 2 + (k * spread) / (n - 1)
-  const rad = (angle * Math.PI) / 180
-  return { dx: FAN_RADIUS * Math.sin(rad), dy: -FAN_RADIUS * Math.cos(rad) }
+  const R = FAN_RADIUS
+  const maxA = Math.min(
+    Math.asin(clamp((VIEW_W - DOT_R - baseX) / R, -1, 1)),
+    MAX_FAN
+  )
+  const minA = Math.max(
+    Math.asin(clamp((DOT_R - baseX) / R, -1, 1)),
+    -MAX_FAN
+  )
+  const t = n > 1 ? k / (n - 1) : 0.5
+  const a = minA + t * (maxA - minA)
+  return { dx: R * Math.sin(a), dy: -R * Math.cos(a) }
 }
 
 function hillPath(): string {
@@ -84,10 +93,10 @@ export function HillChart({
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragProgress, setDragProgress] = useState<number | null>(null)
   const [expandedStep, setExpandedStep] = useState<number | null>(null)
-  const [tooltip, setTooltip] = useState<{
+  const [hovered, setHovered] = useState<{
     x: number
     y: number
-    text: string
+    title: string
   } | null>(null)
 
   const svgXFromEvent = useCallback(
@@ -106,6 +115,7 @@ export function HillChart({
       e.preventDefault()
       if (!onHillProgressChange) return
       setDraggingId(scopeId)
+      setHovered(null)
       let latestProgress: number | null = null
 
       const handleMove = (ev: MouseEvent | TouchEvent) => {
@@ -153,6 +163,7 @@ export function HillChart({
 
   return (
     <div className="flex flex-col gap-2">
+      <div className="relative">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -240,14 +251,12 @@ export function HillChart({
           return (
             <g
               key={`cluster-${step}`}
-              onMouseEnter={
-                n > 1 ? () => setExpandedStep(step) : undefined
-              }
-              onMouseLeave={
-                n > 1
-                  ? () => setExpandedStep((s) => (s === step ? null : s))
-                  : undefined
-              }
+              onMouseEnter={n > 1 ? () => setExpandedStep(step) : undefined}
+              onMouseLeave={() => {
+                if (n > 1) setExpandedStep((s) => (s === step ? null : s))
+                setHovered(null)
+                onScopeHover?.(null)
+              }}
             >
               {/* Transparent backdrop keeps the stack "hovered" while the
                   pointer crosses the gaps between fanned dots. */}
@@ -298,15 +307,7 @@ export function HillChart({
                     onTouchStart={(e) => handlePointerDown(scope.id, e)}
                     onMouseEnter={() => {
                       onScopeHover?.(scope.id)
-                      setTooltip({
-                        x: clamp(cx, 54, VIEW_W - 54),
-                        y: cy - r - 8,
-                        text: scope.title,
-                      })
-                    }}
-                    onMouseLeave={() => {
-                      onScopeHover?.(null)
-                      setTooltip(null)
+                      setHovered({ x: cx, y: cy - r, title: scope.title })
                     }}
                     style={{
                       cursor: onHillProgressChange
@@ -344,35 +345,22 @@ export function HillChart({
           )
         })}
 
-        {tooltip && (
-          <g style={{ pointerEvents: 'none' }}>
-            <rect
-              x={tooltip.x - 50}
-              y={tooltip.y - 18}
-              width={100}
-              height={20}
-              rx={6}
-              fill="hsl(var(--foreground))"
-            />
-            <text
-              x={tooltip.x}
-              y={tooltip.y - 6}
-              textAnchor="middle"
-              fontSize={10}
-              fontWeight={500}
-              fill="hsl(var(--background))"
-            >
-              {tooltip.text.length > 16
-                ? tooltip.text.slice(0, 14) + '…'
-                : tooltip.text}
-            </text>
-            <polygon
-              points={`${tooltip.x - 4},${tooltip.y + 2} ${tooltip.x + 4},${tooltip.y + 2} ${tooltip.x},${tooltip.y + 7}`}
-              fill="hsl(var(--foreground))"
-            />
-          </g>
-        )}
       </svg>
+
+      {hovered && (
+        <div
+          className="pointer-events-none absolute z-10 max-w-[180px] truncate rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-md"
+          style={{
+            left: `${(hovered.x / VIEW_W) * 100}%`,
+            top: `${(hovered.y / VIEW_H) * 100}%`,
+            transform: 'translate(-50%, calc(-100% - 8px))',
+            transition: 'left 160ms ease, top 160ms ease',
+          }}
+        >
+          {hovered.title}
+        </div>
+      )}
+      </div>
 
       <div className="flex gap-4 justify-center text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
