@@ -72,7 +72,7 @@ export function MissionControlView({
           <span className="text-foreground font-medium">{cycleTitle}</span>
         </nav>
         <div className="flex items-end justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-display">
             Mission Control
           </h1>
           {slackEnabled && (

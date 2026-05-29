@@ -45,7 +45,7 @@ export default async function CyclesPage({
   return (
     <main className="w-full max-w-screen-md mx-auto px-6 py-8">
       <div className="mb-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold tracking-tight">Cycles</h1>
+        <h1 className="text-2xl font-display">Cycles</h1>
         <CreateCycleDialog>
           <CreateCycleForm />
         </CreateCycleDialog>

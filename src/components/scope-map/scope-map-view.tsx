@@ -308,7 +308,7 @@ function HeroCard({
   return (
     <section className="rounded-lg border bg-card p-6 flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight leading-tight">
+        <h1 className="text-2xl md:text-3xl font-display leading-tight">
           {pitch.title}
         </h1>
         {onStageChange && (

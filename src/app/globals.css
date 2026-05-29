@@ -5,34 +5,34 @@
   @layer base {
     :root {
       --background: 0 0% 100%;
-      --foreground: 0 0% 9%;
+      --foreground: 0 0% 7%;
 
       --card: 0 0% 100%;
-      --card-foreground: 0 0% 9%;
+      --card-foreground: 0 0% 7%;
 
       --popover: 0 0% 100%;
-      --popover-foreground: 0 0% 9%;
+      --popover-foreground: 0 0% 7%;
 
-      --primary: 0 0% 9%;
-      --primary-foreground: 0 0% 98%;
+      --primary: 0 0% 7%;
+      --primary-foreground: 0 0% 100%;
 
       --secondary: 0 0% 96.1%;
-      --secondary-foreground: 0 0% 9%;
+      --secondary-foreground: 0 0% 7%;
 
       --muted: 0 0% 96.1%;
-      --muted-foreground: 0 0% 45.1%;
+      --muted-foreground: 220 9% 46%;
 
       --accent: 0 0% 96.1%;
-      --accent-foreground: 0 0% 9%;
+      --accent-foreground: 0 0% 7%;
 
-      --destructive: 0 72.2% 50.6%;
-      --destructive-foreground: 0 0% 98%;
+      --destructive: 0 84% 60%;
+      --destructive-foreground: 0 0% 100%;
 
-      --border: 0 0% 90.2%;
-      --input: 0 0% 90.2%;
-      --ring: 0 0% 9%;
+      --border: 220 13% 91%;
+      --input: 220 13% 91%;
+      --ring: 0 0% 7%;
 
-      --radius: 0.5rem;
+      --radius: 0.75rem;
     }
 
     .dark {
@@ -72,6 +72,15 @@
     }
     body {
       @apply bg-background text-foreground;
+    }
+  }
+
+  @layer components {
+    /* Cal Sans display substitute: Inter 600 with tight negative tracking */
+    .font-display {
+      font-family: var(--font-sans), 'Inter', sans-serif;
+      font-weight: 600;
+      letter-spacing: -0.035em;
     }
   }
 

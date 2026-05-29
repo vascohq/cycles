@@ -1,7 +1,7 @@
 'use client'
 
 import { ClientSideSuspense } from '@liveblocks/react'
-import { Skeleton } from 'boneyard-js/react'
+import { ScopeMapSkeleton } from '@/components/scope-map'
 import {
   CycleRoomProvider,
   useCycleStorage,
@@ -57,19 +57,7 @@ export function ScopeMap({
           initialPresence={{}}
           initialStorage={cycleInitialStorage()}
         >
-          <ClientSideSuspense
-            fallback={
-              <Skeleton
-                name="scope-map"
-                loading
-                className="w-full max-w-screen-lg mx-auto"
-              >
-                <main className="w-full max-w-screen-lg mx-auto px-6 py-8 text-sm text-muted-foreground">
-                  Loading…
-                </main>
-              </Skeleton>
-            }
-          >
+          <ClientSideSuspense fallback={<ScopeMapSkeleton />}>
             {() => (
               <ScopeMapWired
                 pitchSlug={pitchSlug}

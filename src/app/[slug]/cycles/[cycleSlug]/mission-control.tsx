@@ -1,7 +1,7 @@
 'use client'
 
 import { ClientSideSuspense } from '@liveblocks/react'
-import { Skeleton } from 'boneyard-js/react'
+import { MissionControlSkeleton } from '@/components/mission-control'
 import {
   CycleRoomProvider,
   useCycleStorage,
@@ -38,19 +38,7 @@ export function MissionControl({
         initialPresence={{}}
         initialStorage={cycleInitialStorage()}
       >
-        <ClientSideSuspense
-          fallback={
-            <Skeleton
-              name="mission-control"
-              loading
-              className="w-full max-w-screen-lg mx-auto"
-            >
-              <main className="w-full max-w-screen-lg mx-auto px-6 py-8 text-sm text-muted-foreground text-center">
-                Loading…
-              </main>
-            </Skeleton>
-          }
-        >
+        <ClientSideSuspense fallback={<MissionControlSkeleton />}>
           {() => (
             <MissionControlWired
               cycleSlug={cycleSlug}

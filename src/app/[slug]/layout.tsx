@@ -17,11 +17,11 @@ export default function OrgLayout({
 }>) {
   return (
     <>
-      <header className="sticky top-0 z-40 h-14 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-40 h-16 border-b bg-background">
         <div className="mx-auto flex h-full max-w-screen-lg items-center justify-between px-6">
           <Link
             href="/"
-            className="text-sm font-semibold tracking-tight transition-colors hover:text-foreground/70"
+            className="font-display text-lg transition-colors hover:text-foreground/70"
           >
             Cycles
           </Link>
