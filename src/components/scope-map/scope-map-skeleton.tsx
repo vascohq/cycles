@@ -36,7 +36,7 @@ export function ScopeMapSkeleton() {
           <Skeleton className="h-8 w-32 rounded-full" />
         </div>
         <div>
-          <Skeleton className="h-40 w-full rounded-lg" />
+          <Skeleton className="h-56 w-full rounded-lg" />
         </div>
       </section>
 

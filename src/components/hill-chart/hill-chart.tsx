@@ -32,6 +32,16 @@ const VIEW_W = WIDTH + SVG_PAD * 2
 const VIEW_H = HEIGHT + SVG_PAD * 2 + 20
 
 const round = (n: number) => Math.round(n * 1000) / 1000
+const clamp = (n: number, min: number, max: number) =>
+  Math.min(Math.max(n, min), max)
+
+// Scopes sharing (nearly) the same hill position would stack into one dot and
+// become impossible to select or drag individually. Fan each cluster out in a
+// small diagonal cascade so every dot stays visible and grabbable. The offset
+// is purely visual — dragging still maps the pointer to progress.
+const STAGGER_EPS = 0.05
+const STAGGER_DX = 9
+const STAGGER_DY = -8
 
 function hillPath(): string {
   const steps = 100
@@ -107,13 +117,29 @@ export function HillChart({
   const path = hillPath()
   const centerX = round(progressToPoint(0.5).x + SVG_PAD)
 
+  const clusterCounts = new Map<number, number>()
+  const staggerIndex = new Map<string, number>()
+  for (const scope of scopes) {
+    const key = Math.round(scope.hill_progress / STAGGER_EPS)
+    const idx = clusterCounts.get(key) ?? 0
+    clusterCounts.set(key, idx + 1)
+    staggerIndex.set(scope.id, idx)
+  }
+
+  // Render the highlighted dot last so hovering a partially-covered scope
+  // brings it fully to the front.
+  const renderScopes = highlightedScopeId
+    ? [...scopes].sort((a, b) =>
+        a.id === highlightedScopeId ? 1 : b.id === highlightedScopeId ? -1 : 0
+      )
+    : scopes
+
   return (
     <div className="flex flex-col gap-2">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         className="w-full select-none"
-        style={{ maxWidth: VIEW_W }}
       >
         <g>
           <path
@@ -171,17 +197,22 @@ export function HillChart({
           KNOWN
         </text>
 
-        {scopes.map((scope) => {
+        {renderScopes.map((scope) => {
           const isDragging = draggingId === scope.id
           const progress =
             isDragging && dragProgress !== null
               ? dragProgress
               : scope.hill_progress
           const pt = progressToPoint(progress)
-          const cx = round(pt.x + SVG_PAD)
-          const cy = round(pt.y + SVG_PAD)
           const isHighlighted = highlightedScopeId === scope.id
           const r = isHighlighted || isDragging ? 17 : 13
+          const stagger = isDragging ? 0 : staggerIndex.get(scope.id) ?? 0
+          const cx = round(
+            clamp(pt.x + SVG_PAD + stagger * STAGGER_DX, r, VIEW_W - r)
+          )
+          const cy = round(
+            clamp(pt.y + SVG_PAD + stagger * STAGGER_DY, r, VIEW_H - r)
+          )
           const sw = isHighlighted || isDragging ? 2.5 : 1.5
 
           return (
