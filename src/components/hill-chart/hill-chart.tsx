@@ -5,7 +5,6 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import {
   progressToPoint,
   pointToProgress,
-  clampHillProgress,
   WIDTH,
   HEIGHT,
   BASELINE_Y,
@@ -31,17 +30,34 @@ const SVG_PAD = 20
 const VIEW_W = WIDTH + SVG_PAD * 2
 const VIEW_H = HEIGHT + SVG_PAD * 2 + 20
 
-const round = (n: number) => Math.round(n * 1000) / 1000
-const clamp = (n: number, min: number, max: number) =>
-  Math.min(Math.max(n, min), max)
+// Progress is discrete: scopes move along the hill in fixed steps rather than
+// a continuous slider. Each step is a slot from "unknown" (0) to "done".
+const STEP_COUNT = 10
+const snapToStep = (p: number) =>
+  Math.round(clamp(p, 0, 1) * STEP_COUNT) / STEP_COUNT
+const stepIndexOf = (p: number) => Math.round(clamp(p, 0, 1) * STEP_COUNT)
 
-// Scopes sharing (nearly) the same hill position would stack into one dot and
-// become impossible to select or drag individually. Fan each cluster out in a
-// small diagonal cascade so every dot stays visible and grabbable. The offset
-// is purely visual — dragging still maps the pointer to progress.
-const STAGGER_EPS = 0.05
-const STAGGER_DX = 9
-const STAGGER_DY = -8
+// When several scopes share a step they stack; hovering fans them out on an
+// arc so each one is individually visible and draggable.
+const FAN_RADIUS = 46
+const DECK_DX = 3
+const DECK_DY = -3
+
+const round = (n: number) => Math.round(n * 1000) / 1000
+function clamp(n: number, min: number, max: number) {
+  return Math.min(Math.max(n, min), max)
+}
+
+// Arc offset for member k of an n-scope stack at viewBox x `baseX`. The fan
+// tilts away from the chart edges so dots near the corners stay on-canvas.
+function fanOffset(baseX: number, k: number, n: number) {
+  const norm = baseX / VIEW_W
+  const center = (0.5 - norm) * 110
+  const spread = Math.min(200, (n - 1) * 36)
+  const angle = center - spread / 2 + (k * spread) / (n - 1)
+  const rad = (angle * Math.PI) / 180
+  return { dx: FAN_RADIUS * Math.sin(rad), dy: -FAN_RADIUS * Math.cos(rad) }
+}
 
 function hillPath(): string {
   const steps = 100
@@ -63,6 +79,7 @@ export function HillChart({
   const svgRef = useRef<SVGSVGElement>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragProgress, setDragProgress] = useState<number | null>(null)
+  const [expandedStep, setExpandedStep] = useState<number | null>(null)
   const [tooltip, setTooltip] = useState<{
     x: number
     y: number
@@ -89,7 +106,7 @@ export function HillChart({
 
       const handleMove = (ev: MouseEvent | TouchEvent) => {
         const x = svgXFromEvent(ev)
-        const progress = clampHillProgress(pointToProgress(x))
+        const progress = snapToStep(pointToProgress(x))
         latestProgress = progress
         setDragProgress(progress)
       }
@@ -117,22 +134,18 @@ export function HillChart({
   const path = hillPath()
   const centerX = round(progressToPoint(0.5).x + SVG_PAD)
 
-  const clusterCounts = new Map<number, number>()
-  const staggerIndex = new Map<string, number>()
+  // Group scopes by step. Each group renders as a stack that fans on hover.
+  const clusters = new Map<number, HillScope[]>()
   for (const scope of scopes) {
-    const key = Math.round(scope.hill_progress / STAGGER_EPS)
-    const idx = clusterCounts.get(key) ?? 0
-    clusterCounts.set(key, idx + 1)
-    staggerIndex.set(scope.id, idx)
+    const key = stepIndexOf(scope.hill_progress)
+    const arr = clusters.get(key) ?? []
+    arr.push(scope)
+    clusters.set(key, arr)
   }
-
-  // Render the highlighted dot last so hovering a partially-covered scope
-  // brings it fully to the front.
-  const renderScopes = highlightedScopeId
-    ? [...scopes].sort((a, b) =>
-        a.id === highlightedScopeId ? 1 : b.id === highlightedScopeId ? -1 : 0
-      )
-    : scopes
+  // Render the expanded stack last so its fanned dots sit above neighbours.
+  const clusterEntries = [...clusters.entries()].sort((a, b) =>
+    a[0] === expandedStep ? 1 : b[0] === expandedStep ? -1 : 0
+  )
 
   return (
     <div className="flex flex-col gap-2">
@@ -170,6 +183,21 @@ export function HillChart({
             strokeWidth={1}
             opacity={0.15}
           />
+
+          {/* step markers along the curve */}
+          {Array.from({ length: STEP_COUNT + 1 }, (_, i) => {
+            const p = progressToPoint(i / STEP_COUNT)
+            return (
+              <circle
+                key={`step-${i}`}
+                cx={round(p.x + SVG_PAD)}
+                cy={round(p.y + SVG_PAD)}
+                r={2}
+                fill="currentColor"
+                opacity={0.2}
+              />
+            )
+          })}
         </g>
 
         <text
@@ -197,65 +225,110 @@ export function HillChart({
           KNOWN
         </text>
 
-        {renderScopes.map((scope) => {
-          const isDragging = draggingId === scope.id
-          const progress =
-            isDragging && dragProgress !== null
-              ? dragProgress
-              : scope.hill_progress
-          const pt = progressToPoint(progress)
-          const isHighlighted = highlightedScopeId === scope.id
-          const r = isHighlighted || isDragging ? 17 : 13
-          const stagger = isDragging ? 0 : staggerIndex.get(scope.id) ?? 0
-          const cx = round(
-            clamp(pt.x + SVG_PAD + stagger * STAGGER_DX, r, VIEW_W - r)
-          )
-          const cy = round(
-            clamp(pt.y + SVG_PAD + stagger * STAGGER_DY, r, VIEW_H - r)
-          )
-          const sw = isHighlighted || isDragging ? 2.5 : 1.5
+        {clusterEntries.map(([step, members]) => {
+          const n = members.length
+          const expanded = expandedStep === step && n > 1
+          const base = progressToPoint(step / STEP_COUNT)
+          const cbx = round(base.x + SVG_PAD)
+          const cby = round(base.y + SVG_PAD)
 
           return (
             <g
-              key={scope.id}
-              onMouseDown={(e) => handlePointerDown(scope.id, e)}
-              onTouchStart={(e) => handlePointerDown(scope.id, e)}
-              onMouseEnter={() => {
-                onScopeHover?.(scope.id)
-                setTooltip({ x: cx, y: cy - r - 8, text: scope.title })
-              }}
-              onMouseLeave={() => {
-                onScopeHover?.(null)
-                setTooltip(null)
-              }}
-              className={onHillProgressChange ? 'cursor-grab' : ''}
-              style={isDragging ? { cursor: 'grabbing' } : undefined}
+              key={`cluster-${step}`}
+              onMouseEnter={
+                n > 1 ? () => setExpandedStep(step) : undefined
+              }
+              onMouseLeave={
+                n > 1
+                  ? () => setExpandedStep((s) => (s === step ? null : s))
+                  : undefined
+              }
             >
-              <circle
-                cx={cx}
-                cy={cy}
-                r={r}
-                fill={TIER_COLORS[scope.tier]}
-                stroke="white"
-                strokeWidth={sw}
-              />
-              <text
-                x={cx}
-                y={cy + 1}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={11}
-                fontWeight="bold"
-                fill="white"
-              >
-                {scope.order}
-              </text>
+              {/* Transparent backdrop keeps the stack "hovered" while the
+                  pointer crosses the gaps between fanned dots. */}
+              {expanded && (
+                <circle
+                  cx={cbx}
+                  cy={cby}
+                  r={FAN_RADIUS + 18}
+                  fill="transparent"
+                  style={{ pointerEvents: 'all' }}
+                />
+              )}
+
+              {members.map((scope, k) => {
+                const isDragging = draggingId === scope.id
+                const isHighlighted = highlightedScopeId === scope.id
+                const r = isHighlighted || isDragging ? 17 : 13
+                const sw = isHighlighted || isDragging ? 2.5 : 1.5
+
+                const progress =
+                  isDragging && dragProgress !== null
+                    ? dragProgress
+                    : snapToStep(scope.hill_progress)
+                const pt = progressToPoint(progress)
+                let x = pt.x + SVG_PAD
+                let y = pt.y + SVG_PAD
+
+                if (!isDragging && n > 1) {
+                  if (expanded) {
+                    const { dx, dy } = fanOffset(x, k, n)
+                    x += dx
+                    y += dy
+                  } else {
+                    x += k * DECK_DX
+                    y += k * DECK_DY
+                  }
+                }
+
+                const cx = round(clamp(x, r, VIEW_W - r))
+                const cy = round(clamp(y, r, VIEW_H - r))
+
+                return (
+                  <g
+                    key={scope.id}
+                    data-scope-dot={scope.id}
+                    onMouseDown={(e) => handlePointerDown(scope.id, e)}
+                    onTouchStart={(e) => handlePointerDown(scope.id, e)}
+                    onMouseEnter={() => {
+                      onScopeHover?.(scope.id)
+                      setTooltip({ x: cx, y: cy - r - 8, text: scope.title })
+                    }}
+                    onMouseLeave={() => {
+                      onScopeHover?.(null)
+                      setTooltip(null)
+                    }}
+                    className={onHillProgressChange ? 'cursor-grab' : ''}
+                    style={isDragging ? { cursor: 'grabbing' } : undefined}
+                  >
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={r}
+                      fill={TIER_COLORS[scope.tier]}
+                      stroke="white"
+                      strokeWidth={sw}
+                    />
+                    <text
+                      x={cx}
+                      y={cy + 1}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={11}
+                      fontWeight="bold"
+                      fill="white"
+                    >
+                      {scope.order}
+                    </text>
+                  </g>
+                )
+              })}
             </g>
           )
         })}
 
         {tooltip && (
-          <g>
+          <g style={{ pointerEvents: 'none' }}>
             <rect
               x={tooltip.x - 50}
               y={tooltip.y - 18}

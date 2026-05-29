@@ -25,13 +25,11 @@ beforeEach(() => {
 })
 
 function dotGroup(container: HTMLElement) {
-  // The dot is the <g> wrapping a <circle> + <text> in the SVG. Picking
-  // the group with a circle distinguishes it from the filter / labels group.
-  const groups = container.querySelectorAll('svg g')
-  for (const g of Array.from(groups)) {
-    if (g.querySelector('circle')) return g
-  }
-  throw new Error('dot group not found')
+  // The draggable dot is the <g> carrying data-scope-dot (a <circle> + <text>
+  // wrapped by a per-step cluster group).
+  const dot = container.querySelector('[data-scope-dot]')
+  if (!dot) throw new Error('dot group not found')
+  return dot
 }
 
 describe('HillChart drag-to-set hill_progress', () => {
