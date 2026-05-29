@@ -223,8 +223,9 @@ function PitchCardItem({
     <Link
       href={`/${slug}/cycles/${cycleSlug}/${pitchSlug}`}
       className={cn(
-        'rounded-lg border bg-card p-4 flex flex-col gap-3',
-        'transition-colors hover:border-foreground/25 hover:bg-muted/40',
+        'rounded-lg border border-border/70 bg-card p-5 flex flex-col gap-3',
+        'shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200',
+        'hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border',
         'animate-in fade-in slide-in-from-bottom-1'
       )}
       style={{ animationDelay: `${delay}s`, animationFillMode: 'backwards' }}
