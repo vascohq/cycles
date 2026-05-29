@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function MissionControlSkeleton() {
   return (
-    <main className="w-full max-w-screen-lg mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
       <header className="flex flex-col gap-4">
         <div className="flex items-center gap-1.5">
           <Skeleton className="h-4 w-12" />

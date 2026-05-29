@@ -18,7 +18,7 @@ export default function OrgLayout({
   return (
     <>
       <header className="sticky top-0 z-40 h-16 border-b bg-background">
-        <div className="mx-auto flex h-full max-w-screen-lg items-center justify-between px-6">
+        <div className="mx-auto flex h-full max-w-screen-xl items-center justify-between px-6">
           <Link
             href="/"
             className="font-display text-lg transition-colors hover:text-foreground/70"
