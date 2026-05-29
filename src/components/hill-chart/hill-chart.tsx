@@ -259,16 +259,16 @@ export function HillChart({
               }}
             >
               {/* Transparent backdrop keeps the stack "hovered" while the
-                  pointer crosses the gaps between fanned dots. */}
-              {expanded && (
-                <circle
-                  cx={cbx}
-                  cy={cby}
-                  r={FAN_RADIUS + 18}
-                  fill="transparent"
-                  style={{ pointerEvents: 'all' }}
-                />
-              )}
+                  pointer crosses the gaps between fanned dots. Always mounted
+                  (toggled via radius) so expanding doesn't reflow the dots
+                  mid-animation. */}
+              <circle
+                cx={cbx}
+                cy={cby}
+                r={expanded ? FAN_RADIUS + 18 : 0}
+                fill="transparent"
+                style={{ pointerEvents: expanded ? 'all' : 'none' }}
+              />
 
               {members.map((scope, k) => {
                 const isDragging = draggingId === scope.id
@@ -302,7 +302,6 @@ export function HillChart({
                   <g
                     key={scope.id}
                     data-scope-dot={scope.id}
-                    transform={`translate(${cx} ${cy})`}
                     onMouseDown={(e) => handlePointerDown(scope.id, e)}
                     onTouchStart={(e) => handlePointerDown(scope.id, e)}
                     onMouseEnter={() => {
@@ -310,6 +309,7 @@ export function HillChart({
                       setHovered({ x: cx, y: cy - r, title: scope.title })
                     }}
                     style={{
+                      transform: `translate(${cx}px, ${cy}px)`,
                       cursor: onHillProgressChange
                         ? isDragging
                           ? 'grabbing'
