@@ -58,6 +58,22 @@ export const AllDone: Story = {
   },
 }
 
+export const WithTrails: Story = {
+  args: {
+    scopes: SAMPLE_SCOPES,
+    trails: [
+      // advanced forward — long rightward trail
+      { scopeId: '1', state: 'moved', fromProgress: 0.05, toProgress: 0.15, stepDelta: 1 },
+      // slid back — leftward trail, neutral color (no alarm)
+      { scopeId: '2', state: 'moved', fromProgress: 0.6, toProgress: 0.4, stepDelta: -3 },
+      // didn't move — no trail rendered
+      { scopeId: '3', state: 'stagnant', fromProgress: 0.6, toProgress: 0.6, stepDelta: 0 },
+      // crept over the crest
+      { scopeId: '4', state: 'moved', fromProgress: 0.5, toProgress: 0.85, stepDelta: 5 },
+    ],
+  },
+}
+
 export const Highlighted: Story = {
   args: {
     scopes: SAMPLE_SCOPES,

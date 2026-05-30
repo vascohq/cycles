@@ -19,6 +19,8 @@ export type NeedleSnapshot = {
 export type HillSnapshot = {
   scopeId: string
   hill_progress: number
+  title?: string
+  tier?: Tier
 }
 
 export type CyclePitch = {

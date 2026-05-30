@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
 import { NeedleGauge } from '@/components/needle'
 import { HillChart, type HillScope } from '@/components/hill-chart'
+import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import { TimeboxTape } from '@/components/timebox'
 import { ScopeGrid } from '@/components/scope-card'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
@@ -41,6 +42,7 @@ export type ScopeMapViewProps = {
     timebox_end: string
   }
   hillScopes: HillScope[]
+  hillTrails?: ScopeTrail[]
   scopeGridItems: ScopeGridDerived[]
   parkingLotItems: ParkingLotItem[]
   totalProgress: { done: number; total: number }
@@ -69,6 +71,7 @@ export function ScopeMapView({
   cycleTitle,
   pitch,
   hillScopes,
+  hillTrails = [],
   scopeGridItems,
   parkingLotItems,
   totalProgress,
@@ -162,6 +165,7 @@ export function ScopeMapView({
         <div>
           <HillChart
             scopes={hillScopes}
+            trails={hillTrails}
             highlightedScopeId={highlightedScopeId}
             onScopeHover={setHighlightedScopeId}
             onHillProgressChange={isDone ? undefined : onHillProgressChange}

@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import type {
   Zone,
   Needle,
+  Tier,
   PitchUpdate,
   HillSnapshot,
 } from '@/cycle-liveblocks.config'
@@ -13,7 +14,7 @@ type BuildUpdateParams = {
   zone: Zone
   narrative: string
   currentNeedle: Needle | null
-  scopes: { id: string; hill_progress: number }[]
+  scopes: { id: string; hill_progress: number; title?: string; tier?: Tier }[]
   tasks: { scopeId: string; done: boolean }[]
   timebox: { daysLeft: number; currentWeek: number; totalWeeks: number }
 }
@@ -24,6 +25,8 @@ export function buildUpdate(params: BuildUpdateParams): PitchUpdate {
   const hill_snapshot: HillSnapshot[] = scopes.map((s) => ({
     scopeId: s.id,
     hill_progress: s.hill_progress,
+    ...(s.title !== undefined ? { title: s.title } : {}),
+    ...(s.tier !== undefined ? { tier: s.tier } : {}),
   }))
 
   const scopeIds = [...new Set(tasks.map((t) => t.scopeId))]
