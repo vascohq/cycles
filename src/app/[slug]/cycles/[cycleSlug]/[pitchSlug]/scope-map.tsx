@@ -17,8 +17,10 @@ import {
   deriveHillScopes,
   deriveParkingLotItems,
   deriveTotalTaskProgress,
+  buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost } from '@/lib/needle-engine'
+import { diffHillTrail } from '@/lib/hill-trail-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
@@ -291,6 +293,13 @@ function ScopeMapWired({
   const totalProgress = deriveTotalTaskProgress(allScopes, allTasks, pitchId)
   const pitchUpdates = allUpdates.filter((u) => u.pitchId === pitchId)
   const ghost = deriveGhost(pitchUpdates)
+  const latestUpdate = pitchUpdates.length
+    ? pitchUpdates.reduce((a, b) => (a.posted_at > b.posted_at ? a : b))
+    : null
+  const hillTrails = latestUpdate
+    ? diffHillTrail(latestUpdate.hill_snapshot, hillScopes)
+    : []
+  const hillHistory = buildHillHistoryFrames(pitchUpdates, hillScopes, usersMap)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
   const today = new Date().toISOString().slice(0, 10)
 
@@ -316,7 +325,7 @@ function ScopeMapWired({
         zone,
         narrative,
         currentNeedle: pitch.needle,
-        scopes: pitchScopes.map((s) => ({ id: s.id, hill_progress: s.hill_progress })),
+        scopes: pitchScopes.map((s) => ({ id: s.id, hill_progress: s.hill_progress, title: s.title, tier: s.tier })),
         tasks: pitchTasks.map((t) => ({ scopeId: t.scopeId, done: t.done })),
         timebox: { daysLeft: timebox.daysLeft, currentWeek: timebox.currentWeek, totalWeeks: timebox.totalWeeks },
       })
@@ -384,6 +393,8 @@ function ScopeMapWired({
       cycleTitle={cycleTitle}
       pitch={pitch}
       hillScopes={hillScopes}
+      hillTrails={hillTrails}
+      hillHistory={hillHistory}
       scopeGridItems={scopeGridItems}
       parkingLotItems={parkingLotItems}
       totalProgress={totalProgress}

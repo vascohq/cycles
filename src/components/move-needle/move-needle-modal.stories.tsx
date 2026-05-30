@@ -2,6 +2,27 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import { MoveNeedleModal } from './move-needle-modal'
 import type { Zone } from '@/cycle-liveblocks.config'
+import type { HillScope } from '@/components/hill-chart'
+import { diffHillTrail } from '@/lib/hill-trail-engine'
+import type { HillSnapshot } from '@/cycle-liveblocks.config'
+
+// A snapshot from the last update, then the live scopes now — fed through the
+// shared Hill Trail engine so the story exercises the real diff, not a mock.
+const previousSnapshot: HillSnapshot[] = [
+  { scopeId: 's1', hill_progress: 0.21, title: 'Auth flow', tier: 'must' },
+  { scopeId: 's2', hill_progress: 0.5, title: 'Billing', tier: 'should' },
+  { scopeId: 's3', hill_progress: 0.43, title: 'Onboarding', tier: 'could' },
+  { scopeId: 's4', hill_progress: 0.71, title: 'Dropped item', tier: 'should' },
+]
+
+const hillScopes: HillScope[] = [
+  { id: 's1', title: 'Auth flow', tier: 'must', hill_progress: 0.57, order: 1 },
+  { id: 's2', title: 'Billing', tier: 'should', hill_progress: 0.5, order: 2 },
+  { id: 's3', title: 'Onboarding', tier: 'could', hill_progress: 0.64, order: 3 },
+  { id: 's5', title: 'New scope', tier: 'must', hill_progress: 0.14, order: 4 },
+]
+
+const hillTrails = diffHillTrail(previousSnapshot, hillScopes)
 
 const meta: Meta<typeof MoveNeedleModal> = {
   title: 'Components/MoveNeedleModal',
@@ -24,6 +45,23 @@ export const Default: Story = {
     daysLeft: 21,
     currentProgress: 0.5,
     currentZone: 'some_risk',
+    onOpenChange: () => {},
+    onPost: () => {},
+  },
+}
+
+export const WithHillDiff: Story = {
+  args: {
+    open: true,
+    weekLabel: 'Week 3 of 6',
+    dateLabel: 'May 27, 2025',
+    userName: 'Seb',
+    pitchTitle: 'Mission Control',
+    tasksDone: 9,
+    tasksTotal: 13,
+    daysLeft: 21,
+    hillScopes,
+    hillTrails,
     onOpenChange: () => {},
     onPost: () => {},
   },

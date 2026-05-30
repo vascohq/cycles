@@ -4,7 +4,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
 import { NeedleGauge } from '@/components/needle'
-import { HillChart, type HillScope } from '@/components/hill-chart'
+import { HillHistory, type HillScope } from '@/components/hill-chart'
+import type { ScopeTrail } from '@/lib/hill-trail-engine'
+import type { HillHistoryFrame } from '@/lib/scope-map-helpers'
 import { TimeboxTape } from '@/components/timebox'
 import { ScopeGrid } from '@/components/scope-card'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
@@ -41,6 +43,8 @@ export type ScopeMapViewProps = {
     timebox_end: string
   }
   hillScopes: HillScope[]
+  hillTrails?: ScopeTrail[]
+  hillHistory?: HillHistoryFrame[]
   scopeGridItems: ScopeGridDerived[]
   parkingLotItems: ParkingLotItem[]
   totalProgress: { done: number; total: number }
@@ -68,6 +72,8 @@ export function ScopeMapView({
   cycleTitle,
   pitch,
   hillScopes,
+  hillTrails = [],
+  hillHistory = [],
   scopeGridItems,
   parkingLotItems,
   totalProgress,
@@ -151,6 +157,8 @@ export function ScopeMapView({
                   daysLeft={timebox.daysLeft}
                   currentProgress={pitch.needle?.progress ?? 0.02}
                   currentZone={pitch.needle?.zone ?? null}
+                  hillScopes={hillScopes}
+                  hillTrails={hillTrails}
                   onPost={onPostUpdate}
                 />
               )}
@@ -159,8 +167,10 @@ export function ScopeMapView({
         </div>
 
         <div>
-          <HillChart
+          <HillHistory
             scopes={hillScopes}
+            trails={hillTrails}
+            history={hillHistory}
             highlightedScopeId={highlightedScopeId}
             onScopeHover={setHighlightedScopeId}
             onHillProgressChange={isDone ? undefined : onHillProgressChange}
