@@ -5,6 +5,7 @@ import type { Zone } from '@/cycle-liveblocks.config'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import { HillChart, type HillScope } from '@/components/hill-chart'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
+import { NeedleControl } from '@/components/needle'
 import {
   Dialog,
   DialogContent,
@@ -32,11 +33,13 @@ export type MoveNeedleModalProps = {
   tasksDone: number
   tasksTotal: number
   daysLeft: number
+  currentProgress: number
+  currentZone: Zone | null
   /** Live scopes for the read-only hill diff (since the last update). */
   hillScopes?: HillScope[]
   /** Trails computed by the Hill Trail engine — drives the read-only diff. */
   hillTrails?: ScopeTrail[]
-  onPost: (zone: Zone, narrative: string) => void | Promise<void>
+  onPost: (progress: number, zone: Zone, narrative: string) => void | Promise<void>
 }
 
 export function MoveNeedleModal({
@@ -49,15 +52,29 @@ export function MoveNeedleModal({
   tasksDone,
   tasksTotal,
   daysLeft,
+  currentProgress,
+  currentZone,
   hillScopes = [],
   hillTrails = [],
   onPost,
 }: MoveNeedleModalProps) {
   const slackEnabled = useSlackEnabled()
   const showHillDiff = hillTrails.length > 0
-  const [zone, setZone] = useState<Zone | null>(null)
+  const [progress, setProgress] = useState(currentProgress)
+  const [zone, setZone] = useState<Zone | null>(currentZone)
   const [narrative, setNarrative] = useState('')
   const [posting, setPosting] = useState(false)
+
+  // Pre-fill position and zone from the current needle each time the modal opens,
+  // so you adjust from where it is rather than from a blank slate.
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (open && !prevOpen) {
+    setProgress(currentProgress)
+    setZone(currentZone)
+    setNarrative('')
+    setPosting(false)
+  }
+  if (open !== prevOpen) setPrevOpen(open)
 
   const canPost = zone !== null && narrative.trim().length > 0 && !posting
 
@@ -65,9 +82,7 @@ export function MoveNeedleModal({
     if (!canPost || !zone) return
     setPosting(true)
     try {
-      await onPost(zone, narrative.trim())
-      setZone(null)
-      setNarrative('')
+      await onPost(progress, zone, narrative.trim())
       onOpenChange(false)
     } finally {
       setPosting(false)
@@ -75,11 +90,6 @@ export function MoveNeedleModal({
   }
 
   function handleOpenChange(next: boolean) {
-    if (!next) {
-      setZone(null)
-      setNarrative('')
-      setPosting(false)
-    }
     onOpenChange(next)
   }
 
@@ -103,6 +113,20 @@ export function MoveNeedleModal({
           }
         >
           <div className="flex flex-col gap-5">
+          <div>
+            <h3 className="text-sm font-medium mb-1">How far along?</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              Drag the handle, click the arc, or use the arrow keys.
+            </p>
+            <div className="flex justify-center">
+              <NeedleControl
+                progress={progress}
+                zone={zone}
+                onChange={setProgress}
+              />
+            </div>
+          </div>
+
           <div>
             <h3 className="text-sm font-medium mb-3">
               How&apos;s the team feeling?

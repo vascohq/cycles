@@ -231,7 +231,7 @@ function PitchCardItem({
       style={{ animationDelay: `${delay}s`, animationFillMode: 'backwards' }}
     >
       <div className="flex items-center justify-between gap-2">
-        <MiniNeedle needle={card.needle} />
+        <MiniNeedle needle={card.needle} delay={delay} />
         <span
           className={cn(
             'text-xs px-2 py-0.5 rounded-full',

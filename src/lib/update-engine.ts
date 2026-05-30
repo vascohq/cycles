@@ -6,11 +6,11 @@ import type {
   PitchUpdate,
   HillSnapshot,
 } from '@/cycle-liveblocks.config'
-import { snapForZone } from './needle-engine'
 
 type BuildUpdateParams = {
   pitchId: string
   userId: string
+  progress: number
   zone: Zone
   narrative: string
   currentNeedle: Needle | null
@@ -20,7 +20,8 @@ type BuildUpdateParams = {
 }
 
 export function buildUpdate(params: BuildUpdateParams): PitchUpdate {
-  const { pitchId, userId, zone, narrative, scopes, tasks, timebox } = params
+  const { pitchId, userId, progress, zone, narrative, scopes, tasks, timebox } =
+    params
 
   const hill_snapshot: HillSnapshot[] = scopes.map((s) => ({
     scopeId: s.id,
@@ -45,7 +46,7 @@ export function buildUpdate(params: BuildUpdateParams): PitchUpdate {
     posted_at: new Date().toISOString(),
     posted_by: userId,
     narrative,
-    needle_snapshot: { progress: snapForZone(zone), zone },
+    needle_snapshot: { progress, zone },
     hill_snapshot,
     task_snapshot,
     timebox_snapshot: timebox,

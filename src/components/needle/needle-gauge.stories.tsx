@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
 import { NeedleGauge } from './needle-gauge'
 
 const meta = {
@@ -65,13 +64,5 @@ export const WithGhost: Story = {
     needle: { progress: 0.7, zone: 'on_track' },
     ghost: { progress: 0.4, zone: 'some_risk' },
     timestamp: 'Updated 2d ago',
-  },
-}
-
-export const Interactive: Story = {
-  args: {
-    needle: { progress: 0.5, zone: 'some_risk' },
-    onProgressChange: fn(),
-    timestamp: 'Click the arc to move',
   },
 }

@@ -1,62 +1,48 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
 import type { Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
-import { clampProgress } from '@/lib/needle-engine'
+import {
+  type ArcConfig,
+  arcPoint,
+  arcPath,
+  arcLength,
+  fillLength,
+  tangentTiltDeg,
+} from './needle-geometry'
 import { ZONE_COLORS, NULL_COLOR } from './zone-colors'
+import { useAnimatedProgress } from './use-animated-progress'
 
-const ARC_SAMPLES = 200
-const WIDTH = 240
-const HEIGHT = 140
-const CX = 120
-const CY = 130
-const RX = 100
-const RY = 90
+const WIDTH = 320
+const HEIGHT = 132
+const ARC: ArcConfig = { cx: 160, cy: 344, r: 280, sweepDeg: 60 }
+const TICKS = [0, 0.25, 0.5, 0.75, 1]
 
 const round = (n: number) => Math.round(n * 1000) / 1000
 
-function arcPoint(t: number) {
-  const angle = Math.PI + t * Math.PI
-  return {
-    x: round(CX + RX * Math.cos(angle)),
-    y: round(CY + RY * Math.sin(angle)),
-  }
-}
-
-function arcPath() {
-  const start = arcPoint(0)
-  const end = arcPoint(1)
-  return `M ${start.x} ${start.y} A ${RX} ${RY} 0 0 1 ${end.x} ${end.y}`
-}
-
-function hashMarks() {
-  const marks = []
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10
-    const inner = arcPoint(t)
-    const angle = Math.PI + t * Math.PI
-    const outerX = round(CX + (RX + 8) * Math.cos(angle))
-    const outerY = round(CY + (RY + 8) * Math.sin(angle))
-    marks.push(
+function tickMarks() {
+  return TICKS.map((t) => {
+    const p = arcPoint(ARC, t)
+    // Short mark pointing inward (toward the circle center).
+    const ux = (ARC.cx - p.x) / ARC.r
+    const uy = (ARC.cy - p.y) / ARC.r
+    return (
       <line
-        key={i}
-        x1={inner.x}
-        y1={inner.y}
-        x2={outerX}
-        y2={outerY}
+        key={t}
+        x1={p.x}
+        y1={p.y}
+        x2={round(p.x + ux * 7)}
+        y2={round(p.y + uy * 7)}
         stroke="currentColor"
         strokeWidth={1.5}
-        opacity={0.4}
+        opacity={0.25}
       />
     )
-  }
-  return marks
+  })
 }
 
 type NeedleGaugeProps = {
   needle: Needle | null
   ghost?: NeedleSnapshot | null
-  onProgressChange?: (progress: number) => void
   label?: string
   timestamp?: string
 }
@@ -64,113 +50,101 @@ type NeedleGaugeProps = {
 export function NeedleGauge({
   needle,
   ghost,
-  onProgressChange,
   label,
   timestamp,
 }: NeedleGaugeProps) {
-  const svgRef = useRef<SVGSVGElement>(null)
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      if (!onProgressChange || !svgRef.current) return
-
-      const rect = svgRef.current.getBoundingClientRect()
-      const clickX = e.clientX - rect.left
-      const clickY = e.clientY - rect.top
-      const scaleX = WIDTH / rect.width
-      const scaleY = HEIGHT / rect.height
-      const svgX = clickX * scaleX
-      const svgY = clickY * scaleY
-
-      let minDist = Infinity
-      let bestT = 0.5
-      for (let i = 0; i <= ARC_SAMPLES; i++) {
-        const t = i / ARC_SAMPLES
-        const pt = arcPoint(t)
-        const dist = Math.hypot(pt.x - svgX, pt.y - svgY)
-        if (dist < minDist) {
-          minDist = dist
-          bestT = t
-        }
-      }
-
-      onProgressChange(clampProgress(bestT))
-    },
-    [onProgressChange]
-  )
-
   const color = needle ? ZONE_COLORS[needle.zone] : NULL_COLOR
-  const progress = needle?.progress ?? 0
-  const tipPoint = arcPoint(progress)
+  const progress = useAnimatedProgress(needle?.progress ?? 0)
+  const tip = arcPoint(ARC, progress)
+  const tilt = tangentTiltDeg(ARC, progress)
+  const arcD = arcPath(ARC)
+  const totalLength = arcLength(ARC)
+  const fillLen = fillLength(ARC, progress)
+
   const zoneLabel =
     needle === null
       ? 'Not yet set'
       : (label ?? needle.zone.replace(/_/g, ' '))
 
-  const arcD = arcPath()
-  const totalLength = round(Math.PI * Math.sqrt((RX * RX + RY * RY) / 2))
-  const fillLength = round(progress * totalLength)
-
   return (
     <div className="flex flex-col items-center gap-1">
       <svg
-        ref={svgRef}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width={WIDTH}
         height={HEIGHT}
-        onClick={handleClick}
-        className={onProgressChange ? 'cursor-pointer' : ''}
+        className="w-full max-w-[320px]"
       >
-        <g>
+        {/* Tape track */}
+        <path
+          d={arcD}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={8}
+          opacity={0.14}
+          strokeLinecap="round"
+        />
+
+        {tickMarks()}
+
+        {/* Zone-colored fill: length = position, color = zone */}
+        {needle && (
           <path
             d={arcD}
             fill="none"
-            stroke="currentColor"
-            strokeWidth={6}
-            opacity={0.15}
+            stroke={color}
+            strokeWidth={8}
             strokeLinecap="round"
+            strokeDasharray={`${fillLen} ${totalLength}`}
           />
+        )}
 
-          {needle && (
-            <path
-              d={arcD}
-              fill="none"
-              stroke={color}
-              strokeWidth={6}
-              strokeLinecap="round"
-              strokeDasharray={`${fillLength} ${totalLength}`}
-            />
-          )}
-
-          {hashMarks()}
-        </g>
-
+        {/* Ghost: where the needle sat at the last update */}
         {ghost && (
           <circle
-            cx={arcPoint(ghost.progress).x}
-            cy={arcPoint(ghost.progress).y}
+            cx={arcPoint(ARC, ghost.progress).x}
+            cy={arcPoint(ARC, ghost.progress).y}
             r={4}
             fill={ZONE_COLORS[ghost.zone]}
             opacity={0.3}
           />
         )}
 
+        {/* Chunky grip handle */}
         {needle && (
-          <circle cx={tipPoint.x} cy={tipPoint.y} r={5} fill={color} />
+          <g transform={`translate(${tip.x} ${tip.y}) rotate(${tilt})`}>
+            <polygon points="-6,-13 6,-13 0,1" fill={color} />
+            <rect
+              x={-9}
+              y={-42}
+              width={18}
+              height={30}
+              rx={5}
+              className="fill-background"
+              stroke={color}
+              strokeWidth={2}
+            />
+            {[-4, 0, 4].map((dx) => (
+              <line
+                key={dx}
+                x1={dx}
+                y1={-32}
+                x2={dx}
+                y2={-22}
+                stroke={color}
+                strokeWidth={1.5}
+                opacity={0.7}
+              />
+            ))}
+          </g>
         )}
-
-        <text
-          x={CX}
-          y={CY - 15}
-          textAnchor="middle"
-          fontSize={13}
-          fontWeight={500}
-          fill={color}
-        >
-          {zoneLabel}
-        </text>
       </svg>
 
+      <span
+        className="text-sm font-medium capitalize"
+        style={{ color }}
+      >
+        {zoneLabel}
+      </span>
       {timestamp && (
         <span className="text-xs text-muted-foreground">{timestamp}</span>
       )}

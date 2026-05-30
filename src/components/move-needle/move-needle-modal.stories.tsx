@@ -43,6 +43,8 @@ export const Default: Story = {
     tasksDone: 9,
     tasksTotal: 13,
     daysLeft: 21,
+    currentProgress: 0.5,
+    currentZone: 'some_risk',
     onOpenChange: () => {},
     onPost: () => {},
   },
@@ -69,6 +71,7 @@ export const Interactive: Story = {
   render: function Render() {
     const [open, setOpen] = useState(false)
     const [lastPost, setLastPost] = useState<{
+      progress: number
       zone: Zone
       narrative: string
     } | null>(null)
@@ -91,13 +94,16 @@ export const Interactive: Story = {
           tasksDone={9}
           tasksTotal={13}
           daysLeft={21}
-          onPost={async (zone, narrative) => {
+          currentProgress={0.5}
+          currentZone={null}
+          onPost={async (progress, zone, narrative) => {
             await new Promise((r) => setTimeout(r, 800))
-            setLastPost({ zone, narrative })
+            setLastPost({ progress, zone, narrative })
           }}
         />
         {lastPost && (
           <div className="text-xs font-mono p-3 rounded border bg-muted max-w-xs">
+            <div>Progress: {lastPost.progress.toFixed(2)}</div>
             <div>Zone: {lastPost.zone}</div>
             <div>Narrative: {lastPost.narrative}</div>
           </div>
