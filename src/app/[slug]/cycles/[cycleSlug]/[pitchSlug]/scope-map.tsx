@@ -115,16 +115,6 @@ function ScopeMapWired({
     [pitchId]
   )
 
-  const onNeedleProgressChange = useCycleMutation(
-    ({ storage }, progress: number) => {
-      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
-      if (!p) return
-      const needle = p.get('needle')
-      if (needle) p.set('needle', { ...needle, progress })
-    },
-    [pitchId]
-  )
-
   const onHillProgressChange = useCycleMutation(
     ({ storage }, scopeId: string, progress: number) => {
       const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
@@ -317,11 +307,12 @@ function ScopeMapWired({
   const userName = user?.firstName ?? usersMap.get(userId ?? '')?.name ?? 'You'
 
   const onPostUpdate = useCallback(
-    async (zone: Zone, narrative: string) => {
+    async (progress: number, zone: Zone, narrative: string) => {
       if (!pitch || !userId || !timebox) return
       const built = buildUpdate({
         pitchId,
         userId,
+        progress,
         zone,
         narrative,
         currentNeedle: pitch.needle,
@@ -399,7 +390,6 @@ function ScopeMapWired({
       ghost={ghost}
       today={today}
       onStageChange={onStageChange}
-      onNeedleProgressChange={onNeedleProgressChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
       onAddTask={onAddTask}

@@ -35,7 +35,7 @@ _Avoid_: Deadline, due date, sprint length
 ### The Needle
 
 **Needle**:
-The team's subjective impression of how a pitch is going. A position on an arc (0..1) plus a zone. Intentionally manual — never calculated from scope progress.
+The team's subjective impression of how a pitch is going. Two independent dimensions: a **position** on an arc (0..1, "how far along") set by sliding, and a **zone** (sentiment, rendered as color) chosen separately. Neither derives from the other. Intentionally manual — never calculated from scope progress, task counts, or each other.
 _Avoid_: Gauge, status indicator, health check
 
 **Zone**:
@@ -43,7 +43,7 @@ The needle's sentiment: `on_track`, `some_risk`, or `concerned`. Rendered as col
 _Avoid_: Status, RAG status, health
 
 **Move the Needle**:
-The action of updating a pitch's needle and posting a narrative update to Slack. Can happen any day but follows a Tuesday cadence. Always creates an immutable update — never edits a previous one.
+The action of updating a pitch's needle and posting a narrative update. Done only in the dedicated modal — the on-page needle is display-only, never edited in place. Requires placing the position, choosing a zone, and writing narrative; the modal pre-fills position and zone to the current needle so you adjust from where it is. Can happen any day but follows a Tuesday cadence. Always creates an immutable update — never edits a previous one.
 _Avoid_: Check-in, standup, status update
 
 ### Scopes and tasks
@@ -129,3 +129,4 @@ _Avoid_: Pitch detail, pitch page
 - **"progress"** was used to mean both **Hill Progress** (scope-level, position on hill chart) and **Needle** progress (pitch-level, position on arc). Resolved: always qualify — "hill progress" for scopes, "needle progress" for the pitch-level arc position.
 - **"snapshot"** was used for the existing `PitchSnapshot` type (legacy board feature) and for the new update snapshots. Resolved: the legacy type is retired. New terms are **Needle Snapshot** and **Hill Snapshot**, both part of an **Update**.
 - **"color"** was used for tier color (red/orange/grey on scope dots) and zone color (green/yellow/red on the needle). These overlap on red. Resolved: context distinguishes them — tier colors appear on scope dots and cards, zone colors appear on the needle and update cards. Tier red = highest priority, zone red = concerned.
+- **needle position vs. zone** were coupled: position was auto-snapped from the chosen zone (on_track→0.85, some_risk→0.5, concerned→0.2). Resolved: they are independent — position is slid manually, zone is chosen separately, and the snapping derivation is removed. The needle's filled arc encodes both at once: length = position, color = zone.
