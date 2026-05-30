@@ -11,6 +11,7 @@ import {
 } from '@/lib/hill-engine'
 import { TIER_COLORS } from './tier-colors'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
+import { rollupHillTrails } from '@/lib/hill-trail-engine'
 
 export type HillScope = {
   id: string
@@ -115,6 +116,7 @@ export function HillChart({
     x: number
     y: number
     title: string
+    detail?: string
   } | null>(null)
 
   const svgXFromEvent = useCallback(
@@ -167,9 +169,11 @@ export function HillChart({
   const centerX = round(progressToPoint(0.5).x + SVG_PAD)
 
   const scopeById = new Map(scopes.map((s) => [s.id, s]))
+  const trailById = new Map(trails.map((t) => [t.scopeId, t]))
   const newScopeIds = new Set(
     trails.filter((t) => t.state === 'new').map((t) => t.scopeId)
   )
+  const rollup = rollupHillTrails(trails)
 
   // Group scopes by step. Each group renders as a stack that fans on hover.
   const clusters = new Map<number, HillScope[]>()
@@ -401,7 +405,19 @@ export function HillChart({
                     onTouchStart={(e) => handlePointerDown(scope.id, e)}
                     onMouseEnter={() => {
                       onScopeHover?.(scope.id)
-                      setHovered({ x: cx, y: cy - r, title: scope.title })
+                      const trail = trailById.get(scope.id)
+                      const detail =
+                        trail && trail.state !== 'dropped'
+                          ? 'stepDelta' in trail
+                            ? `${trail.label} · ${trail.stepDelta > 0 ? '+' : ''}${trail.stepDelta} ${Math.abs(trail.stepDelta) === 1 ? 'step' : 'steps'}`
+                            : trail.label
+                          : undefined
+                      setHovered({
+                        x: cx,
+                        y: cy - r,
+                        title: scope.title,
+                        detail,
+                      })
                     }}
                     style={{
                       transform: `translate(${cx}px, ${cy}px)`,
@@ -464,10 +480,24 @@ export function HillChart({
             transition: 'left 160ms ease, top 160ms ease',
           }}
         >
-          {hovered.title}
+          <div className="truncate">{hovered.title}</div>
+          {hovered.detail && (
+            <div className="text-[10px] font-normal opacity-70">
+              {hovered.detail}
+            </div>
+          )}
         </div>
       )}
       </div>
+
+      {trails.length > 0 && (
+        <div className="flex gap-3 justify-center text-xs text-muted-foreground">
+          <span>{rollup.moved} moved</span>
+          <span>{rollup.stalled} stalled</span>
+          {rollup.new > 0 && <span>{rollup.new} new</span>}
+          {rollup.dropped > 0 && <span>{rollup.dropped} dropped</span>}
+        </div>
+      )}
 
       <div className="flex gap-4 justify-center text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
