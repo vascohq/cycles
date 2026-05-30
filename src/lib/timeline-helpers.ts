@@ -1,4 +1,10 @@
 import type { PitchUpdate, NeedleSnapshot } from '@/cycle-liveblocks.config'
+import {
+  diffHillTrail,
+  rollupHillTrails,
+  type ScopeTrail,
+  type HillTrailRollup,
+} from '@/lib/hill-trail-engine'
 
 export type TimelineCard = {
   id: string
@@ -10,6 +16,15 @@ export type TimelineCard = {
   needleSnapshot: NeedleSnapshot
   scopesMoved: number
   slackFailed: boolean
+  /**
+   * Frozen per-scope hill movement between this update's snapshot and the
+   * previous update's snapshot. Computed once from STORED snapshots via the
+   * shared Hill Trail engine — never recomputed against live positions.
+   */
+  trails: ScopeTrail[]
+  rollup: HillTrailRollup
+  /** scopeId -> display title, from the snapshots backing this card's diff. */
+  scopeTitles: Record<string, string>
 }
 
 export function formatUpdateTimestamp(iso: string): string {
@@ -35,17 +50,27 @@ export function deriveTimelineCards(
 
   return sorted.map((update, i) => {
     const user = users.get(update.posted_by)
+    // `sorted` is newest-first, so the immediate predecessor is the next entry.
     const prev = sorted[i + 1]
 
-    let scopesMoved = 0
-    if (prev) {
-      const prevMap = new Map(
-        prev.hill_snapshot.map((h) => [h.scopeId, h.hill_progress])
-      )
-      scopesMoved = update.hill_snapshot.filter((h) => {
-        const prevProgress = prevMap.get(h.scopeId)
-        return prevProgress !== undefined && h.hill_progress !== prevProgress
-      }).length
+    // Frozen diff: this update's stored snapshot vs the previous update's
+    // stored snapshot. For the first-ever update (no predecessor) we pass an
+    // empty previous, which the engine renders as all-"new". Reusing the shared
+    // engine over STORED snapshots keeps card movement frozen — it never
+    // recomputes against live positions.
+    const trails = diffHillTrail(
+      prev?.hill_snapshot ?? [],
+      update.hill_snapshot.map((s) => ({
+        id: s.scopeId,
+        hill_progress: s.hill_progress,
+      }))
+    )
+    const rollup = rollupHillTrails(trails)
+
+    // Titles for display, drawn from whichever snapshot holds the scope.
+    const scopeTitles: Record<string, string> = {}
+    for (const snap of [...(prev?.hill_snapshot ?? []), ...update.hill_snapshot]) {
+      if (snap.title) scopeTitles[snap.scopeId] = snap.title
     }
 
     return {
@@ -56,8 +81,11 @@ export function deriveTimelineCards(
       formattedTimestamp: formatUpdateTimestamp(update.posted_at),
       narrative: update.narrative,
       needleSnapshot: update.needle_snapshot,
-      scopesMoved,
+      scopesMoved: rollup.moved,
       slackFailed: !!update.slack_attempted && !update.slack_delivered_at,
+      trails,
+      rollup,
+      scopeTitles,
     }
   })
 }
