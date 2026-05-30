@@ -1,20 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { snapForZone, clampProgress, SHIPPED_NEEDLE, deriveGhost } from './needle-engine'
+import { clampProgress, SHIPPED_NEEDLE, deriveGhost } from './needle-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
-
-describe('snapForZone', () => {
-  it('snaps on_track to 0.85', () => {
-    expect(snapForZone('on_track')).toBe(0.85)
-  })
-
-  it('snaps some_risk to 0.5', () => {
-    expect(snapForZone('some_risk')).toBe(0.5)
-  })
-
-  it('snaps concerned to 0.2', () => {
-    expect(snapForZone('concerned')).toBe(0.2)
-  })
-})
 
 describe('clampProgress', () => {
   it('clamps 0 to 0.02', () => {

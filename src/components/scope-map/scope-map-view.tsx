@@ -47,7 +47,6 @@ export type ScopeMapViewProps = {
   ghost: NeedleSnapshot | null
   today: string
   onStageChange?: (stage: Stage) => void
-  onNeedleProgressChange?: (progress: number) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
   onAddTask?: (scopeId: string, title: string) => void
@@ -57,7 +56,7 @@ export type ScopeMapViewProps = {
   onScopeReorder?: (activeId: string, overId: string) => void
   onScopeReset?: (scopeId: string) => void
   onParkingToggle?: (itemId: string, resolved: boolean) => void
-  onPostUpdate?: (zone: Zone, narrative: string) => void | Promise<void>
+  onPostUpdate?: (progress: number, zone: Zone, narrative: string) => void | Promise<void>
   userName?: string
   timelineCards?: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
@@ -75,7 +74,6 @@ export function ScopeMapView({
   ghost,
   today,
   onStageChange,
-  onNeedleProgressChange,
   onHillProgressChange,
   onTaskToggle,
   onAddTask,
@@ -130,7 +128,6 @@ export function ScopeMapView({
           <NeedleGauge
             needle={isDone ? SHIPPED_NEEDLE : pitch.needle}
             ghost={isDone ? null : ghost}
-            onProgressChange={isDone ? undefined : onNeedleProgressChange}
             label={isDone ? 'Shipped' : undefined}
           />
           {!isDone && (
@@ -152,6 +149,8 @@ export function ScopeMapView({
                   tasksDone={totalProgress.done}
                   tasksTotal={totalProgress.total}
                   daysLeft={timebox.daysLeft}
+                  currentProgress={pitch.needle?.progress ?? 0.02}
+                  currentZone={pitch.needle?.zone ?? null}
                   onPost={onPostUpdate}
                 />
               )}
