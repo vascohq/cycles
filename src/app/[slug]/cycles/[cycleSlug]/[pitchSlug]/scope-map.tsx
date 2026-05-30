@@ -17,6 +17,7 @@ import {
   deriveHillScopes,
   deriveParkingLotItems,
   deriveTotalTaskProgress,
+  buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost } from '@/lib/needle-engine'
 import { diffHillTrail } from '@/lib/hill-trail-engine'
@@ -308,6 +309,7 @@ function ScopeMapWired({
   const hillTrails = latestUpdate
     ? diffHillTrail(latestUpdate.hill_snapshot, hillScopes)
     : []
+  const hillHistory = buildHillHistoryFrames(pitchUpdates, hillScopes, usersMap)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
   const today = new Date().toISOString().slice(0, 10)
 
@@ -401,6 +403,7 @@ function ScopeMapWired({
       pitch={pitch}
       hillScopes={hillScopes}
       hillTrails={hillTrails}
+      hillHistory={hillHistory}
       scopeGridItems={scopeGridItems}
       parkingLotItems={parkingLotItems}
       totalProgress={totalProgress}
