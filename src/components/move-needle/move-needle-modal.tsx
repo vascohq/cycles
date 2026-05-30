@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import type { Zone } from '@/cycle-liveblocks.config'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
+import { HillChart, type HillScope } from '@/components/hill-chart'
+import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,10 @@ export type MoveNeedleModalProps = {
   tasksDone: number
   tasksTotal: number
   daysLeft: number
+  /** Live scopes for the read-only hill diff (since the last update). */
+  hillScopes?: HillScope[]
+  /** Trails computed by the Hill Trail engine — drives the read-only diff. */
+  hillTrails?: ScopeTrail[]
   onPost: (zone: Zone, narrative: string) => void | Promise<void>
 }
 
@@ -43,9 +49,12 @@ export function MoveNeedleModal({
   tasksDone,
   tasksTotal,
   daysLeft,
+  hillScopes = [],
+  hillTrails = [],
   onPost,
 }: MoveNeedleModalProps) {
   const slackEnabled = useSlackEnabled()
+  const showHillDiff = hillTrails.length > 0
   const [zone, setZone] = useState<Zone | null>(null)
   const [narrative, setNarrative] = useState('')
   const [posting, setPosting] = useState(false)
@@ -76,7 +85,7 @@ export function MoveNeedleModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className={showHillDiff ? 'max-w-2xl' : 'max-w-md'}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold tracking-tight">
             Move the needle
@@ -86,7 +95,14 @@ export function MoveNeedleModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-5 py-2">
+        <div
+          className={
+            showHillDiff
+              ? 'grid grid-cols-1 sm:grid-cols-2 gap-6 py-2'
+              : 'flex flex-col gap-5 py-2'
+          }
+        >
+          <div className="flex flex-col gap-5">
           <div>
             <h3 className="text-sm font-medium mb-3">
               How&apos;s the team feeling?
@@ -138,6 +154,19 @@ export function MoveNeedleModal({
               tasksTotal={tasksTotal}
               daysLeft={daysLeft}
             />
+          )}
+          </div>
+
+          {showHillDiff && (
+            <div>
+              <h3 className="text-sm font-medium mb-2">
+                What moved on the hill?
+              </h3>
+              {/* Read-only diff: no onHillProgressChange => not draggable.
+                  Reuses the Hill Trail engine via the trails prop; the count
+                  rollup renders for free below the chart. */}
+              <HillChart scopes={hillScopes} trails={hillTrails} />
+            </div>
           )}
         </div>
 

@@ -155,6 +155,8 @@ export function ScopeMapView({
                   tasksDone={totalProgress.done}
                   tasksTotal={totalProgress.total}
                   daysLeft={timebox.daysLeft}
+                  hillScopes={hillScopes}
+                  hillTrails={hillTrails}
                   onPost={onPostUpdate}
                 />
               )}
