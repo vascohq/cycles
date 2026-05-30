@@ -128,45 +128,48 @@ export function HillChart({
     []
   )
 
-  const handlePointerDown = useCallback(
-    (scopeId: string, e: React.MouseEvent | React.TouchEvent) => {
-      e.preventDefault()
-      if (!onHillProgressChange) return
-      setDraggingId(scopeId)
-      setHovered(null)
-      let latestProgress: number | null = null
+  const handlePointerDown = (
+    scopeId: string,
+    e: React.MouseEvent | React.TouchEvent
+  ) => {
+    e.preventDefault()
+    if (!onHillProgressChange) return
+    setDraggingId(scopeId)
+    setHovered(null)
+    let latestProgress: number | null = null
 
-      const handleMove = (ev: MouseEvent | TouchEvent) => {
-        const x = svgXFromEvent(ev)
-        const progress = snapToStep(pointToProgress(x))
-        latestProgress = progress
-        setDragProgress(progress)
+    const handleMove = (ev: MouseEvent | TouchEvent) => {
+      const x = svgXFromEvent(ev)
+      const progress = snapToStep(pointToProgress(x))
+      latestProgress = progress
+      setDragProgress(progress)
+    }
+
+    const handleUp = () => {
+      if (latestProgress !== null) {
+        onHillProgressChange(scopeId, latestProgress)
       }
+      setDraggingId(null)
+      setDragProgress(null)
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      window.removeEventListener('touchmove', handleMove)
+      window.removeEventListener('touchend', handleUp)
+    }
 
-      const handleUp = () => {
-        if (latestProgress !== null) {
-          onHillProgressChange(scopeId, latestProgress)
-        }
-        setDraggingId(null)
-        setDragProgress(null)
-        window.removeEventListener('mousemove', handleMove)
-        window.removeEventListener('mouseup', handleUp)
-        window.removeEventListener('touchmove', handleMove)
-        window.removeEventListener('touchend', handleUp)
-      }
-
-      window.addEventListener('mousemove', handleMove)
-      window.addEventListener('mouseup', handleUp)
-      window.addEventListener('touchmove', handleMove)
-      window.addEventListener('touchend', handleUp)
-    },
-    [onHillProgressChange, svgXFromEvent]
-  )
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    window.addEventListener('touchmove', handleMove)
+    window.addEventListener('touchend', handleUp)
+  }
 
   const path = hillPath()
   const centerX = round(progressToPoint(0.5).x + SVG_PAD)
 
   const scopeById = new Map(scopes.map((s) => [s.id, s]))
+  const newScopeIds = new Set(
+    trails.filter((t) => t.state === 'new').map((t) => t.scopeId)
+  )
 
   // Group scopes by step. Each group renders as a stack that fans on hover.
   const clusters = new Map<number, HillScope[]>()
@@ -266,6 +269,37 @@ export function HillChart({
             color throughout — regression reads from geometry, never alarm. */}
         <g style={{ pointerEvents: 'none' }}>
           {trails.map((trail) => {
+            // Dropped: a lone named ghost at its last position. The scope is
+            // gone from the live set, so there is no dot and no order number.
+            if (trail.state === 'dropped') {
+              const at = snapToStep(trail.fromProgress)
+              const g = progressToPoint(at)
+              const gx = round(g.x + SVG_PAD)
+              const gy = round(g.y + SVG_PAD)
+              return (
+                <g key={`trail-${trail.scopeId}`}>
+                  <circle
+                    cx={gx}
+                    cy={gy}
+                    r={DOT_R}
+                    fill={trail.tier ? TIER_COLORS[trail.tier] : 'currentColor'}
+                    opacity={0.25}
+                  />
+                  {trail.title && (
+                    <text
+                      x={gx}
+                      y={gy + DOT_R + 11}
+                      textAnchor="middle"
+                      fontSize={9}
+                      fill="currentColor"
+                      opacity={0.4}
+                    >
+                      {trail.title}
+                    </text>
+                  )}
+                </g>
+              )
+            }
             if (trail.state !== 'moved') return null
             const scope = scopeById.get(trail.scopeId)
             if (!scope) return null
@@ -379,6 +413,18 @@ export function HillChart({
                       transition: isDragging ? 'none' : 'transform 160ms ease',
                     }}
                   >
+                    {newScopeIds.has(scope.id) && (
+                      <circle
+                        cx={0}
+                        cy={0}
+                        r={r + 5}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeDasharray="3 3"
+                        opacity={0.4}
+                      />
+                    )}
                     <circle
                       cx={0}
                       cy={0}

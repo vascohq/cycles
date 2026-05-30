@@ -74,6 +74,20 @@ export const WithTrails: Story = {
   },
 }
 
+export const NewAndDropped: Story = {
+  args: {
+    scopes: SAMPLE_SCOPES,
+    trails: [
+      // new scope — dashed halo, no trail (absent from last snapshot)
+      { scopeId: '4', state: 'new', toProgress: 0.85 },
+      // moved scope alongside
+      { scopeId: '1', state: 'moved', fromProgress: 0.05, toProgress: 0.15, stepDelta: 1 },
+      // dropped scope — lone named ghost, no live dot
+      { scopeId: 'gone', state: 'dropped', fromProgress: 0.7, title: 'Cut feature', tier: 'should' },
+    ],
+  },
+}
+
 export const Highlighted: Story = {
   args: {
     scopes: SAMPLE_SCOPES,
