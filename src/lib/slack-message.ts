@@ -10,7 +10,13 @@ export const slackMessageSchema = z.object({
   tasksDone: z.number(),
   tasksTotal: z.number(),
   daysLeft: z.number(),
-  pitchUrl: z.string().url().refine((u) => u.startsWith('https://'), 'Must be HTTPS'),
+  pitchUrl: z
+    .string()
+    .url()
+    .refine(
+      (u) => u.startsWith('https://') || u.startsWith('http://localhost'),
+      'Must be HTTPS'
+    ),
   postedAt: z.string(),
 })
 
