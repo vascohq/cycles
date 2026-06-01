@@ -224,11 +224,40 @@ export async function handleBatch(
   return jsonResult({ results })
 }
 
+// Every tool MUST declare annotations so MCP clients (e.g. Claude) can group it
+// as read vs. write and render a sensible title. `defineTool` makes `annotations`
+// a required argument — a new tool that omits it fails `yarn typecheck`.
+type CyclesToolAnnotations = {
+  /** Human-readable title shown in client UIs. */
+  title: string
+  /** true for query tools, false for anything that mutates storage. */
+  readOnlyHint: boolean
+  /** true when the tool can delete or overwrite existing data. */
+  destructiveHint?: boolean
+  /** true when calling repeatedly with the same args has no extra effect. */
+  idempotentHint?: boolean
+  /** Cycles tools only touch Liveblocks storage, so this is always false. */
+  openWorldHint?: boolean
+}
+
+function defineTool(
+  server: any,
+  name: string,
+  description: string,
+  schema: Record<string, unknown>,
+  annotations: CyclesToolAnnotations,
+  cb: (args: any, extra: ToolExtra) => Promise<ToolResult>
+): void {
+  server.tool(name, description, schema, annotations, cb)
+}
+
 export function registerCyclesTools(server: any): void {
-  server.tool(
+  defineTool(
+    server,
     'list_cycles',
     'List cycles. With no "org" argument: lists cycles for the user\'s only org, or grouped by org if they belong to several.',
     orgArg,
+    { title: 'List cycles', readOnlyHint: true, openWorldHint: false },
     async ({ org }: { org?: string }, extra: ToolExtra) => {
       const memberships = getMemberships(extra)
       if (!org && memberships.length > 1) {
@@ -240,7 +269,8 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'create_cycle',
     'Create a new cycle (a Liveblocks room). The slug is how the cycle is addressed by the other tools — omit it to derive one from the name (e.g. "2026 Q3 Build" → "2026-q3-build"), or pass an explicit slug of lowercase letters, digits, "-" or "_". Fails if a cycle with that slug already exists. After creating, use upsert_pitch to add pitches.',
     {
@@ -254,6 +284,13 @@ export function registerCyclesTools(server: any): void {
       start_date: z.string().default('').describe('ISO date (YYYY-MM-DD), or empty.'),
       end_date: z.string().default('').describe('ISO date (YYYY-MM-DD), or empty.'),
       slack_channel: z.string().default('#product-general'),
+    },
+    {
+      title: 'Create cycle',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
     async (
       {
@@ -278,10 +315,12 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'get_cycle',
     'Get cycle details with pitch summaries',
     { ...orgArg, ...slugPathArg },
+    { title: 'Get cycle', readOnlyHint: true, openWorldHint: false },
     async (
       { org, slug_path }: { org?: string; slug_path: string },
       extra: ToolExtra
@@ -294,10 +333,12 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'get_pitch',
     'Get full pitch detail with scopes, tasks, and parking items',
     { ...orgArg, ...slugPathArg },
+    { title: 'Get pitch', readOnlyHint: true, openWorldHint: false },
     async (
       { org, slug_path }: { org?: string; slug_path: string },
       extra: ToolExtra
@@ -313,10 +354,12 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'get_pitch_updates',
     'Get update history for a pitch, newest first',
     { ...orgArg, ...slugPathArg },
+    { title: 'Get pitch updates', readOnlyHint: true, openWorldHint: false },
     async (
       { org, slug_path }: { org?: string; slug_path: string },
       extra: ToolExtra
@@ -338,7 +381,8 @@ export function registerCyclesTools(server: any): void {
     cycle_slug: z.string().describe('Cycle slug, e.g. "2026-q2-build"'),
   }
 
-  server.tool(
+  defineTool(
+    server,
     'upsert_pitch',
     'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update.',
     {
@@ -351,6 +395,13 @@ export function registerCyclesTools(server: any): void {
       frame_outcome: z.string().default(''),
       timebox_start: z.string().default(''),
       timebox_end: z.string().default(''),
+    },
+    {
+      title: 'Create or update pitch',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async (
       { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string },
@@ -369,7 +420,8 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'upsert_scope',
     'Create or update a scope under a pitch. Omit id to create.',
     {
@@ -381,6 +433,13 @@ export function registerCyclesTools(server: any): void {
       tier: z.enum(['must', 'should', 'could']),
       litmus_text: z.string().default(''),
       hill_progress: z.number().min(0).max(1).default(0),
+    },
+    {
+      title: 'Create or update scope',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async (
       { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text: string; hill_progress: number },
@@ -399,7 +458,8 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'upsert_task',
     'Create or update a task under a scope. Omit id to create.',
     {
@@ -409,6 +469,13 @@ export function registerCyclesTools(server: any): void {
       scopeId: z.string().describe('Parent scope id'),
       title: z.string(),
       done: z.boolean().default(false),
+    },
+    {
+      title: 'Create or update task',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async (
       { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done: boolean },
@@ -427,7 +494,8 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'upsert_parking_item',
     'Create or update a parking lot item under a pitch. Omit id to create.',
     {
@@ -437,6 +505,13 @@ export function registerCyclesTools(server: any): void {
       pitchId: z.string().describe('Parent pitch id'),
       text: z.string(),
       resolved: z.boolean().default(false),
+    },
+    {
+      title: 'Create or update parking item',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async (
       { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; text: string; resolved: boolean },
@@ -455,10 +530,18 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'delete_pitch',
     'Delete a pitch by id',
     { ...orgArg, ...cycleSlugArg, id: z.string().describe('Pitch id to delete') },
+    {
+      title: 'Delete pitch',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async (
       { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
       extra: ToolExtra
@@ -475,10 +558,18 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'delete_scope',
     'Delete a scope and its tasks by id',
     { ...orgArg, ...cycleSlugArg, id: z.string().describe('Scope id to delete') },
+    {
+      title: 'Delete scope',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async (
       { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
       extra: ToolExtra
@@ -495,10 +586,18 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'delete_task',
     'Delete a task by id',
     { ...orgArg, ...cycleSlugArg, id: z.string().describe('Task id to delete') },
+    {
+      title: 'Delete task',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async (
       { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
       extra: ToolExtra
@@ -515,10 +614,18 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'delete_parking_item',
     'Delete a parking lot item by id',
     { ...orgArg, ...cycleSlugArg, id: z.string().describe('Parking item id to delete') },
+    {
+      title: 'Delete parking item',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async (
       { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
       extra: ToolExtra
@@ -535,7 +642,8 @@ export function registerCyclesTools(server: any): void {
     }
   )
 
-  server.tool(
+  defineTool(
+    server,
     'batch',
     'Execute multiple write operations sequentially. Each operation specifies a tool and params. Returns results for all operations — successful ops persist even if others fail.',
     {
@@ -547,6 +655,13 @@ export function registerCyclesTools(server: any): void {
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),
+    },
+    {
+      title: 'Batch write operations',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
     },
     async (
       { org, cycle_slug, operations }: { org?: string; cycle_slug: string; operations: BatchOp[] },
