@@ -58,6 +58,36 @@ export const AllDone: Story = {
   },
 }
 
+export const WithTrails: Story = {
+  args: {
+    scopes: SAMPLE_SCOPES,
+    trails: [
+      // advanced forward — long rightward trail
+      { scopeId: '1', state: 'moved', fromProgress: 0.05, toProgress: 0.15, stepDelta: 1, label: 'Nudged forward' },
+      // slid back — leftward trail, neutral color (no alarm)
+      { scopeId: '2', state: 'moved', fromProgress: 0.6, toProgress: 0.4, stepDelta: -3, label: 'Slid back' },
+      // didn't move — no trail rendered
+      { scopeId: '3', state: 'stagnant', fromProgress: 0.6, toProgress: 0.6, stepDelta: 0, label: "Didn't move" },
+      // crept over the crest
+      { scopeId: '4', state: 'moved', fromProgress: 0.5, toProgress: 0.85, stepDelta: 5, label: 'Over the hill' },
+    ],
+  },
+}
+
+export const NewAndDropped: Story = {
+  args: {
+    scopes: SAMPLE_SCOPES,
+    trails: [
+      // new scope — dashed halo, no trail (absent from last snapshot)
+      { scopeId: '4', state: 'new', toProgress: 0.85, label: 'New' },
+      // moved scope alongside
+      { scopeId: '1', state: 'moved', fromProgress: 0.05, toProgress: 0.15, stepDelta: 1, label: 'Nudged forward' },
+      // dropped scope — lone named ghost, no live dot
+      { scopeId: 'gone', state: 'dropped', fromProgress: 0.7, title: 'Cut feature', tier: 'should', label: 'Dropped' },
+    ],
+  },
+}
+
 export const Highlighted: Story = {
   args: {
     scopes: SAMPLE_SCOPES,

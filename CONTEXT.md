@@ -68,6 +68,10 @@ _Avoid_: Completion percentage, progress bar
 Visualization of all scopes' hill progress on a hill-shaped curve. Each scope is a numbered, tier-colored dot. Left = unknown, right = known.
 _Avoid_: Burndown, velocity chart
 
+**Hill Trail**:
+A scope's movement since the last update, drawn on the hill chart: a dimmed ghost dot at its prior position, a neutral curve-following line, and the live dot at its current position. Trail geometry tells the story — long rightward = lots of progress, leftward = slid back, no trail = didn't move. Crossing the crest (step 7 / 0.5) is "over the hill". Regression is never colored as alarming; the chart shows movement, it does not judge it. A new scope (absent from the last snapshot) shows a dashed halo and no trail; a dropped scope (in the last snapshot, since deleted) shows a lone named ghost that self-expires after the next update.
+_Avoid_: Diff, delta, change indicator
+
 **Task**:
 A checklist item within a scope. Binary: done or not done. No assignee, no type, no intermediate states.
 _Avoid_: Subtask, to-do, issue, ticket
@@ -82,13 +86,21 @@ _Avoid_: Backlog, blockers, open questions list
 An immutable record of a needle move. Contains the zone, needle progress, narrative text, and snapshots of all hill positions and task counts at post time. Posted to a shared Slack channel. Updates are always appended, never edited.
 _Avoid_: Check-in, standup note, status report
 
+**Ghost**:
+A dimmed marker showing where something sat at the last update — the needle's prior position on the arc, or a scope's prior dot on the hill chart. Always sourced from a frozen snapshot, never from live state.
+_Avoid_: Shadow, history dot
+
 **Needle Snapshot**:
 The needle's progress and zone frozen at the time an update was posted. Used to render the "ghost" showing where the needle was at the last update.
 _Avoid_: Previous state
 
 **Hill Snapshot**:
-All scopes' hill progress values frozen at the time an update was posted. Captured in v1 for future diff rendering in v2.
+Every scope's hill progress — plus its title and tier — frozen at the time an update was posted. Each update holds exactly one. The diff between consecutive Hill Snapshots (or the latest snapshot vs. the live positions) drives the trail rendering on the hill chart. Title and tier are frozen so a scope deleted since the snapshot can still render a named ghost.
 _Avoid_: Scope snapshot (conflicts with existing PitchSnapshot)
+
+**Hill History**:
+The arrow-scrubbable sequence of past Hill Snapshots. Stepping back shows a read-only historical frame — that update's positions with the trail from the update before it. There is no continuous log of every drag; the heartbeat is the needle update, so history advances one update at a time.
+_Avoid_: Timeline (reserved for the updates feed), movement log, playback
 
 ### Views
 

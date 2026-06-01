@@ -91,4 +91,22 @@ describe('deriveTimelineCards', () => {
     const cards = deriveTimelineCards(delivered, users)
     expect(cards[0].slackFailed).toBe(false)
   })
+
+  it('computes a frozen trail diff vs the previous update snapshot', () => {
+    const cards = deriveTimelineCards(updates, users)
+    // u2 (newest) diffed against u1: s1 0.3 -> 0.7 is a forward move.
+    const trail = cards[0].trails.find((t) => t.scopeId === 's1')
+    expect(trail?.state).toBe('moved')
+    expect(cards[0].rollup.moved).toBe(1)
+    expect(cards[0].scopesMoved).toBe(1)
+  })
+
+  it('renders the first-ever update with all scopes as "new"', () => {
+    const cards = deriveTimelineCards(updates, users)
+    // u1 (oldest) has no predecessor -> empty previous -> all-new.
+    const first = cards[1]
+    expect(first.trails).toHaveLength(1)
+    expect(first.trails[0].state).toBe('new')
+    expect(first.rollup).toEqual({ moved: 0, stalled: 0, new: 1, dropped: 0 })
+  })
 })

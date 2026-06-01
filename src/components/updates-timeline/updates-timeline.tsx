@@ -3,6 +3,7 @@
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import type { TimelineCard } from '@/lib/timeline-helpers'
+import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
 
@@ -87,14 +88,12 @@ function UpdateCard({
           >
             {zoneLabel.charAt(0).toUpperCase() + zoneLabel.slice(1)}
           </span>
-          {card.scopesMoved > 0 && (
-            <span className="text-xs font-mono text-muted-foreground">
-              {card.scopesMoved} scope{card.scopesMoved !== 1 ? 's' : ''} moved
-            </span>
-          )}
+          <RollupSummary card={card} />
         </div>
 
         <p className="text-[13.5px] leading-relaxed">{card.narrative}</p>
+
+        <HillMovement card={card} />
 
         {card.slackFailed && onRetrySlack && (
           <button
@@ -107,4 +106,78 @@ function UpdateCard({
       </div>
     </div>
   )
+}
+
+// Compact rollup of the frozen movement, shown beside the needle. Counts come
+// straight from the engine's rollup over stored snapshots.
+function RollupSummary({ card }: { card: TimelineCard }) {
+  const { moved, stalled, new: added, dropped } = card.rollup
+  const parts: string[] = []
+  if (moved > 0) parts.push(`${moved} moved`)
+  if (added > 0) parts.push(`${added} new`)
+  if (stalled > 0) parts.push(`${stalled} stalled`)
+  if (dropped > 0) parts.push(`${dropped} dropped`)
+  if (parts.length === 0) return null
+  return (
+    <span className="text-xs font-mono text-muted-foreground">
+      {parts.join(' · ')}
+    </span>
+  )
+}
+
+// Frozen per-scope trail list for this update. Reads only from card.trails,
+// which were computed from STORED snapshots — never from live positions.
+function HillMovement({ card }: { card: TimelineCard }) {
+  if (card.trails.length === 0) return null
+  return (
+    <ul className="flex flex-col gap-1 border-t pt-2">
+      {card.trails.map((trail) => (
+        <li
+          key={trail.scopeId}
+          className="flex items-center gap-2 text-xs min-w-0"
+        >
+          <span className="truncate text-muted-foreground">
+            {scopeLabel(trail, card.scopeTitles)}
+          </span>
+          <span
+            className="font-medium shrink-0"
+            style={{ color: trailLabelColor(trail) }}
+          >
+            {trailDetail(trail)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function scopeLabel(
+  trail: ScopeTrail,
+  titles: Record<string, string>
+): string {
+  if (trail.state === 'dropped' && trail.title) return trail.title
+  return titles[trail.scopeId] ?? trail.scopeId
+}
+
+function trailDetail(trail: ScopeTrail): string {
+  if ('stepDelta' in trail && trail.stepDelta !== 0) {
+    const sign = trail.stepDelta > 0 ? '+' : ''
+    const unit = Math.abs(trail.stepDelta) === 1 ? 'step' : 'steps'
+    return `${trail.label} · ${sign}${trail.stepDelta} ${unit}`
+  }
+  return trail.label
+}
+
+// Color reads from geometry/direction only — never an alarm. Forward progress
+// is positive (foreground), regression is muted, neutral states stay quiet.
+function trailLabelColor(trail: ScopeTrail): string {
+  switch (trail.label) {
+    case 'Over the hill':
+    case 'Lots of progress':
+    case 'Nudged forward':
+    case 'New':
+      return 'hsl(var(--foreground))'
+    default:
+      return 'hsl(var(--muted-foreground))'
+  }
 }
