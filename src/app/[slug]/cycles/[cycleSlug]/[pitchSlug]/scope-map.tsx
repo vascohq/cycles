@@ -365,6 +365,15 @@ function ScopeMapWired({
     noChangeStreaks(snapshotsNewestFirst, hillScopes),
     new Map(hillScopes.map((s) => [s.id, s.title]))
   )
+  // Scope positions frozen at the last update — the "before" for the modal's
+  // before/after hill comparison.
+  const previousHillScopes = (latestUpdate?.hill_snapshot ?? []).map((h, i) => ({
+    id: h.scopeId,
+    title: h.title ?? '',
+    tier: h.tier ?? ('should' as const),
+    hill_progress: h.hill_progress,
+    order: i + 1,
+  }))
   const hillHistory = buildHillHistoryFrames(pitchUpdates, hillScopes, usersMap)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
   const today = new Date().toISOString().slice(0, 10)
@@ -408,6 +417,8 @@ function ScopeMapWired({
           authorName: userName,
           narrative,
           movement,
+          needleProgress: progress,
+          previousNeedleProgress: pitch.needle?.progress ?? null,
           daysLeft: timebox.daysLeft,
           pitchUrl,
           postedAt: built.posted_at,
@@ -456,6 +467,8 @@ function ScopeMapWired({
           authorName: usersMap.get(update.posted_by)?.name ?? 'Teammate',
           narrative: update.narrative,
           movement,
+          needleProgress: update.needle_snapshot.progress,
+          previousNeedleProgress: prev?.needle_snapshot.progress ?? null,
           daysLeft: tb.daysLeft,
           pitchUrl,
           postedAt: update.posted_at,
@@ -503,6 +516,8 @@ function ScopeMapWired({
       onPostUpdate={onPostUpdate}
       userName={userName}
       previousZone={previousZone}
+      previousNeedleProgress={pitch.needle?.progress ?? null}
+      previousHillScopes={previousHillScopes}
       movementPreview={movement}
       timelineCards={timelineCards}
       onRetrySlack={slackEnabled ? onRetrySlack : undefined}

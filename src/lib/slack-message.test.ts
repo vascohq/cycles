@@ -10,6 +10,8 @@ const BASE_PARAMS: SlackMessageParams = {
   authorName: 'Sebastien',
   narrative: 'Scope map is fully wired. Hill chart drag works.',
   movement: null,
+  needleProgress: 0.6,
+  previousNeedleProgress: 0.6,
   daysLeft: 21,
   pitchUrl: 'https://cycles.vasco.app/vasco/cycles/cycle-34/mission-control',
   postedAt: '2026-06-10T14:30:00Z',
@@ -65,6 +67,47 @@ describe('formatSlackMessage blocks', () => {
     )
     // JSON-escaped newlines: each line carries its own "> " marker.
     expect(text).toContain('> Line one.\\n> Line two.')
+  })
+
+  it('omits the narrative block when the narrative is empty', () => {
+    const withText = formatSlackMessage(BASE_PARAMS).blocks.length
+    const without = formatSlackMessage({ ...BASE_PARAMS, narrative: '   ' }).blocks.length
+    expect(without).toBe(withText - 1)
+    // No section block should carry a blockquote marker.
+    const hasQuote = formatSlackMessage({ ...BASE_PARAMS, narrative: '' }).blocks.some(
+      (b) => b.type === 'section' && b.text.text.startsWith('>')
+    )
+    expect(hasQuote).toBe(false)
+  })
+
+  it('celebrates a forward needle move with the delta and from→to', () => {
+    const text = allText(
+      formatSlackMessage({ ...BASE_PARAMS, previousNeedleProgress: 0.48, needleProgress: 0.6 }).blocks
+    )
+    expect(text).toContain('🎉 Needle moved forward 12% (48% → 60%)')
+  })
+
+  it('reports a backward needle move as a neutral regression, not a celebration', () => {
+    const text = allText(
+      formatSlackMessage({ ...BASE_PARAMS, previousNeedleProgress: 0.6, needleProgress: 0.48 }).blocks
+    )
+    expect(text).toContain('🔻 Needle slipped back 12% (60% → 48%)')
+    expect(text).not.toContain('🎉')
+  })
+
+  it('stays silent on the needle line when it held steady', () => {
+    const text = allText(
+      formatSlackMessage({ ...BASE_PARAMS, previousNeedleProgress: 0.6, needleProgress: 0.6 }).blocks
+    )
+    expect(text).not.toContain('🎉')
+    expect(text).not.toContain('🔻')
+  })
+
+  it('does not celebrate on the first-ever update (no previous progress)', () => {
+    const text = allText(
+      formatSlackMessage({ ...BASE_PARAMS, previousNeedleProgress: null, needleProgress: 0.6 }).blocks
+    )
+    expect(text).not.toContain('🎉')
   })
 
   it('includes the movement line when provided', () => {

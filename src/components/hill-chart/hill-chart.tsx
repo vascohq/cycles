@@ -27,15 +27,22 @@ type HillChartProps = {
   highlightedScopeId?: string | null
   onScopeHover?: (scopeId: string | null) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
+  /** Resting dot radius; defaults to DOT_R. Smaller reads less crowded. */
+  dotRadius?: number
+  /** Dim non-highlighted scopes when one is highlighted. Only for paired
+   *  before/after charts where the comparison is the point — off by default. */
+  fadeOthers?: boolean
 }
 
 const SVG_PAD = 20
 const VIEW_W = WIDTH + SVG_PAD * 2
-const VIEW_H = HEIGHT + SVG_PAD * 2 + 20
+// Just enough room below the baseline for the unknown/known labels — no excess
+// whitespace pushing the legend down.
+const VIEW_H = HEIGHT + SVG_PAD + 24
 
 // Progress is discrete: scopes move along the hill in fixed steps rather than
 // a continuous slider. Each step is a slot from "unknown" (0) to "done".
-const STEP_COUNT = 14
+const STEP_COUNT = 12
 const snapToStep = (p: number) =>
   Math.round(clamp(p, 0, 1) * STEP_COUNT) / STEP_COUNT
 const stepIndexOf = (p: number) => Math.round(clamp(p, 0, 1) * STEP_COUNT)
@@ -44,35 +51,14 @@ const stepIndexOf = (p: number) => Math.round(clamp(p, 0, 1) * STEP_COUNT)
 const DOT_R = 10
 const DOT_R_ACTIVE = 13
 
-// When several scopes share a step they stack; hovering fans them out on an
-// arc so each one is individually visible and draggable.
-const FAN_RADIUS = 38
-const DECK_DX = 3
+// When several scopes share a step they stack vertically. Collapsed they sit in
+// a tight pile (small upward offset); hovering fans them straight up into a
+// column so the cursor stays over a pill and the motion reads coherently.
 const DECK_DY = -3
 
 const round = (n: number) => Math.round(n * 1000) / 1000
 function clamp(n: number, min: number, max: number) {
   return Math.min(Math.max(n, min), max)
-}
-
-// Arc offset for member k of an n-scope stack at viewBox x `baseX`. Angles are
-// measured from straight up (+ = right). The fan opens within the angular
-// window that keeps every dot on-canvas, so edge stacks fan inward instead of
-// squishing against the border.
-const MAX_FAN = (82 * Math.PI) / 180
-function fanOffset(baseX: number, k: number, n: number) {
-  const R = FAN_RADIUS
-  const maxA = Math.min(
-    Math.asin(clamp((VIEW_W - DOT_R - baseX) / R, -1, 1)),
-    MAX_FAN
-  )
-  const minA = Math.max(
-    Math.asin(clamp((DOT_R - baseX) / R, -1, 1)),
-    -MAX_FAN
-  )
-  const t = n > 1 ? k / (n - 1) : 0.5
-  const a = minA + t * (maxA - minA)
-  return { dx: R * Math.sin(a), dy: -R * Math.cos(a) }
 }
 
 function hillPath(): string {
@@ -107,7 +93,16 @@ export function HillChart({
   highlightedScopeId,
   onScopeHover,
   onHillProgressChange,
+  dotRadius,
+  fadeOthers = false,
 }: HillChartProps) {
+  // Resting / hovered dot radii; the caller can shrink them (e.g. the dense
+  // pitch-page chart). Label offsets scale with the dot so they don't overlap.
+  const dotR = dotRadius ?? DOT_R
+  const dotRActive = dotR + 3
+  const dotFont = Math.max(5, Math.round(dotR * 0.8))
+  // Vertical gap between fanned-out pills (just enough to not overlap).
+  const fanSpacing = dotR * 2 + 4
   const svgRef = useRef<SVGSVGElement>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragProgress, setDragProgress] = useState<number | null>(null)
@@ -115,6 +110,8 @@ export function HillChart({
   const [hovered, setHovered] = useState<{
     x: number
     y: number
+    r: number
+    side: 'left' | 'right'
     title: string
     detail?: string
   } | null>(null)
@@ -247,7 +244,7 @@ export function HillChart({
           x={SVG_PAD + WIDTH * 0.2}
           y={BASELINE_Y + SVG_PAD + 16}
           textAnchor="middle"
-          fontSize={9}
+          fontSize={7}
           fontWeight={500}
           letterSpacing={0.5}
           fill="currentColor"
@@ -259,7 +256,7 @@ export function HillChart({
           x={SVG_PAD + WIDTH * 0.8}
           y={BASELINE_Y + SVG_PAD + 16}
           textAnchor="middle"
-          fontSize={9}
+          fontSize={7}
           fontWeight={500}
           letterSpacing={0.5}
           fill="currentColor"
@@ -285,14 +282,14 @@ export function HillChart({
                   <circle
                     cx={gx}
                     cy={gy}
-                    r={DOT_R}
+                    r={dotR}
                     fill={trail.tier ? TIER_COLORS[trail.tier] : 'currentColor'}
                     opacity={0.25}
                   />
                   {trail.title && (
                     <text
                       x={gx}
-                      y={gy + DOT_R + 11}
+                      y={gy + dotR + 11}
                       textAnchor="middle"
                       fontSize={9}
                       fill="currentColor"
@@ -322,13 +319,13 @@ export function HillChart({
                   strokeLinecap="round"
                   opacity={0.25}
                 />
-                <circle cx={gx} cy={gy} r={DOT_R} fill={TIER_COLORS[scope.tier]} opacity={0.25} />
+                <circle cx={gx} cy={gy} r={dotR} fill={TIER_COLORS[scope.tier]} opacity={0.25} />
                 <text
                   x={gx}
                   y={gy + 1}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize={10}
+                  fontSize={dotFont}
                   fontWeight="bold"
                   fill="white"
                   opacity={0.6}
@@ -357,22 +354,23 @@ export function HillChart({
                 onScopeHover?.(null)
               }}
             >
-              {/* Transparent backdrop keeps the stack "hovered" while the
-                  pointer crosses the gaps between fanned dots. Always mounted
-                  (toggled via radius) so expanding doesn't reflow the dots
-                  mid-animation. */}
-              <circle
-                cx={cbx}
-                cy={cby}
-                r={expanded ? FAN_RADIUS + 18 : 0}
-                fill="transparent"
-                style={{ pointerEvents: expanded ? 'all' : 'none' }}
-              />
+              {/* Transparent backdrop covering the fanned column keeps the
+                  stack "hovered" while the pointer moves up between pills. */}
+              {expanded && (
+                <rect
+                  x={cbx - dotR - 6}
+                  y={cby - (n - 1) * fanSpacing - dotR - 6}
+                  width={(dotR + 6) * 2}
+                  height={(n - 1) * fanSpacing + (dotR + 6) * 2}
+                  fill="transparent"
+                  style={{ pointerEvents: 'all' }}
+                />
+              )}
 
               {members.map((scope, k) => {
                 const isDragging = draggingId === scope.id
                 const isHighlighted = highlightedScopeId === scope.id
-                const r = isHighlighted || isDragging ? DOT_R_ACTIVE : DOT_R
+                const r = isHighlighted || isDragging ? dotRActive : dotR
                 const sw = isHighlighted || isDragging ? 2.5 : 1.5
 
                 const progress =
@@ -380,18 +378,13 @@ export function HillChart({
                     ? dragProgress
                     : snapToStep(scope.hill_progress)
                 const pt = progressToPoint(progress)
-                let x = pt.x + SVG_PAD
+                const x = pt.x + SVG_PAD
                 let y = pt.y + SVG_PAD
 
+                // Stack straight up: tight pile when collapsed, spread column
+                // when expanded — the cursor stays over the base pill.
                 if (!isDragging && n > 1) {
-                  if (expanded) {
-                    const { dx, dy } = fanOffset(x, k, n)
-                    x += dx
-                    y += dy
-                  } else {
-                    x += k * DECK_DX
-                    y += k * DECK_DY
-                  }
+                  y += k * (expanded ? -fanSpacing : DECK_DY)
                 }
 
                 const cx = round(clamp(x, r, VIEW_W - r))
@@ -414,7 +407,11 @@ export function HillChart({
                           : undefined
                       setHovered({
                         x: cx,
-                        y: cy - r,
+                        y: cy,
+                        r,
+                        // Sit to the right of the dot, flipping left near the
+                        // right edge — never above, where the fan column lives.
+                        side: cx > VIEW_W * 0.62 ? 'left' : 'right',
                         title: scope.title,
                         detail,
                       })
@@ -426,7 +423,13 @@ export function HillChart({
                           ? 'grabbing'
                           : 'grab'
                         : 'default',
-                      transition: isDragging ? 'none' : 'transform 160ms ease',
+                      // Fade the rest when another scope is highlighted so the
+                      // focused one stands out — only in paired before/after charts.
+                      opacity:
+                        fadeOthers && highlightedScopeId && !isHighlighted ? 0.2 : 1,
+                      transition: isDragging
+                        ? 'none'
+                        : 'transform 160ms ease, opacity 160ms ease',
                     }}
                   >
                     {newScopeIds.has(scope.id) && (
@@ -452,11 +455,12 @@ export function HillChart({
                     />
                     <text
                       x={0}
-                      y={1}
+                      y={0}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fontSize={10}
-                      fontWeight="bold"
+                      dy="0.05em"
+                      fontSize={dotFont}
+                      fontWeight={600}
                       fill="white"
                     >
                       {scope.order}
@@ -474,9 +478,12 @@ export function HillChart({
         <div
           className="pointer-events-none absolute z-10 max-w-[180px] truncate rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-md"
           style={{
-            left: `${(hovered.x / VIEW_W) * 100}%`,
+            left: `${((hovered.x + (hovered.side === 'right' ? hovered.r + 8 : -(hovered.r + 8))) / VIEW_W) * 100}%`,
             top: `${(hovered.y / VIEW_H) * 100}%`,
-            transform: 'translate(-50%, calc(-100% - 8px))',
+            transform:
+              hovered.side === 'right'
+                ? 'translate(0, -50%)'
+                : 'translate(-100%, -50%)',
             transition: 'left 160ms ease, top 160ms ease',
           }}
         >
@@ -493,7 +500,7 @@ export function HillChart({
       {trails.length > 0 && (
         <div className="flex gap-3 justify-center text-xs text-muted-foreground">
           <span>{rollup.moved} moved</span>
-          <span>{rollup.stalled} stalled</span>
+          <span>{rollup.stalled} unchanged</span>
           {rollup.new > 0 && <span>{rollup.new} new</span>}
           {rollup.dropped > 0 && <span>{rollup.dropped} dropped</span>}
         </div>

@@ -90,9 +90,13 @@ export function HillHistory({
 
       <HillChart
         scopes={isLive ? scopes : frame!.scopes}
-        trails={isLive ? trails : frame!.trails}
+        // Live view shows clean current positions — no trail ghosts (jarring on
+        // the main chart). Movement now lives in the before/after charts. The
+        // historical scrub frames keep their trails for comparison.
+        trails={isLive ? [] : frame!.trails}
         highlightedScopeId={highlightedScopeId}
         onScopeHover={onScopeHover}
+        dotRadius={7}
         // Historical frames are read-only: omit the change handler so HillChart
         // disables dragging. Returning to Live re-enables editing.
         onHillProgressChange={isLive ? onHillProgressChange : undefined}

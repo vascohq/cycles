@@ -95,16 +95,21 @@ export function noChangeStreaks(
   return streaks
 }
 
-// Notable trail labels get named in the movement line; routine forward moves
-// are collapsed into a count, and quiet scopes are listed separately.
-const NOTABLE_PHRASE: Partial<Record<TrailLabel, string>> = {
-  'Over the hill': 'over the hill',
-  'Slid back': 'slid back',
-  New: 'added',
-  Dropped: 'dropped',
-}
+const NAMED_CAP = 3 // most movers named before overflowing to "+N more"
+const QUIET_NAME_CAP = 3 // most longest-streak names listed for the quiet group
+const BIG_MOVE_STEPS = 3 // step delta that counts as a "big" climb / slide
 
-const NAMED_CAP = 3
+// Emoji vocabulary for the hill metaphor — magnitude is built in.
+const EMOJI = {
+  overHill: '⛰️',
+  bigClimb: '⏫',
+  nudge: '🔼',
+  slidBack: '🔻',
+  slidWayBack: '⏬',
+  unchanged: '⏸️',
+  new: '🆕',
+  dropped: '❌',
+} as const
 
 function trailTitle(trail: ScopeTrail, titles: Map<string, string>): string {
   const fromMap = titles.get(trail.scopeId)
@@ -113,10 +118,31 @@ function trailTitle(trail: ScopeTrail, titles: Map<string, string>): string {
   return trail.scopeId
 }
 
-// Builds the human movement line from trails + streaks + scope titles. Names
-// notable events (capped, overflow → "+N more"), always lists quiet scopes with
-// their no-change count (longest streak first), and collapses routine forward
-// moves into a count. Returns null when there are no scopes to report on.
+// A single mover rendered with its emoji. Small forward nudges return kind
+// 'nudge' so they can be collapsed into one count; everything else is 'named'.
+function moverSegment(
+  trail: ScopeTrail,
+  titles: Map<string, string>
+): { kind: 'named' | 'nudge'; text: string } | null {
+  const name = trailTitle(trail, titles)
+  if (trail.state === 'new') return { kind: 'named', text: `${EMOJI.new} ${name}` }
+  if (trail.state === 'dropped') return { kind: 'named', text: `${EMOJI.dropped} ${name}` }
+  if (trail.state !== 'moved') return null
+
+  if (trail.label === 'Over the hill')
+    return { kind: 'named', text: `${EMOJI.overHill} ${name} over the hill` }
+  const d = trail.stepDelta
+  if (d >= BIG_MOVE_STEPS) return { kind: 'named', text: `${EMOJI.bigClimb} ${name} big climb` }
+  if (d > 0) return { kind: 'nudge', text: name }
+  if (d <= -BIG_MOVE_STEPS)
+    return { kind: 'named', text: `${EMOJI.slidWayBack} ${name} slid way back` }
+  return { kind: 'named', text: `${EMOJI.slidBack} ${name} slid back` }
+}
+
+// Builds the digestible hill-movement summary: an emoji-led line naming the
+// movers (small nudges collapsed into a count, the rest capped with "+N more"),
+// and a separate line that collapses the quiet scopes into a count while naming
+// only the longest no-change streaks. Returns null when there's nothing to say.
 export function summarizeMovement(
   trails: ScopeTrail[],
   streaks: Map<string, number>,
@@ -124,29 +150,49 @@ export function summarizeMovement(
 ): string | null {
   if (trails.length === 0) return null
 
-  const notable = trails
-    .filter((t) => NOTABLE_PHRASE[t.label])
-    .map((t) => `${trailTitle(t, titles)} ${NOTABLE_PHRASE[t.label]}`)
-  const notableSegments =
-    notable.length > NAMED_CAP
-      ? [...notable.slice(0, NAMED_CAP), `+${notable.length - NAMED_CAP} more`]
-      : notable
+  const named: string[] = []
+  let nudges = 0
+  for (const trail of trails) {
+    const seg = moverSegment(trail, titles)
+    if (!seg) continue
+    if (seg.kind === 'nudge') nudges++
+    else named.push(seg.text)
+  }
+  const moverSegments =
+    named.length > NAMED_CAP
+      ? [...named.slice(0, NAMED_CAP), `+${named.length - NAMED_CAP} more`]
+      : [...named]
+  if (nudges > 0) moverSegments.push(`${EMOJI.nudge} +${nudges} nudged`)
+  const moversLine = moverSegments.join(' · ')
 
-  const quietSegments = trails
+  const quiet = trails
     .filter((t) => t.state === 'stagnant')
     .map((t) => ({ name: trailTitle(t, titles), streak: streaks.get(t.scopeId) ?? 1 }))
     .sort((a, b) => b.streak - a.streak)
-    .map(({ name, streak }) =>
-      streak >= 2 ? `${name} no change for ${streak} updates` : `${name} no change`
-    )
 
-  const nudged = trails.filter(
-    (t) => t.label === 'Nudged forward' || t.label === 'Lots of progress'
-  ).length
-  const routineSegment = nudged > 0 ? [`+${nudged} nudged forward`] : []
+  // No quiet scopes: just the movers line (always present here, since trails
+  // is non-empty and nothing was stagnant).
+  if (quiet.length === 0) return moversLine || null
 
-  const segments = [...notableSegments, ...quietSegments, ...routineSegment]
-  return segments.length > 0 ? segments.join(' · ') : null
+  const maxStreak = quiet[0].streak
+  const longestNames = quiet
+    .filter((q) => q.streak === maxStreak)
+    .slice(0, QUIET_NAME_CAP)
+    .map((q) => q.name)
+  const longest =
+    maxStreak >= 2 ? `longest ${maxStreak} updates: ${longestNames.join(', ')}` : ''
+
+  // Nothing moved at all — lead with that, put the longest-quiet detail on its
+  // own line, and note how many quiet scopes weren't named.
+  if (moverSegments.length === 0) {
+    const head = `${EMOJI.unchanged} No hill movement · ${quiet.length} unchanged`
+    if (!longest) return head
+    const extra = quiet.length - longestNames.length
+    return `${head}\n${longest}${extra > 0 ? ` (+${extra})` : ''}`
+  }
+
+  const quietLine = `${EMOJI.unchanged} ${quiet.length} unchanged${longest ? ` · ${longest}` : ''}`
+  return `${moversLine}\n${quietLine}`
 }
 
 export function diffHillTrail(

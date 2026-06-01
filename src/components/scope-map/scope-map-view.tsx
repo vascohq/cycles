@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
 import { NeedleGauge } from '@/components/needle'
@@ -66,6 +66,10 @@ export type ScopeMapViewProps = {
   userName?: string
   /** Zone at the last update — drives the preview's zone-transition line. */
   previousZone?: Zone | null
+  /** Needle position at the last update — drives the progress celebration. */
+  previousNeedleProgress?: number | null
+  /** Scope positions at the last update — the "before" hill in the modal. */
+  previousHillScopes?: HillScope[]
   /** Pre-computed hill-movement summary for the Slack preview. */
   movementPreview?: string | null
   timelineCards?: TimelineCard[]
@@ -101,6 +105,8 @@ export function ScopeMapView({
   onPostUpdate,
   userName = 'You',
   previousZone = null,
+  previousNeedleProgress = null,
+  previousHillScopes = [],
   movementPreview = null,
   timelineCards = [],
   onRetrySlack,
@@ -125,7 +131,7 @@ export function ScopeMapView({
     : null
 
   return (
-    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 py-6 flex flex-col gap-5">
       <AppBar
         slug={slug}
         cycleSlug={cycleSlug}
@@ -141,44 +147,52 @@ export function ScopeMapView({
         isDone={isDone}
       />
 
-      <section className="grid grid-cols-1 gap-6 mc-row">
-        <div className="flex flex-col items-center gap-3">
-          <NeedleGauge
-            needle={isDone ? SHIPPED_NEEDLE : pitch.needle}
-            ghost={isDone ? null : ghost}
-            label={isDone ? 'Shipped' : undefined}
-          />
-          {!isDone && (
-            <>
-              <button
-                onClick={() => setMoveNeedleOpen(true)}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border rounded-full px-4 py-1.5"
-              >
+      <section className="grid grid-cols-1 gap-5 mc-row">
+        <div>
+          {isDone ? (
+            <div className="rounded-lg border bg-card p-4 h-full flex flex-col items-center justify-center gap-3">
+              <NeedleGauge needle={SHIPPED_NEEDLE} ghost={null} label="Shipped" />
+            </div>
+          ) : (
+            // The on-page needle is display-only, so the whole card is the click
+            // target for moving it — and the pill lights up on hover so it's
+            // clear the needle isn't edited in place.
+            <button
+              type="button"
+              onClick={() => setMoveNeedleOpen(true)}
+              aria-label="Move the needle"
+              className="group w-full h-full rounded-lg border bg-card p-4 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition-colors hover:border-foreground/20 hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <NeedleGauge needle={pitch.needle} ghost={ghost} />
+              <span className="text-xs font-medium border rounded-full px-4 py-1.5 transition-colors text-muted-foreground group-hover:text-foreground group-hover:border-foreground/30 group-hover:bg-muted">
                 Move the needle
-              </button>
-              {onPostUpdate && (
-                <MoveNeedleModal
-                  open={moveNeedleOpen}
-                  onOpenChange={setMoveNeedleOpen}
-                  weekLabel={`Week ${timebox.currentWeek} of ${timebox.totalWeeks}`}
-                  dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  userName={userName}
-                  pitchTitle={pitch.title}
-                  daysLeft={timebox.daysLeft}
-                  currentProgress={pitch.needle?.progress ?? 0.02}
-                  currentZone={pitch.needle?.zone ?? null}
-                  previousZone={previousZone}
-                  movementPreview={movementPreview}
-                  hillScopes={hillScopes}
-                  hillTrails={hillTrails}
-                  onPost={onPostUpdate}
-                />
-              )}
-            </>
+              </span>
+            </button>
+          )}
+          {!isDone && onPostUpdate && (
+            <MoveNeedleModal
+              open={moveNeedleOpen}
+              onOpenChange={setMoveNeedleOpen}
+              weekLabel={`Week ${timebox.currentWeek} of ${timebox.totalWeeks}`}
+              dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              userName={userName}
+              pitchTitle={pitch.title}
+              daysLeft={timebox.daysLeft}
+              currentProgress={pitch.needle?.progress ?? 0.02}
+              currentZone={pitch.needle?.zone ?? null}
+              previousZone={previousZone}
+              previousNeedleProgress={previousNeedleProgress}
+              previousHillScopes={previousHillScopes}
+              ghost={ghost}
+              movementPreview={movementPreview}
+              hillScopes={hillScopes}
+              hillTrails={hillTrails}
+              onPost={onPostUpdate}
+            />
           )}
         </div>
 
-        <div>
+        <div className="rounded-lg border bg-card p-4">
           <HillHistory
             scopes={hillScopes}
             trails={hillTrails}
@@ -332,46 +346,94 @@ function HeroCard({
 }) {
   const stageIndex = STAGES.indexOf(pitch.stage)
 
+  // Keep the header to a fixed height; if the framing overflows, fade it out
+  // and let "View more" slide the rest into view.
+  const COLLAPSED_PX = 250
+  const [expanded, setExpanded] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
+  // Default to "overflowing" so the first paint is already collapsed (no flash
+  // of full content), then correct after measuring.
+  const [overflowing, setOverflowing] = useState(true)
+  // Transitions are enabled a frame after mount so the initial collapse doesn't
+  // animate (no slide-up on load) — only user toggles animate.
+  const [animate, setAnimate] = useState(false)
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const measure = () => setOverflowing(el.scrollHeight > COLLAPSED_PX + 8)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    const raf = requestAnimationFrame(() => setAnimate(true))
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(raf)
+    }
+  }, [pitch.title, pitch.frame_problem, pitch.frame_outcome])
+
+  const collapsed = overflowing && !expanded
+
   return (
-    <section className="rounded-lg border bg-card p-6 flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-display leading-tight">
-          {pitch.title}
-        </h1>
-        {onStageChange && (
-          <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-        {STAGES.map((s, i) => (
-          <span key={s} className={i <= stageIndex ? 'text-foreground' : ''}>
-            {s} {i < stageIndex ? '✓' : i === stageIndex ? '←' : ''}
-          </span>
-        ))}
-      </div>
-
-      <TimeboxTape
-        start={pitch.timebox_start}
-        end={pitch.timebox_end}
-        today={today}
-        done={isDone}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-            Problem
-          </h3>
-          <FramingList text={pitch.frame_problem} />
+    <section
+      className={`group relative rounded-lg border bg-card overflow-hidden ${
+        animate ? 'transition-[max-height] duration-500 ease-in-out' : ''
+      }`}
+      style={{ maxHeight: collapsed ? COLLAPSED_PX : 2000 }}
+    >
+      <div ref={contentRef} className={`p-6 flex flex-col gap-5 ${overflowing ? 'pb-12' : ''}`}>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl md:text-3xl font-display leading-tight">
+            {pitch.title}
+          </h1>
+          {onStageChange && (
+            <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
+          )}
         </div>
-        <div>
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-            Outcome
-          </h3>
-          <FramingList text={pitch.frame_outcome} />
+
+        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+          {STAGES.map((s, i) => (
+            <span key={s} className={i <= stageIndex ? 'text-foreground' : ''}>
+              {s} {i < stageIndex ? '✓' : i === stageIndex ? '←' : ''}
+            </span>
+          ))}
+        </div>
+
+        <TimeboxTape
+          start={pitch.timebox_start}
+          end={pitch.timebox_end}
+          today={today}
+          done={isDone}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Problem
+            </h3>
+            <FramingList text={pitch.frame_problem} />
+          </div>
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Outcome
+            </h3>
+            <FramingList text={pitch.frame_outcome} />
+          </div>
         </div>
       </div>
+
+      {/* Fade + toggle when the framing exceeds the fixed height */}
+      {collapsed && (
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-card via-card/80 to-transparent pointer-events-none" />
+      )}
+      {overflowing && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border bg-background rounded-full px-3 py-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+        >
+          {expanded ? 'View less' : 'View more'}
+        </button>
+      )}
     </section>
   )
 }
