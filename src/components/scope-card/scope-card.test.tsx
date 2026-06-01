@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { ScopeCard } from './scope-card'
 
 afterEach(cleanup)
@@ -37,5 +37,82 @@ describe('ScopeCard actions menu trigger', () => {
   it('does not render the actions trigger when no onEdit or onDelete', () => {
     const { container } = render(<ScopeCard {...BASE_PROPS} />)
     expect(container.querySelector('[aria-label="Scope actions"]')).toBeNull()
+  })
+})
+
+describe('task edit', () => {
+  it('renames a task via the inline editor on Enter, trimming whitespace', () => {
+    const onTaskEdit = vi.fn()
+    render(<ScopeCard {...BASE_PROPS} onTaskEdit={onTaskEdit} />)
+
+    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: '  Login screen  ' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onTaskEdit).toHaveBeenCalledWith('t1', 'Login screen')
+  })
+
+  it('reverts (no save) when the edited title is emptied', () => {
+    const onTaskEdit = vi.fn()
+    render(<ScopeCard {...BASE_PROPS} onTaskEdit={onTaskEdit} />)
+
+    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: '   ' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onTaskEdit).not.toHaveBeenCalled()
+  })
+
+  it('cancels on Escape without saving', () => {
+    const onTaskEdit = vi.fn()
+    render(<ScopeCard {...BASE_PROPS} onTaskEdit={onTaskEdit} />)
+
+    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: 'Changed' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+
+    expect(onTaskEdit).not.toHaveBeenCalled()
+  })
+
+  it('does not flip done when renaming', () => {
+    const onTaskToggle = vi.fn()
+    const onTaskEdit = vi.fn()
+    render(
+      <ScopeCard {...BASE_PROPS} onTaskToggle={onTaskToggle} onTaskEdit={onTaskEdit} />
+    )
+
+    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: 'Renamed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onTaskToggle).not.toHaveBeenCalled()
+  })
+})
+
+describe('task delete', () => {
+  it('deletes a task immediately with no confirm', () => {
+    const onTaskDelete = vi.fn()
+    render(<ScopeCard {...BASE_PROPS} onTaskDelete={onTaskDelete} />)
+
+    fireEvent.click(screen.getAllByLabelText('Delete task')[0])
+
+    expect(onTaskDelete).toHaveBeenCalledWith('t1')
+  })
+
+  it('renders no task edit/delete controls in readOnly mode', () => {
+    render(
+      <ScopeCard
+        {...BASE_PROPS}
+        onTaskEdit={vi.fn()}
+        onTaskDelete={vi.fn()}
+        readOnly
+      />
+    )
+    expect(screen.queryByLabelText('Edit task')).toBeNull()
+    expect(screen.queryByLabelText('Delete task')).toBeNull()
   })
 })

@@ -53,6 +53,8 @@ export type ScopeMapViewProps = {
   onStageChange?: (stage: Stage) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
+  onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
+  onTaskDelete?: (scopeId: string, taskId: string) => void
   onAddTask?: (scopeId: string, title: string) => void
   onAddScope?: (title: string, tier: string) => void
   onEditScope?: (scopeId: string, title: string, tier: string) => void
@@ -64,6 +66,7 @@ export type ScopeMapViewProps = {
   userName?: string
   timelineCards?: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
+  onDeleteUpdate?: (updateId: string) => void
 }
 
 export function ScopeMapView({
@@ -82,6 +85,8 @@ export function ScopeMapView({
   onStageChange,
   onHillProgressChange,
   onTaskToggle,
+  onTaskEdit,
+  onTaskDelete,
   onAddTask,
   onAddScope,
   onEditScope,
@@ -93,6 +98,7 @@ export function ScopeMapView({
   userName = 'You',
   timelineCards = [],
   onRetrySlack,
+  onDeleteUpdate,
 }: ScopeMapViewProps) {
   const isDone = pitch.stage === 'done'
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
@@ -201,6 +207,8 @@ export function ScopeMapView({
           scopes={scopeGridItems}
           onReorder={isDone ? undefined : onScopeReorder}
           onTaskToggle={isDone ? undefined : onTaskToggle}
+          onTaskEdit={isDone ? undefined : onTaskEdit}
+          onTaskDelete={isDone ? undefined : onTaskDelete}
           onAddTask={isDone ? undefined : onAddTask}
           onReset={isDone ? undefined : onScopeReset}
           onEditScope={!isDone && onEditScope ? (id) => setEditingScopeId(id) : undefined}
@@ -246,7 +254,11 @@ export function ScopeMapView({
         />
       </section>
 
-      <UpdatesTimeline cards={timelineCards} onRetrySlack={onRetrySlack} />
+      <UpdatesTimeline
+        cards={timelineCards}
+        onRetrySlack={onRetrySlack}
+        onDeleteUpdate={isDone ? undefined : onDeleteUpdate}
+      />
 
       <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
         scope map · drag dots on the hill · check tasks · move the needle
