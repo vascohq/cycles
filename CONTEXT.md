@@ -83,8 +83,12 @@ _Avoid_: Backlog, blockers, open questions list
 ### Updates
 
 **Update**:
-An immutable record of a needle move. Contains the zone, needle progress, narrative text, and snapshots of all hill positions and task counts at post time. Posted to a shared Slack channel. Updates are always appended, never edited.
+An immutable record of a needle move. Contains the zone, needle progress, narrative text, and snapshots of all hill positions and task counts at post time. Posted to a shared Slack channel. Updates are always appended, never edited. They can be **deleted** only as a misfire undo — and only the latest update on a pitch — never as general history rewriting (see Delete Update).
 _Avoid_: Check-in, standup note, status report
+
+**Delete Update**:
+The narrow escape hatch for undoing a misfired needle move (wrong pitch, fat-fingered position, duplicate post). Only the **latest** update on a pitch can be deleted; once another update is posted on top, the earlier one is sealed. Deleting reverts the pitch's needle to the prior update's Needle Snapshot (or `null` if it was the only update) so the on-page needle stays truthful; live scope hill positions are left untouched, and the needle Ghost and Hill Trails rebase onto the now-latest update automatically. Editing an update is never allowed — only delete-and-repost.
+_Avoid_: Edit update, revise update, retract
 
 **Ghost**:
 A dimmed marker showing where something sat at the last update — the needle's prior position on the arc, or a scope's prior dot on the hill chart. Always sourced from a frozen snapshot, never from live state.
@@ -133,7 +137,10 @@ _Avoid_: Pitch detail, pitch page
 > **Domain expert:** "No. **Tier** is intrinsic priority — it doesn't change when you reorder. The number on the dot is build order, the color is tier. They're independent signals."
 
 > **Dev:** "Can someone edit a Tuesday **Update** after posting?"
-> **Domain expert:** "No. **Updates** are immutable. If something changes, post a new one. The timeline tells the honest story of how the team felt over time."
+> **Domain expert:** "No. **Updates** are immutable — you never revise what you felt at a sealed checkpoint. If something changes, post a new one. The timeline tells the honest story of how the team felt over time."
+
+> **Dev:** "So an **Update** can never be removed?"
+> **Domain expert:** "One exception: a misfire. If you just posted to the wrong pitch or fat-fingered the needle, you can **delete the latest** update — that's undoing a post that shouldn't have existed, not rewriting history. Only the latest, and the needle reverts to the previous update. Older updates are sealed."
 
 ## Flagged ambiguities
 

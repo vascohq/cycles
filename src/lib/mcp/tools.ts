@@ -14,6 +14,7 @@ import {
   deleteScope,
   deleteTask,
   deleteParkingItem,
+  deleteUpdate,
 } from './liveblocks-writer'
 
 const orgArg = {
@@ -193,6 +194,7 @@ const WRITE_TOOLS: Record<
   delete_scope: (roomId, p) => deleteScope(roomId, p.id).then(() => undefined),
   delete_task: (roomId, p) => deleteTask(roomId, p.id).then(() => undefined),
   delete_parking_item: (roomId, p) => deleteParkingItem(roomId, p.id).then(() => undefined),
+  delete_update: (roomId, p) => deleteUpdate(roomId, p.id).then(() => undefined),
 }
 
 export async function handleBatch(
@@ -644,6 +646,34 @@ export function registerCyclesTools(server: any): void {
 
   defineTool(
     server,
+    'delete_update',
+    'Delete the latest needle update on a pitch (a misfire undo — wrong pitch, fat-fingered position, duplicate post). Only the latest update for a pitch can be deleted; passing any older update fails. Reverts the pitch needle to the prior update (or unset if it was the only one). Does not remove the Slack message that was posted.',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Update id to delete (must be the latest update for its pitch)') },
+    {
+      title: 'Delete latest update',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      try {
+        await deleteUpdate(`${resolved.org.id}:cycle:${cycle_slug}`, id)
+        return jsonResult({ deleted: true })
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  defineTool(
+    server,
     'batch',
     'Execute multiple write operations sequentially. Each operation specifies a tool and params. Returns results for all operations — successful ops persist even if others fail.',
     {
@@ -651,7 +681,7 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       operations: z.array(
         z.object({
-          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, delete_pitch, delete_scope, delete_task, delete_parking_item'),
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_update'),
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),

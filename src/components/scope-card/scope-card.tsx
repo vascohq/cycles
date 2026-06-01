@@ -25,6 +25,8 @@ export type ScopeCardProps = {
   litmus_text: string
   tasks: ScopeCardTask[]
   onTaskToggle?: (taskId: string, done: boolean) => void
+  onTaskEdit?: (taskId: string, title: string) => void
+  onTaskDelete?: (taskId: string) => void
   onAddTask?: (title: string) => void
   onReset?: () => void
   onEdit?: () => void
@@ -43,6 +45,8 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       litmus_text,
       tasks,
       onTaskToggle,
+      onTaskEdit,
+      onTaskDelete,
       onAddTask,
       onReset,
       onEdit,
@@ -93,39 +97,16 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
             bottom fade hints at more when the list overflows. */}
         <div className="relative flex-1 min-h-0">
           <div className="h-full overflow-y-auto flex flex-col gap-1 pr-1">
-            {tasks.map((task) => {
-              const Tag = readOnly ? 'div' : 'button'
-              return (
-                <Tag
-                  key={task.id}
-                  {...(!readOnly && { type: 'button' as const, onClick: () => onTaskToggle?.(task.id, !task.done) })}
-                  className={`flex items-center gap-2 text-xs text-left py-0.5 flex-shrink-0 ${readOnly ? '' : 'group'}`}
-                >
-                  <span
-                    className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                      task.done
-                        ? 'bg-foreground/10 border-foreground/20'
-                        : readOnly
-                          ? 'border-foreground/20'
-                          : 'border-foreground/20 group-hover:border-foreground/40'
-                    }`}
-                  >
-                    {task.done && (
-                      <Check className="w-3 h-3 text-foreground/60" />
-                    )}
-                  </span>
-                  <span
-                    className={
-                      task.done
-                        ? 'line-through text-muted-foreground/60'
-                        : 'text-foreground'
-                    }
-                  >
-                    {task.title}
-                  </span>
-                </Tag>
-              )
-            })}
+            {tasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                readOnly={readOnly}
+                onToggle={onTaskToggle ? () => onTaskToggle(task.id, !task.done) : undefined}
+                onEdit={onTaskEdit ? (title) => onTaskEdit(task.id, title) : undefined}
+                onDelete={onTaskDelete ? () => onTaskDelete(task.id) : undefined}
+              />
+            ))}
 
             {onAddTask && !readOnly && (
               <AddTaskInput onAddTask={onAddTask} />
@@ -152,6 +133,108 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     )
   }
 )
+
+// A single task line: checkbox + title toggle done; hover reveals inline rename
+// (pencil) and delete (trash). The row is a flex container — never a <button> —
+// so the action controls aren't nested inside a button. Rename mirrors the
+// add-task input: Enter/blur saves, Esc cancels, an empty title reverts.
+function TaskRow({
+  task,
+  readOnly,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  task: ScopeCardTask
+  readOnly?: boolean
+  onToggle?: () => void
+  onEdit?: (title: string) => void
+  onDelete?: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(task.title)
+
+  function startEdit() {
+    setValue(task.title)
+    setEditing(true)
+  }
+
+  function save() {
+    const trimmed = value.trim()
+    if (trimmed && trimmed !== task.title) onEdit?.(trimmed)
+    setEditing(false)
+  }
+
+  if (editing && onEdit) {
+    return (
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+          if (e.key === 'Escape') { setValue(task.title); setEditing(false) }
+        }}
+        onBlur={save}
+        className="w-full text-xs bg-transparent border-b border-foreground/30 py-0.5 outline-none flex-shrink-0"
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <div className={`flex items-center gap-2 text-xs py-0.5 flex-shrink-0 ${readOnly ? '' : 'group'}`}>
+      <button
+        type="button"
+        {...(!readOnly && onToggle ? { onClick: onToggle } : { disabled: true })}
+        className="flex items-center gap-2 text-left min-w-0 flex-1"
+      >
+        <span
+          className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+            task.done
+              ? 'bg-foreground/10 border-foreground/20'
+              : readOnly
+                ? 'border-foreground/20'
+                : 'border-foreground/20 group-hover:border-foreground/40'
+          }`}
+        >
+          {task.done && <Check className="w-3 h-3 text-foreground/60" />}
+        </span>
+        <span
+          className={`truncate ${
+            task.done ? 'line-through text-muted-foreground/60' : 'text-foreground'
+          }`}
+        >
+          {task.title}
+        </span>
+      </button>
+
+      {!readOnly && (onEdit || onDelete) && (
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          {onEdit && (
+            <button
+              type="button"
+              aria-label="Edit task"
+              onClick={startEdit}
+              className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              aria-label="Delete task"
+              onClick={onDelete}
+              className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ScopeActions({
   onEdit,

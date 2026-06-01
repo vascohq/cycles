@@ -21,6 +21,7 @@ import {
   deleteScope,
   deleteTask,
   deleteParkingItem,
+  deleteUpdate,
 } from './liveblocks-writer'
 
 const mockGetRoom = vi.mocked(liveblocks.getRoom)
@@ -84,6 +85,7 @@ type StorageData = {
   scopes?: MockItem[]
   tasks?: MockItem[]
   parkingItems?: MockItem[]
+  updates?: MockItem[]
 }
 
 function setupStorage(data: StorageData = {}) {
@@ -92,6 +94,7 @@ function setupStorage(data: StorageData = {}) {
     scopes: makeMockList(data.scopes ?? []),
     tasks: makeMockList(data.tasks ?? []),
     parkingItems: makeMockList(data.parkingItems ?? []),
+    updates: makeMockList(data.updates ?? []),
   }
 
   mockMutateStorage.mockImplementation(async (_roomId, callback) => {
@@ -359,5 +362,76 @@ describe('deleteParkingItem', () => {
     await deleteParkingItem(ROOM, 'pk1')
 
     expect(storage.parkingItems.toArray()).toHaveLength(0)
+  })
+})
+
+describe('deleteUpdate', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mkUpdate = (
+    id: string,
+    pitchId: string,
+    posted_at: string,
+    needle_snapshot: { progress: number; zone: string }
+  ) => makeMockItem({ id, pitchId, posted_at, needle_snapshot })
+
+  it('deletes the latest update and reverts the pitch needle to the prior snapshot', async () => {
+    const pitch = makeMockItem({
+      id: 'p1',
+      needle: { progress: 0.7, zone: 'on_track' },
+    })
+    const u1 = mkUpdate('u1', 'p1', '2026-06-03T10:00:00Z', { progress: 0.3, zone: 'concerned' })
+    const u2 = mkUpdate('u2', 'p1', '2026-06-10T10:00:00Z', { progress: 0.7, zone: 'on_track' })
+    const storage = setupStorage({ pitches: [pitch], updates: [u1, u2] })
+
+    await deleteUpdate(ROOM, 'u2')
+
+    expect(storage.updates.toArray()).toHaveLength(1)
+    expect(storage.updates.toArray()[0].get('id')).toBe('u1')
+    expect(pitch.get('needle')).toEqual({ progress: 0.3, zone: 'concerned' })
+  })
+
+  it('reverts the needle to null when deleting the only update', async () => {
+    const pitch = makeMockItem({
+      id: 'p1',
+      needle: { progress: 0.3, zone: 'concerned' },
+    })
+    const u1 = mkUpdate('u1', 'p1', '2026-06-03T10:00:00Z', { progress: 0.3, zone: 'concerned' })
+    const storage = setupStorage({ pitches: [pitch], updates: [u1] })
+
+    await deleteUpdate(ROOM, 'u1')
+
+    expect(storage.updates.toArray()).toHaveLength(0)
+    expect(pitch.get('needle')).toBeNull()
+  })
+
+  it('refuses to delete an update that is not the latest for its pitch', async () => {
+    const pitch = makeMockItem({ id: 'p1', needle: { progress: 0.7, zone: 'on_track' } })
+    const u1 = mkUpdate('u1', 'p1', '2026-06-03T10:00:00Z', { progress: 0.3, zone: 'concerned' })
+    const u2 = mkUpdate('u2', 'p1', '2026-06-10T10:00:00Z', { progress: 0.7, zone: 'on_track' })
+    const storage = setupStorage({ pitches: [pitch], updates: [u1, u2] })
+
+    await expect(deleteUpdate(ROOM, 'u1')).rejects.toThrow('latest update')
+    expect(storage.updates.toArray()).toHaveLength(2)
+    expect(pitch.get('needle')).toEqual({ progress: 0.7, zone: 'on_track' })
+  })
+
+  it('judges latest per-pitch, ignoring newer updates on other pitches', async () => {
+    const p1 = makeMockItem({ id: 'p1', needle: { progress: 0.5, zone: 'some_risk' } })
+    const u1 = mkUpdate('u1', 'p1', '2026-06-03T10:00:00Z', { progress: 0.2, zone: 'concerned' })
+    const u2 = mkUpdate('u2', 'p1', '2026-06-05T10:00:00Z', { progress: 0.5, zone: 'some_risk' })
+    // Newer, but belongs to a different pitch — must not block deleting p1's latest.
+    const o1 = mkUpdate('o1', 'p2', '2026-06-20T10:00:00Z', { progress: 0.9, zone: 'on_track' })
+    const storage = setupStorage({ pitches: [p1], updates: [u1, u2, o1] })
+
+    await deleteUpdate(ROOM, 'u2')
+
+    expect(storage.updates.toArray().map((u) => u.get('id'))).toEqual(['u1', 'o1'])
+    expect(p1.get('needle')).toEqual({ progress: 0.2, zone: 'concerned' })
+  })
+
+  it('throws when the update is not found', async () => {
+    setupStorage()
+    await expect(deleteUpdate(ROOM, 'nope')).rejects.toThrow('not found')
   })
 })

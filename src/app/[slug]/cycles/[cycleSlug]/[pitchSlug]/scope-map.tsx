@@ -19,7 +19,7 @@ import {
   deriveTotalTaskProgress,
   buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
-import { deriveGhost } from '@/lib/needle-engine'
+import { deriveGhost, needleAfterDeletingLatest } from '@/lib/needle-engine'
 import { diffHillTrail } from '@/lib/hill-trail-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
 import { buildUpdate } from '@/lib/update-engine'
@@ -133,6 +133,23 @@ function ScopeMapWired({
     []
   )
 
+  const onTaskEdit = useCycleMutation(
+    ({ storage }, _scopeId: string, taskId: string, title: string) => {
+      const task = storage.get('tasks').find((t) => t.get('id') === taskId)
+      task?.set('title', title)
+    },
+    []
+  )
+
+  const onTaskDelete = useCycleMutation(
+    ({ storage }, _scopeId: string, taskId: string) => {
+      const tasksList = storage.get('tasks')
+      const idx = tasksList.findIndex((t) => t.get('id') === taskId)
+      if (idx !== -1) tasksList.delete(idx)
+    },
+    []
+  )
+
   const onAddTask = useCycleMutation(
     ({ storage }, scopeId: string, title: string) => {
       const task: ScopeTask = { id: nanoid(), scopeId, title, done: false }
@@ -234,6 +251,37 @@ function ScopeMapWired({
       storage.get('updates').push(new LiveObject(built))
       const p = storage.get('pitches').find((x) => x.get('id') === built.pitchId)
       if (p) p.set('needle', { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone })
+    },
+    []
+  )
+
+  // Delete the latest update — the misfire-undo escape hatch (ADR 0006). The UI
+  // only offers this on the newest card, so latest-only holds; we revert the
+  // pitch's denormalized needle to the prior update's snapshot (or null). Live
+  // scope hill positions are untouched; Ghost and Hill Trails rebase off the
+  // now-latest update through pure derivation.
+  const onDeleteUpdate = useCycleMutation(
+    ({ storage }, updateId: string) => {
+      const updates = storage.get('updates')
+      const idx = updates.findIndex((u) => u.get('id') === updateId)
+      if (idx === -1) return
+      const targetPitchId = updates.get(idx)!.get('pitchId')
+
+      const all: PitchUpdate[] = []
+      for (let i = 0; i < updates.length; i++) {
+        const u = updates.get(i)!
+        all.push({
+          id: u.get('id'),
+          pitchId: u.get('pitchId'),
+          posted_at: u.get('posted_at'),
+          needle_snapshot: u.get('needle_snapshot'),
+        } as PitchUpdate)
+      }
+      const reverted = needleAfterDeletingLatest(all, targetPitchId, updateId)
+
+      updates.delete(idx)
+      const p = storage.get('pitches').find((x) => x.get('id') === targetPitchId)
+      if (p) p.set('needle', reverted)
     },
     []
   )
@@ -403,6 +451,8 @@ function ScopeMapWired({
       onStageChange={onStageChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
+      onTaskEdit={onTaskEdit}
+      onTaskDelete={onTaskDelete}
       onAddTask={onAddTask}
       onAddScope={onAddScope}
       onEditScope={onEditScope}
@@ -414,6 +464,7 @@ function ScopeMapWired({
       userName={userName}
       timelineCards={timelineCards}
       onRetrySlack={slackEnabled ? onRetrySlack : undefined}
+      onDeleteUpdate={onDeleteUpdate}
     />
   )
 }

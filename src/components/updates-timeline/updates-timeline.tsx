@@ -1,18 +1,38 @@
 'use client'
 
+import { useState } from 'react'
+import { MoreHorizontal, Trash2 } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 export type UpdatesTimelineProps = {
   cards: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
+  onDeleteUpdate?: (updateId: string) => void
 }
 
-export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
+export function UpdatesTimeline({
+  cards,
+  onRetrySlack,
+  onDeleteUpdate,
+}: UpdatesTimelineProps) {
   const slackEnabled = useSlackEnabled()
   return (
     <section className="flex flex-col gap-4">
@@ -37,6 +57,7 @@ export function UpdatesTimeline({ cards, onRetrySlack }: UpdatesTimelineProps) {
               card={card}
               isNewest={i === 0}
               onRetrySlack={onRetrySlack}
+              onDeleteUpdate={i === 0 ? onDeleteUpdate : undefined}
             />
           ))}
         </div>
@@ -49,13 +70,16 @@ function UpdateCard({
   card,
   isNewest,
   onRetrySlack,
+  onDeleteUpdate,
 }: {
   card: TimelineCard
   isNewest: boolean
   onRetrySlack?: (updateId: string) => void
+  onDeleteUpdate?: (updateId: string) => void
 }) {
   const zoneLabel = card.needleSnapshot.zone.replace('_', ' ')
   const zoneColor = ZONE_COLORS[card.needleSnapshot.zone]
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
     <div
@@ -78,6 +102,38 @@ function UpdateCard({
           <span className="text-xs font-mono text-muted-foreground">
             {card.formattedTimestamp}
           </span>
+          {onDeleteUpdate && (
+            <div className="ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Update actions"
+                    className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-36">
+                  <DropdownMenuItem
+                    onClick={() => setConfirmOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DeleteUpdateDialog
+                open={confirmOpen}
+                onOpenChange={setConfirmOpen}
+                onConfirm={() => {
+                  onDeleteUpdate(card.id)
+                  setConfirmOpen(false)
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -105,6 +161,48 @@ function UpdateCard({
         )}
       </div>
     </div>
+  )
+}
+
+// Confirms deleting the latest update — a misfire undo (see ADR 0006). Spells
+// out the two consequences: the needle reverts, and the Slack message stays.
+function DeleteUpdateDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold tracking-tight">
+            Delete this update?
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          The needle will revert to the previous update. This won&apos;t remove
+          the message already posted to Slack. This can&apos;t be undone.
+        </p>
+        <DialogFooter className="gap-2">
+          <button
+            onClick={() => onOpenChange(false)}
+            className="px-4 py-2 text-sm rounded-lg border hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground font-medium transition-opacity"
+          >
+            Delete
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -19,13 +19,16 @@ vi.mock('./liveblocks-writer', () => ({
   deleteScope: vi.fn(),
   deleteTask: vi.fn(),
   deleteParkingItem: vi.fn(),
+  deleteUpdate: vi.fn(),
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
+import { deleteUpdate } from './liveblocks-writer'
 
 const mockListRooms = vi.mocked(listCycleRooms)
 const mockGetStorage = vi.mocked(getCycleStorage)
 const mockResolvePitch = vi.mocked(resolvePitch)
+const mockDeleteUpdate = vi.mocked(deleteUpdate)
 
 const ORG_ID = 'org_test'
 
@@ -309,6 +312,24 @@ describe('handleBatch', () => {
     expect(data.results[2].ok).toBe(true)
   })
 
+  it('routes delete_update through the writer and surfaces latest-only errors', async () => {
+    mockDeleteUpdate.mockResolvedValueOnce(undefined)
+    mockDeleteUpdate.mockRejectedValueOnce(
+      new Error('Only the latest update can be deleted: "u1" is not the latest update for its pitch')
+    )
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'delete_update', params: { id: 'u2' } },
+      { tool: 'delete_update', params: { id: 'u1' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(mockDeleteUpdate).toHaveBeenNthCalledWith(1, `${ORG_ID}:cycle:q2-build`, 'u2')
+    expect(data.results[0].ok).toBe(true)
+    expect(data.results[1].ok).toBe(false)
+    expect(data.results[1].error).toContain('latest update')
+  })
+
   it('rejects unknown tool names', async () => {
     const result = await handleBatch(ORG_ID, 'q2-build', [
       { tool: 'unknown_tool', params: {} },
@@ -338,7 +359,7 @@ describe('tool annotations', () => {
   }
 
   const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'get_pitch_updates']
-  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'batch']
+  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'delete_update', 'batch']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
     const tools = collectTools()

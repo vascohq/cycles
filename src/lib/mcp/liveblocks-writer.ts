@@ -6,7 +6,9 @@ import type {
   CycleScope,
   ScopeTask,
   ParkingItem,
+  PitchUpdate,
 } from '@/cycle-liveblocks.config'
+import { needleAfterDeletingLatest } from '@/lib/needle-engine'
 
 type UpsertResult = { created: boolean; id: string }
 
@@ -351,6 +353,63 @@ export async function deleteTask(roomId: string, taskId: string): Promise<void> 
   })
 
   if (notFound) throw new Error(`Task not found: "${taskId}"`)
+}
+
+// Delete the latest needle update on a pitch — the misfire-undo escape hatch
+// (see ADR 0006). Refuses any update that isn't the latest for its pitch, since
+// only the latest is deletable. Reverts the pitch's denormalized needle to the
+// prior update's snapshot (or null if it was the only one); live scope hill
+// positions are left untouched, and the needle Ghost / Hill Trails rebase off
+// the now-latest update through pure derivation.
+export async function deleteUpdate(roomId: string, updateId: string): Promise<void> {
+  let notFound = false
+  let notLatest = false
+
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    const updates = root.get('updates')
+    const idx = updates.findIndex((u: any) => getField(u, 'id') === updateId)
+    if (idx === -1) {
+      notFound = true
+      return
+    }
+
+    const target = updates.get ? updates.get(idx) : [...updates][idx]
+    const pitchId = getField(target, 'pitchId')
+
+    // Latest-only: the target must be the newest update for its pitch.
+    const all = [...updates] as any[]
+    const latestForPitch = all
+      .filter((u) => getField(u, 'pitchId') === pitchId)
+      .reduce((a, b) =>
+        getField(a, 'posted_at') > getField(b, 'posted_at') ? a : b
+      )
+    if (getField(latestForPitch, 'id') !== updateId) {
+      notLatest = true
+      return
+    }
+
+    // Compute the revert target from the full list before removing the row.
+    const asUpdates: PitchUpdate[] = all.map((u) => ({
+      id: getField(u, 'id'),
+      pitchId: getField(u, 'pitchId'),
+      posted_at: getField(u, 'posted_at'),
+      needle_snapshot: getField(u, 'needle_snapshot'),
+    })) as PitchUpdate[]
+    const revertedNeedle = needleAfterDeletingLatest(asUpdates, pitchId, updateId)
+
+    updates.delete(idx)
+
+    const pitch = root
+      .get('pitches')
+      .find((p: any) => getField(p, 'id') === pitchId)
+    if (pitch) pitch.set('needle', revertedNeedle)
+  })
+
+  if (notFound) throw new Error(`Update not found: "${updateId}"`)
+  if (notLatest)
+    throw new Error(
+      `Only the latest update can be deleted: "${updateId}" is not the latest update for its pitch`
+    )
 }
 
 export async function deleteParkingItem(
