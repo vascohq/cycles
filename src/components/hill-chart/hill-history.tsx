@@ -90,9 +90,12 @@ export function HillHistory({
 
       <HillChart
         scopes={isLive ? scopes : frame!.scopes}
-        trails={isLive ? trails : frame!.trails}
+        // No trail ghosts on any hill — movement now reads from the before/after
+        // charts in the modal and update cards.
+        trails={[]}
         highlightedScopeId={highlightedScopeId}
         onScopeHover={onScopeHover}
+        dotRadius={7}
         // Historical frames are read-only: omit the change handler so HillChart
         // disables dragging. Returning to Live re-enables editing.
         onHillProgressChange={isLive ? onHillProgressChange : undefined}

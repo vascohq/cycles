@@ -4,6 +4,17 @@ export function clampProgress(progress: number): number {
   return Math.min(0.98, Math.max(0.02, progress))
 }
 
+// The needle moves in discrete steps spanning the full 0%–100% range.
+export const NEEDLE_STEP_COUNT = 12
+
+// Snap an arbitrary position to the nearest step, clamped to [0, 1] so the
+// first step is a true 0% and the last a true 100% (unlike clampProgress, which
+// keeps the tip just off the arc ends for the display-only gauge).
+export function snapNeedleProgress(progress: number): number {
+  const clamped = Math.min(1, Math.max(0, progress))
+  return Math.round(clamped * NEEDLE_STEP_COUNT) / NEEDLE_STEP_COUNT
+}
+
 export const SHIPPED_NEEDLE: NeedleSnapshot = { progress: 1, zone: 'on_track' }
 
 export function deriveGhost(updates: PitchUpdate[]): NeedleSnapshot | null {

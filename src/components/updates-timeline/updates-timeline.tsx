@@ -4,10 +4,28 @@ import { useState } from 'react'
 import { MoreHorizontal, Trash2 } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
+import { HillChart, type HillScope } from '@/components/hill-chart'
 import type { TimelineCard } from '@/lib/timeline-helpers'
-import type { ScopeTrail } from '@/lib/hill-trail-engine'
+import type { HillSnapshot, Zone } from '@/cycle-liveblocks.config'
+import { needleProgressNote } from '@/lib/slack-message'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
+
+const ZONE_LABEL: Record<Zone, string> = {
+  on_track: 'On track',
+  some_risk: 'Some risk',
+  concerned: 'Concerned',
+}
+
+function toHillScopes(snapshot: HillSnapshot[]): HillScope[] {
+  return snapshot.map((h, i) => ({
+    id: h.scopeId,
+    title: h.title ?? '',
+    tier: h.tier ?? ('should' as const),
+    hill_progress: h.hill_progress,
+    order: i + 1,
+  }))
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,9 +95,17 @@ function UpdateCard({
   onRetrySlack?: (updateId: string) => void
   onDeleteUpdate?: (updateId: string) => void
 }) {
-  const zoneLabel = card.needleSnapshot.zone.replace('_', ' ')
-  const zoneColor = ZONE_COLORS[card.needleSnapshot.zone]
+  const zone = card.needleSnapshot.zone
+  const zoneChanged = card.previousZone !== null && card.previousZone !== zone
+  const needleNote = needleProgressNote(
+    card.previousNeedleProgress,
+    card.needleSnapshot.progress
+  )
+  const hasHill = card.beforeSnapshot.length > 0 || card.afterSnapshot.length > 0
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // Shared across this card's before/after charts: hovering a scope on one
+  // highlights it on the other and fades the rest.
+  const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(null)
 
   return (
     <div
@@ -136,20 +162,71 @@ function UpdateCard({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Zone line — mirrors the Slack post: a transition when it changed. */}
+        <div className="flex items-center gap-2 text-xs font-medium">
           <MiniNeedle needle={card.needleSnapshot} />
-          <span
-            className="text-xs font-medium"
-            style={{ color: zoneColor }}
-          >
-            {zoneLabel.charAt(0).toUpperCase() + zoneLabel.slice(1)}
-          </span>
-          <RollupSummary card={card} />
+          {zoneChanged && card.previousZone ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ZONE_COLORS[card.previousZone] }} />
+              <span className="text-muted-foreground">→</span>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ZONE_COLORS[zone] }} />
+              <span style={{ color: ZONE_COLORS[zone] }}>Now {ZONE_LABEL[zone].toLowerCase()}</span>
+              <span className="text-muted-foreground">(was {ZONE_LABEL[card.previousZone].toLowerCase()})</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ZONE_COLORS[zone] }} />
+              <span style={{ color: ZONE_COLORS[zone] }}>{ZONE_LABEL[zone]}</span>
+            </span>
+          )}
         </div>
 
-        <p className="text-[13.5px] leading-relaxed">{card.narrative}</p>
+        {needleNote && <div className="text-xs font-medium">{needleNote}</div>}
 
-        <HillMovement card={card} />
+        {card.narrative && (
+          <p className="text-[13.5px] leading-relaxed border-l-2 border-border pl-2">
+            {card.narrative}
+          </p>
+        )}
+
+        {card.movement && (
+          <div className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
+            {card.movement}
+          </div>
+        )}
+
+        {hasHill && (
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div className="rounded-lg border bg-muted/20 p-1.5">
+              <div className="text-[9px] font-mono uppercase tracking-wide text-muted-foreground mb-0.5 px-0.5">
+                After
+              </div>
+              <HillChart
+                scopes={toHillScopes(card.afterSnapshot)}
+                dotRadius={6}
+                highlightedScopeId={highlightedScopeId}
+                onScopeHover={setHighlightedScopeId}
+                fadeOthers
+              />
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-1.5">
+              <div className="text-[9px] font-mono uppercase tracking-wide text-muted-foreground mb-0.5 px-0.5">
+                Before
+              </div>
+              <HillChart
+                scopes={toHillScopes(card.beforeSnapshot)}
+                dotRadius={6}
+                highlightedScopeId={highlightedScopeId}
+                onScopeHover={setHighlightedScopeId}
+                fadeOthers
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="text-[11px] font-mono text-muted-foreground">
+          Week {card.weekNumber} of {card.totalWeeks} · {card.daysLeft} days left
+        </div>
 
         {card.slackFailed && onRetrySlack && (
           <button
@@ -206,76 +283,3 @@ function DeleteUpdateDialog({
   )
 }
 
-// Compact rollup of the frozen movement, shown beside the needle. Counts come
-// straight from the engine's rollup over stored snapshots.
-function RollupSummary({ card }: { card: TimelineCard }) {
-  const { moved, stalled, new: added, dropped } = card.rollup
-  const parts: string[] = []
-  if (moved > 0) parts.push(`${moved} moved`)
-  if (added > 0) parts.push(`${added} new`)
-  if (stalled > 0) parts.push(`${stalled} stalled`)
-  if (dropped > 0) parts.push(`${dropped} dropped`)
-  if (parts.length === 0) return null
-  return (
-    <span className="text-xs font-mono text-muted-foreground">
-      {parts.join(' · ')}
-    </span>
-  )
-}
-
-// Frozen per-scope trail list for this update. Reads only from card.trails,
-// which were computed from STORED snapshots — never from live positions.
-function HillMovement({ card }: { card: TimelineCard }) {
-  if (card.trails.length === 0) return null
-  return (
-    <ul className="flex flex-col gap-1 border-t pt-2">
-      {card.trails.map((trail) => (
-        <li
-          key={trail.scopeId}
-          className="flex items-center gap-2 text-xs min-w-0"
-        >
-          <span className="truncate text-muted-foreground">
-            {scopeLabel(trail, card.scopeTitles)}
-          </span>
-          <span
-            className="font-medium shrink-0"
-            style={{ color: trailLabelColor(trail) }}
-          >
-            {trailDetail(trail)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function scopeLabel(
-  trail: ScopeTrail,
-  titles: Record<string, string>
-): string {
-  if (trail.state === 'dropped' && trail.title) return trail.title
-  return titles[trail.scopeId] ?? trail.scopeId
-}
-
-function trailDetail(trail: ScopeTrail): string {
-  if ('stepDelta' in trail && trail.stepDelta !== 0) {
-    const sign = trail.stepDelta > 0 ? '+' : ''
-    const unit = Math.abs(trail.stepDelta) === 1 ? 'step' : 'steps'
-    return `${trail.label} · ${sign}${trail.stepDelta} ${unit}`
-  }
-  return trail.label
-}
-
-// Color reads from geometry/direction only — never an alarm. Forward progress
-// is positive (foreground), regression is muted, neutral states stay quiet.
-function trailLabelColor(trail: ScopeTrail): string {
-  switch (trail.label) {
-    case 'Over the hill':
-    case 'Lots of progress':
-    case 'Nudged forward':
-    case 'New':
-      return 'hsl(var(--foreground))'
-    default:
-      return 'hsl(var(--muted-foreground))'
-  }
-}

@@ -12,8 +12,6 @@ const BASE_PROPS = {
   dateLabel: 'May 27, 2025',
   userName: 'Seb',
   pitchTitle: 'Mission Control',
-  tasksDone: 9,
-  tasksTotal: 13,
   daysLeft: 21,
   currentProgress: 0.5,
   currentZone: null,
@@ -39,25 +37,21 @@ describe('MoveNeedleModal', () => {
 
     expect(onPost).toHaveBeenCalledTimes(1)
     const [progress, zone, narrative] = onPost.mock.calls[0]
-    expect(progress).toBeCloseTo(0.6)
+    // Two steps up from 0.5 on the 12-step grid → 8/12.
+    expect(progress).toBeCloseTo(8 / 12)
     expect(zone).toBe('on_track')
     expect(narrative).toBe('Shipped the gauge')
   })
 
-  it('disables posting until position, zone, and narrative are present', async () => {
+  it('disables posting until a zone is chosen (narrative is optional)', async () => {
     const user = userEvent.setup()
     render(<MoveNeedleModal {...BASE_PROPS} onPost={vi.fn()} />)
 
     const post = screen.getByRole('button', { name: /Post update/ })
     expect(post).toBeDisabled()
 
+    // Choosing a zone is enough — narrative is optional.
     await user.click(screen.getByRole('button', { name: 'Concerned' }))
-    expect(post).toBeDisabled()
-
-    await user.type(
-      screen.getByPlaceholderText(/Ship something/),
-      'Hit a wall'
-    )
     expect(post).toBeEnabled()
   })
 

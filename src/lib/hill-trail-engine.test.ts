@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { diffHillTrail, rollupHillTrails } from './hill-trail-engine'
+import {
+  diffHillTrail,
+  rollupHillTrails,
+  noChangeStreaks,
+  summarizeMovement,
+} from './hill-trail-engine'
 import type { HillSnapshot } from '@/cycle-liveblocks.config'
 
 describe('diffHillTrail', () => {
@@ -170,22 +175,48 @@ describe('diffHillTrail', () => {
     expect(trail.label).toBe('Slid back')
   })
 
-  it('labels a forward crest crossing "Over the hill"', () => {
+  it('labels landing on the crest "At the top"', () => {
+    const [trail] = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 3 / 14 }],
+      [{ id: 's1', hill_progress: 0.5 }]
+    )
+
+    expect(trail.label).toBe('At the top')
+  })
+
+  it('labels crossing the crest onto the downhill side "Crossed the hill"', () => {
     const [trail] = diffHillTrail(
       [{ scopeId: 's1', hill_progress: 5 / 14 }],
       [{ id: 's1', hill_progress: 9 / 14 }]
     )
 
-    expect(trail.label).toBe('Over the hill')
+    expect(trail.label).toBe('Crossed the hill')
   })
 
-  it('does not label a forward move that stays below the crest "Over the hill"', () => {
+  it('labels further downhill progress (already past the crest) "Heading down"', () => {
+    const [trail] = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 9 / 14 }],
+      [{ id: 's1', hill_progress: 12 / 14 }]
+    )
+
+    expect(trail.label).toBe('Heading down')
+  })
+
+  it('labels reaching the end "Done"', () => {
+    const [trail] = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 11 / 14 }],
+      [{ id: 's1', hill_progress: 1 }]
+    )
+
+    expect(trail.label).toBe('Done')
+  })
+
+  it('does not call a forward move below the crest "At the top"', () => {
     const [trail] = diffHillTrail(
       [{ scopeId: 's1', hill_progress: 1 / 14 }],
       [{ id: 's1', hill_progress: 6 / 14 }]
     )
 
-    expect(trail.label).not.toBe('Over the hill')
     expect(trail.label).toBe('Lots of progress')
   })
 
@@ -214,5 +245,161 @@ describe('diffHillTrail', () => {
     const rollup = rollupHillTrails(diffHillTrail(previous, current))
 
     expect(rollup).toEqual({ moved: 1, stalled: 1, new: 1, dropped: 1 })
+  })
+})
+
+describe('noChangeStreaks', () => {
+  it('counts consecutive updates a scope held its current step', () => {
+    const snapshotsNewestFirst: HillSnapshot[][] = [
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+    ]
+    const live = [{ id: 's1', hill_progress: 0.5 }]
+
+    expect(noChangeStreaks(snapshotsNewestFirst, live).get('s1')).toBe(2)
+  })
+
+  it('reports a streak of 0 for a scope that moved since the last update', () => {
+    const snapshots: HillSnapshot[][] = [[{ scopeId: 's1', hill_progress: 0.3 }]]
+    const live = [{ id: 's1', hill_progress: 0.6 }]
+
+    expect(noChangeStreaks(snapshots, live).get('s1')).toBe(0)
+  })
+
+  it('stops counting at the first update where the step differs', () => {
+    const snapshots: HillSnapshot[][] = [
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [{ scopeId: 's1', hill_progress: 0.2 }],
+    ]
+    const live = [{ id: 's1', hill_progress: 0.5 }]
+
+    expect(noChangeStreaks(snapshots, live).get('s1')).toBe(2)
+  })
+
+  it('stops counting when the scope is absent from an older snapshot', () => {
+    const snapshots: HillSnapshot[][] = [
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [], // scope did not exist this far back
+    ]
+    const live = [{ id: 's1', hill_progress: 0.5 }]
+
+    expect(noChangeStreaks(snapshots, live).get('s1')).toBe(1)
+  })
+})
+
+describe('summarizeMovement', () => {
+  const titles = new Map([
+    ['s1', 'Checkout'],
+    ['s2', 'Login'],
+    ['s3', 'Auth'],
+  ])
+
+  it('names a scope that reached the top in Shape Up terms', () => {
+    const trails = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 3 / 14 }],
+      [{ id: 's1', hill_progress: 0.5 }]
+    )
+    const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
+    expect(line).toContain('⛰️ "Checkout" over the hill')
+  })
+
+  it('celebrates a scope that reached done', () => {
+    const trails = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 11 / 14 }],
+      [{ id: 's1', hill_progress: 1 }]
+    )
+    const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
+    expect(line).toContain('🎉 "Checkout" done!')
+  })
+
+  it('frames climbing the unknown side as figuring it out, with position', () => {
+    const bigClimb = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 1 / 14 }],
+      [{ id: 's1', hill_progress: 5 / 14 }]
+    )
+    expect(summarizeMovement(bigClimb, new Map(), titles)).toBe(
+      '🔍 "Checkout" figuring it out (now 71%)'
+    )
+  })
+
+  it('frames the known side as making it happen, with position', () => {
+    const trail = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 5 / 14 }],
+      [{ id: 's1', hill_progress: 9 / 14 }]
+    )
+    expect(summarizeMovement(trail, new Map(), titles)).toBe(
+      '🛠️ "Checkout" making it happen (now 29%)'
+    )
+  })
+
+  it('frames a slide back with position', () => {
+    const trail = diffHillTrail(
+      [{ scopeId: 's2', hill_progress: 5 / 14 }],
+      [{ id: 's2', hill_progress: 3 / 14 }]
+    )
+    expect(summarizeMovement(trail, new Map(), titles)).toBe(
+      '🔻 "Login" slid back (now 43%)'
+    )
+  })
+
+  it('names new and dropped scopes with their emoji', () => {
+    const trails = diffHillTrail(
+      [{ scopeId: 's3', hill_progress: 0.5, title: 'Auth' }],
+      [{ id: 's1', hill_progress: 0.2 }]
+    )
+    const line = summarizeMovement(trails, new Map(), titles) ?? ''
+    expect(line).toContain('🆕 "Checkout" added')
+    expect(line).toContain('❌ "Auth" dropped')
+  })
+
+  it('caps named movers and overflows the rest into "+N more"', () => {
+    const current = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, hill_progress: 0.1 }))
+    const line = summarizeMovement(diffHillTrail([], current), new Map(), new Map()) ?? ''
+    expect(line.match(/🆕/g)?.length).toBe(3)
+    expect(line).toContain('+2 more')
+  })
+
+  it('collapses an all-quiet update to a count and names the longest streaks', () => {
+    const snapshots: HillSnapshot[][] = [
+      [
+        { scopeId: 's1', hill_progress: 0.3 },
+        { scopeId: 's2', hill_progress: 0.3 },
+        { scopeId: 's3', hill_progress: 0.3 },
+      ],
+      [
+        { scopeId: 's1', hill_progress: 0.3 },
+        { scopeId: 's2', hill_progress: 0.3 },
+      ],
+    ]
+    const live = [
+      { id: 's1', hill_progress: 0.3 },
+      { id: 's2', hill_progress: 0.3 },
+      { id: 's3', hill_progress: 0.3 },
+    ]
+    const line = summarizeMovement(diffHillTrail(snapshots[0], live), noChangeStreaks(snapshots, live), titles)
+    // s1 & s2 held for 2 updates (longest), s3 only 1.
+    expect(line).toBe('⏸️ No hill movement · 3 unchanged\nlongest 2 updates: "Checkout", "Login" (+1)')
+  })
+
+  it('puts movers and a quiet count on separate lines when both occur', () => {
+    const trails = diffHillTrail(
+      [
+        { scopeId: 's1', hill_progress: 5 / 14 },
+        { scopeId: 's2', hill_progress: 0.5 },
+      ],
+      [
+        { id: 's1', hill_progress: 9 / 14 }, // crossed to the known side
+        { id: 's2', hill_progress: 0.5 }, // unchanged
+      ]
+    )
+    const line = summarizeMovement(trails, noChangeStreaks([], []), titles) ?? ''
+    const [movers, quiet] = line.split('\n')
+    expect(movers).toContain('🛠️ "Checkout" making it happen (now 29%)')
+    expect(quiet).toBe('⏸️ 1 unchanged')
+  })
+
+  it('returns null when there are no scopes to report on', () => {
+    expect(summarizeMovement([], new Map(), new Map())).toBeNull()
   })
 })

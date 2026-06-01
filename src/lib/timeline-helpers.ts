@@ -1,7 +1,14 @@
-import type { PitchUpdate, NeedleSnapshot } from '@/cycle-liveblocks.config'
+import type {
+  PitchUpdate,
+  NeedleSnapshot,
+  HillSnapshot,
+  Zone,
+} from '@/cycle-liveblocks.config'
 import {
   diffHillTrail,
   rollupHillTrails,
+  noChangeStreaks,
+  summarizeMovement,
   type ScopeTrail,
   type HillTrailRollup,
 } from '@/lib/hill-trail-engine'
@@ -14,6 +21,13 @@ export type TimelineCard = {
   formattedTimestamp: string
   narrative: string
   needleSnapshot: NeedleSnapshot
+  /** Zone/needle position at the previous update — drives the deltas, mirroring Slack. */
+  previousZone: Zone | null
+  previousNeedleProgress: number | null
+  /** Timebox context frozen at post time, for the footer. */
+  weekNumber: number
+  totalWeeks: number
+  daysLeft: number
   scopesMoved: number
   slackFailed: boolean
   /**
@@ -23,6 +37,11 @@ export type TimelineCard = {
    */
   trails: ScopeTrail[]
   rollup: HillTrailRollup
+  /** Emoji movement summary (same string the Slack post used). */
+  movement: string | null
+  /** Frozen scope positions before/after this update, for the mini hill charts. */
+  beforeSnapshot: HillSnapshot[]
+  afterSnapshot: HillSnapshot[]
   /** scopeId -> display title, from the snapshots backing this card's diff. */
   scopeTitles: Record<string, string>
 }
@@ -73,6 +92,19 @@ export function deriveTimelineCards(
       if (snap.title) scopeTitles[snap.scopeId] = snap.title
     }
 
+    // The same emoji movement summary the Slack post showed: streaks come from
+    // every snapshot strictly older than this update (sorted is newest-first).
+    const priorSnapshots = sorted.slice(i + 1).map((u) => u.hill_snapshot)
+    const thisScopes = update.hill_snapshot.map((s) => ({
+      id: s.scopeId,
+      hill_progress: s.hill_progress,
+    }))
+    const movement = summarizeMovement(
+      trails,
+      noChangeStreaks(priorSnapshots, thisScopes),
+      new Map(Object.entries(scopeTitles))
+    )
+
     return {
       id: update.id,
       authorName: user?.name ?? 'Unknown',
@@ -81,10 +113,18 @@ export function deriveTimelineCards(
       formattedTimestamp: formatUpdateTimestamp(update.posted_at),
       narrative: update.narrative,
       needleSnapshot: update.needle_snapshot,
+      previousZone: prev?.needle_snapshot.zone ?? null,
+      previousNeedleProgress: prev?.needle_snapshot.progress ?? null,
+      weekNumber: update.timebox_snapshot.currentWeek,
+      totalWeeks: update.timebox_snapshot.totalWeeks,
+      daysLeft: update.timebox_snapshot.daysLeft,
       scopesMoved: rollup.moved,
       slackFailed: !!update.slack_attempted && !update.slack_delivered_at,
       trails,
       rollup,
+      movement,
+      beforeSnapshot: prev?.hill_snapshot ?? [],
+      afterSnapshot: update.hill_snapshot,
       scopeTitles,
     }
   })

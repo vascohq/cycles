@@ -1,8 +1,8 @@
 'use client'
 
 import { useRef } from 'react'
-import type { Zone } from '@/cycle-liveblocks.config'
-import { clampProgress } from '@/lib/needle-engine'
+import type { Zone, NeedleSnapshot } from '@/cycle-liveblocks.config'
+import { NEEDLE_STEP_COUNT, snapNeedleProgress } from '@/lib/needle-engine'
 import {
   type ArcConfig,
   arcPoint,
@@ -15,20 +15,23 @@ import {
 import { ZONE_COLORS, NULL_COLOR } from './zone-colors'
 
 const WIDTH = 360
-const HEIGHT = 150
+const HEIGHT = 112
 const ARC: ArcConfig = { cx: 180, cy: 360, r: 300, sweepDeg: 60 }
-const TICKS = [0, 0.25, 0.5, 0.75, 1]
-const STEP = 0.05
+// The needle moves in discrete steps; drag and arrow keys both snap to them.
+const STEP = 1 / NEEDLE_STEP_COUNT
+const TICKS = Array.from({ length: NEEDLE_STEP_COUNT + 1 }, (_, i) => i / NEEDLE_STEP_COUNT)
 
 const round = (n: number) => Math.round(n * 1000) / 1000
 
 type NeedleControlProps = {
   progress: number
   zone: Zone | null
+  /** Where the needle sat at the last update — drawn as a dimmed marker. */
+  ghost?: NeedleSnapshot | null
   onChange: (progress: number) => void
 }
 
-export function NeedleControl({ progress, zone, onChange }: NeedleControlProps) {
+export function NeedleControl({ progress, zone, ghost, onChange }: NeedleControlProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragging = useRef(false)
 
@@ -53,7 +56,7 @@ export function NeedleControl({ progress, zone, onChange }: NeedleControlProps) 
 
   function moveTo(clientX: number, clientY: number) {
     const next = progressFromEvent(clientX, clientY)
-    if (next !== null) onChange(next)
+    if (next !== null) onChange(snapNeedleProgress(next))
   }
 
   function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
@@ -83,16 +86,16 @@ export function NeedleControl({ progress, zone, onChange }: NeedleControlProps) 
   function handleKeyDown(e: React.KeyboardEvent<SVGSVGElement>) {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
       e.preventDefault()
-      onChange(clampProgress(progress - STEP))
+      onChange(snapNeedleProgress(progress - STEP))
     } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
       e.preventDefault()
-      onChange(clampProgress(progress + STEP))
+      onChange(snapNeedleProgress(progress + STEP))
     } else if (e.key === 'Home') {
       e.preventDefault()
-      onChange(clampProgress(0))
+      onChange(snapNeedleProgress(0))
     } else if (e.key === 'End') {
       e.preventDefault()
-      onChange(clampProgress(1))
+      onChange(snapNeedleProgress(1))
     }
   }
 
@@ -149,6 +152,26 @@ export function NeedleControl({ progress, zone, onChange }: NeedleControlProps) 
         strokeLinecap="round"
         strokeDasharray={`${fillLen} ${totalLength}`}
       />
+
+      {/* Ghost: where the needle sat at the last update — a solid radial line
+          across the arc, so it reads clearly as "the previous mark". */}
+      {ghost &&
+        (() => {
+          const g = arcPoint(ARC, ghost.progress)
+          const ux = (ARC.cx - g.x) / ARC.r
+          const uy = (ARC.cy - g.y) / ARC.r
+          return (
+            <line
+              x1={round(g.x - ux * 7)}
+              y1={round(g.y - uy * 7)}
+              x2={round(g.x + ux * 13)}
+              y2={round(g.y + uy * 13)}
+              stroke={ZONE_COLORS[ghost.zone]}
+              strokeWidth={3}
+              strokeLinecap="round"
+            />
+          )
+        })()}
 
       <g transform={`translate(${tip.x} ${tip.y}) rotate(${tilt})`}>
         <polygon points="-6,-13 6,-13 0,1" fill={color} />

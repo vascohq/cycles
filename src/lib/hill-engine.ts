@@ -30,15 +30,36 @@ function hillPoint(t: number): { x: number; y: number } {
   }
 }
 
-const sampledPoints = Array.from({ length: SAMPLES + 1 }, (_, i) => {
-  const t = i / SAMPLES
-  return { t, ...hillPoint(t) }
-})
+// Sample the curve, then tag each sample with its cumulative arc-length
+// fraction `s`. Reparameterizing by `s` makes equal progress steps equal
+// DISTANCE along the hill (the raw Bézier parameter bunches points near the
+// foot and stretches them near the crest). The curve shape is unchanged.
+const sampledPoints = (() => {
+  const pts = Array.from({ length: SAMPLES + 1 }, (_, i) => {
+    const t = i / SAMPLES
+    return { t, ...hillPoint(t) }
+  })
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y))
+  }
+  const total = cum[cum.length - 1] || 1
+  return pts.map((p, i) => ({ ...p, s: cum[i] / total }))
+})()
 
+// `progress` is an arc-length fraction (0..1): the point that far ALONG the hill.
 export function progressToPoint(progress: number): { x: number; y: number } {
   const p = Math.max(0, Math.min(1, progress))
-  const pt = hillPoint(p)
-  return { x: pt.x, y: pt.y }
+  let best = sampledPoints[0]
+  let bestDist = Math.abs(best.s - p)
+  for (const sp of sampledPoints) {
+    const dist = Math.abs(sp.s - p)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = sp
+    }
+  }
+  return { x: best.x, y: best.y }
 }
 
 export function pointToProgress(x: number): number {
@@ -51,7 +72,7 @@ export function pointToProgress(x: number): number {
       best = sp
     }
   }
-  return best.t
+  return best.s
 }
 
 export function clampHillProgress(progress: number): number {
