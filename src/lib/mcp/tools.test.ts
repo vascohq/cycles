@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates, handleBatch, handleCreateCycle } from './tools'
+import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates, handleBatch, handleCreateCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -317,5 +317,54 @@ describe('handleBatch', () => {
     const data = JSON.parse(result.content[0].text) as any
     expect(data.results[0].ok).toBe(false)
     expect(data.results[0].error).toContain('Unknown tool')
+  })
+})
+
+// Locks in the requirement that every MCP tool carries annotations so clients
+// (e.g. Claude) can split them into read vs. write groups and render a title.
+// A new tool registered without valid annotations fails here.
+describe('tool annotations', () => {
+  type Registered = { name: string; description: string; annotations: any }
+
+  function collectTools(): Registered[] {
+    const tools: Registered[] = []
+    const server = {
+      tool(name: string, description: string, _schema: unknown, annotations: any) {
+        tools.push({ name, description, annotations })
+      },
+    }
+    registerCyclesTools(server)
+    return tools
+  }
+
+  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'get_pitch_updates']
+  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'batch']
+
+  it('registers every tool with a title and explicit readOnlyHint', () => {
+    const tools = collectTools()
+    expect(tools.length).toBeGreaterThan(0)
+    for (const tool of tools) {
+      expect(tool.annotations, `${tool.name} is missing annotations`).toBeDefined()
+      expect(typeof tool.annotations.title, `${tool.name}.title`).toBe('string')
+      expect(tool.annotations.title.length).toBeGreaterThan(0)
+      expect(typeof tool.annotations.readOnlyHint, `${tool.name}.readOnlyHint`).toBe('boolean')
+    }
+  })
+
+  it('marks query tools read-only and mutating tools writable', () => {
+    const byName = Object.fromEntries(collectTools().map((t) => [t.name, t.annotations]))
+    for (const name of READ_TOOLS) {
+      expect(byName[name]?.readOnlyHint, `${name} should be read-only`).toBe(true)
+    }
+    for (const name of Object.keys(byName).filter((n) => !READ_TOOLS.includes(n))) {
+      expect(byName[name]?.readOnlyHint, `${name} should be writable`).toBe(false)
+    }
+  })
+
+  it('flags delete and batch tools as destructive', () => {
+    const byName = Object.fromEntries(collectTools().map((t) => [t.name, t.annotations]))
+    for (const name of DESTRUCTIVE_TOOLS) {
+      expect(byName[name]?.destructiveHint, `${name} should be destructive`).toBe(true)
+    }
   })
 })
