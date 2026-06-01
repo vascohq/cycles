@@ -295,6 +295,45 @@ export async function upsertParkingItem(
   return { created, id }
 }
 
+// ── Updates ──
+
+// Append a needle update and denormalize the pitch's `needle` to its snapshot,
+// mirroring the client `pushUpdate` mutation in scope-map.tsx. The `built`
+// update is produced by the pure `buildUpdate` engine; any slack_attempted flag
+// already set on it is persisted as-is.
+export async function pushUpdate(
+  roomId: string,
+  built: PitchUpdate
+): Promise<void> {
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    root.get('updates').push(new LiveObject(built))
+    const pitch = root
+      .get('pitches')
+      .find((p: any) => getField(p, 'id') === built.pitchId)
+    if (pitch) {
+      pitch.set('needle', {
+        progress: built.needle_snapshot.progress,
+        zone: built.needle_snapshot.zone,
+      })
+    }
+  })
+}
+
+// Stamp the delivery timestamp on an update once Slack confirms receipt — the
+// server-side twin of the client `markSlackDelivered` mutation.
+export async function markSlackDelivered(
+  roomId: string,
+  updateId: string,
+  deliveredAt: string
+): Promise<void> {
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    const update = root
+      .get('updates')
+      .find((u: any) => getField(u, 'id') === updateId)
+    if (update) update.set('slack_delivered_at', deliveredAt)
+  })
+}
+
 // ── Deletes ──
 
 export async function deletePitch(roomId: string, pitchId: string): Promise<void> {
