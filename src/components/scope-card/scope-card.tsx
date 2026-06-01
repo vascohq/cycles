@@ -3,7 +3,7 @@
 import { forwardRef, useState } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { TIER_COLORS } from '@/components/hill-chart/tier-colors'
-import { Check, Plus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { Check, Plus, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -174,6 +174,7 @@ function TaskRow({
           if (e.key === 'Enter') save()
           if (e.key === 'Escape') { setValue(task.title); setEditing(false) }
         }}
+        onFocus={(e) => e.currentTarget.select()}
         onBlur={save}
         className="w-full text-xs bg-transparent border-b border-foreground/30 py-0.5 outline-none flex-shrink-0"
         autoFocus
@@ -227,7 +228,7 @@ function TaskRow({
               onClick={onDelete}
               className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors"
             >
-              <Trash2 className="w-3 h-3" />
+              <X className="w-3 h-3" />
             </button>
           )}
         </div>
