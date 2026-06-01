@@ -351,8 +351,19 @@ function ScopeMapWired({
   const latestUpdate = pitchUpdates.length
     ? pitchUpdates.reduce((a, b) => (a.posted_at > b.posted_at ? a : b))
     : null
-  const hillTrails = latestUpdate
-    ? diffHillTrail(latestUpdate.hill_snapshot, hillScopes)
+  // The "before" snapshot. On the first-ever update there's no prior one, so
+  // baseline every scope at 0% — the first move still gets a before/after diff
+  // (everything starting from the foot of the hill).
+  const baselineSnapshot = latestUpdate
+    ? latestUpdate.hill_snapshot
+    : hillScopes.map((s) => ({
+        scopeId: s.id,
+        hill_progress: 0,
+        title: s.title,
+        tier: s.tier,
+      }))
+  const hillTrails = hillScopes.length
+    ? diffHillTrail(baselineSnapshot, hillScopes)
     : []
   // Zone delta and hill movement are framed against the previous update; both
   // feed the Slack message and its live preview, so derive them once here.
@@ -365,9 +376,9 @@ function ScopeMapWired({
     noChangeStreaks(snapshotsNewestFirst, hillScopes),
     new Map(hillScopes.map((s) => [s.id, s.title]))
   )
-  // Scope positions frozen at the last update — the "before" for the modal's
-  // before/after hill comparison.
-  const previousHillScopes = (latestUpdate?.hill_snapshot ?? []).map((h, i) => ({
+  // "Before" scopes for the modal's before/after comparison — the last update's
+  // positions, or the 0% baseline on the first move.
+  const previousHillScopes = baselineSnapshot.map((h, i) => ({
     id: h.scopeId,
     title: h.title ?? '',
     tier: h.tier ?? ('should' as const),
