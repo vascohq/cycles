@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatSlackMessage, type SlackMessageParams } from './slack-message'
+import { formatSlackMessage, slackMessageSchema, type SlackMessageParams } from './slack-message'
 
 const BASE_PARAMS: SlackMessageParams = {
   pitchTitle: 'Mission Control',
@@ -52,5 +52,21 @@ describe('formatSlackMessage', () => {
     const msg = formatSlackMessage(BASE_PARAMS)
     const epoch = Math.floor(new Date('2026-06-10T14:30:00Z').getTime() / 1000)
     expect(msg.text).toContain(`<!date^${epoch}^{date_short_pretty} at {time}|`)
+  })
+})
+
+describe('slackMessageSchema pitchUrl', () => {
+  it('accepts https URLs', () => {
+    expect(slackMessageSchema.safeParse(BASE_PARAMS).success).toBe(true)
+  })
+
+  it('accepts http://localhost URLs for local dev', () => {
+    const params = { ...BASE_PARAMS, pitchUrl: 'http://localhost:3000/vasco/cycles/c/p' }
+    expect(slackMessageSchema.safeParse(params).success).toBe(true)
+  })
+
+  it('rejects non-localhost http URLs', () => {
+    const params = { ...BASE_PARAMS, pitchUrl: 'http://evil.example.com/redirect' }
+    expect(slackMessageSchema.safeParse(params).success).toBe(false)
   })
 })

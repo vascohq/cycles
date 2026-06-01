@@ -323,6 +323,9 @@ function ScopeMapWired({
         if (res.ok) {
           const { delivered_at } = (await res.json()) as { delivered_at: string }
           markSlackDelivered(updateId, delivered_at)
+        } else {
+          const body = await res.text()
+          console.warn(`Slack delivery failed (${res.status})`, body)
         }
       } catch (err) {
         console.warn('Slack delivery failed', err)
