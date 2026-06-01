@@ -4,7 +4,10 @@ export type TrailLabel =
   | "Didn't move"
   | 'Nudged forward'
   | 'Lots of progress'
-  | 'Over the hill'
+  | 'At the top'
+  | 'Crossed the hill'
+  | 'Heading down'
+  | 'Done'
   | 'Slid back'
   | 'New'
   | 'Dropped'
@@ -50,17 +53,24 @@ export function hillStepIndex(progress: number): number {
   return Math.round(clamped * HILL_STEP_COUNT)
 }
 
-// Label describes the delta — it never renders a verdict (no auto "at risk").
+// Label describes the delta against the hill metaphor: climb up the unknown
+// side, reach the top (crest), cross over and head down the known side, and
+// finally reach done. Never a verdict — a slide back is just movement.
 function movedLabel(
   fromProgress: number,
   toProgress: number,
   stepDelta: number
 ): TrailLabel {
   if (stepDelta < 0) return 'Slid back'
-  const crossedCrest =
-    hillStepIndex(fromProgress) < CREST_STEP &&
-    hillStepIndex(toProgress) >= CREST_STEP
-  if (crossedCrest) return 'Over the hill'
+  if (toProgress >= 0.999) return 'Done' // reached the bottom of the far side
+  const fromStep = hillStepIndex(fromProgress)
+  const toStep = hillStepIndex(toProgress)
+  if (toStep === CREST_STEP) return 'At the top' // landed on the crest
+  if (toStep > CREST_STEP) {
+    // On the downhill / known side: distinguish the moment of crossing.
+    return fromStep <= CREST_STEP ? 'Crossed the hill' : 'Heading down'
+  }
+  // Still climbing the unknown side.
   return stepDelta >= 3 ? 'Lots of progress' : 'Nudged forward'
 }
 
@@ -99,9 +109,11 @@ const NAMED_CAP = 3 // most movers named before overflowing to "+N more"
 const QUIET_NAME_CAP = 3 // most longest-streak names listed for the quiet group
 const BIG_MOVE_STEPS = 3 // step delta that counts as a "big" climb / slide
 
-// Emoji vocabulary for the hill metaphor — magnitude is built in.
+// Emoji vocabulary for the hill metaphor — magnitude and stage are built in.
 const EMOJI = {
-  overHill: '⛰️',
+  done: '🎉',
+  atTop: '⛰️',
+  crossed: '🏂',
   bigClimb: '⏫',
   nudge: '🔼',
   slidBack: '🔻',
@@ -129,14 +141,27 @@ function moverSegment(
   if (trail.state === 'dropped') return { kind: 'named', text: `${EMOJI.dropped} ${name}` }
   if (trail.state !== 'moved') return null
 
-  if (trail.label === 'Over the hill')
-    return { kind: 'named', text: `${EMOJI.overHill} ${name} over the hill` }
   const d = trail.stepDelta
-  if (d >= BIG_MOVE_STEPS) return { kind: 'named', text: `${EMOJI.bigClimb} ${name} big climb` }
-  if (d > 0) return { kind: 'nudge', text: name }
-  if (d <= -BIG_MOVE_STEPS)
-    return { kind: 'named', text: `${EMOJI.slidWayBack} ${name} slid way back` }
-  return { kind: 'named', text: `${EMOJI.slidBack} ${name} slid back` }
+  switch (trail.label) {
+    case 'Done':
+      return { kind: 'named', text: `${EMOJI.done} ${name} done!` }
+    case 'At the top':
+      return { kind: 'named', text: `${EMOJI.atTop} ${name} at the top` }
+    case 'Crossed the hill':
+      return { kind: 'named', text: `${EMOJI.crossed} ${name} crossed the hill` }
+    case 'Heading down':
+      return { kind: 'named', text: `${EMOJI.crossed} ${name} heading down` }
+    case 'Lots of progress':
+      return { kind: 'named', text: `${EMOJI.bigClimb} ${name} big climb` }
+    case 'Nudged forward':
+      return { kind: 'nudge', text: name }
+    case 'Slid back':
+      return d <= -BIG_MOVE_STEPS
+        ? { kind: 'named', text: `${EMOJI.slidWayBack} ${name} slid way back` }
+        : { kind: 'named', text: `${EMOJI.slidBack} ${name} slid back` }
+    default:
+      return null
+  }
 }
 
 // Builds the digestible hill-movement summary: an emoji-led line naming the

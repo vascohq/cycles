@@ -175,22 +175,48 @@ describe('diffHillTrail', () => {
     expect(trail.label).toBe('Slid back')
   })
 
-  it('labels a forward crest crossing "Over the hill"', () => {
+  it('labels landing on the crest "At the top"', () => {
+    const [trail] = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 3 / 14 }],
+      [{ id: 's1', hill_progress: 0.5 }]
+    )
+
+    expect(trail.label).toBe('At the top')
+  })
+
+  it('labels crossing the crest onto the downhill side "Crossed the hill"', () => {
     const [trail] = diffHillTrail(
       [{ scopeId: 's1', hill_progress: 5 / 14 }],
       [{ id: 's1', hill_progress: 9 / 14 }]
     )
 
-    expect(trail.label).toBe('Over the hill')
+    expect(trail.label).toBe('Crossed the hill')
   })
 
-  it('does not label a forward move that stays below the crest "Over the hill"', () => {
+  it('labels further downhill progress (already past the crest) "Heading down"', () => {
+    const [trail] = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 9 / 14 }],
+      [{ id: 's1', hill_progress: 12 / 14 }]
+    )
+
+    expect(trail.label).toBe('Heading down')
+  })
+
+  it('labels reaching the end "Done"', () => {
+    const [trail] = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 11 / 14 }],
+      [{ id: 's1', hill_progress: 1 }]
+    )
+
+    expect(trail.label).toBe('Done')
+  })
+
+  it('does not call a forward move below the crest "At the top"', () => {
     const [trail] = diffHillTrail(
       [{ scopeId: 's1', hill_progress: 1 / 14 }],
       [{ id: 's1', hill_progress: 6 / 14 }]
     )
 
-    expect(trail.label).not.toBe('Over the hill')
     expect(trail.label).toBe('Lots of progress')
   })
 
@@ -269,13 +295,22 @@ describe('summarizeMovement', () => {
     ['s3', 'Auth'],
   ])
 
-  it('names a scope that went over the hill with the peak emoji', () => {
+  it('names a scope that reached the top', () => {
     const trails = diffHillTrail(
-      [{ scopeId: 's1', hill_progress: 5 / 14 }],
-      [{ id: 's1', hill_progress: 9 / 14 }]
+      [{ scopeId: 's1', hill_progress: 3 / 14 }],
+      [{ id: 's1', hill_progress: 0.5 }]
     )
     const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
-    expect(line).toContain('⛰️ Checkout over the hill')
+    expect(line).toContain('⛰️ Checkout at the top')
+  })
+
+  it('celebrates a scope that reached done', () => {
+    const trails = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 11 / 14 }],
+      [{ id: 's1', hill_progress: 1 }]
+    )
+    const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
+    expect(line).toContain('🎉 Checkout done!')
   })
 
   it('distinguishes a big climb from a small nudge', () => {
@@ -366,13 +401,13 @@ describe('summarizeMovement', () => {
         { scopeId: 's2', hill_progress: 0.5 },
       ],
       [
-        { id: 's1', hill_progress: 9 / 14 }, // over the hill
+        { id: 's1', hill_progress: 9 / 14 }, // crossed the hill
         { id: 's2', hill_progress: 0.5 }, // unchanged
       ]
     )
     const line = summarizeMovement(trails, noChangeStreaks([], []), titles) ?? ''
     const [movers, quiet] = line.split('\n')
-    expect(movers).toContain('⛰️ Checkout over the hill')
+    expect(movers).toContain('🏂 Checkout crossed the hill')
     expect(quiet).toBe('⏸️ 1 unchanged')
   })
 

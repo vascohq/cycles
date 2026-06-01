@@ -68,8 +68,8 @@ export const WithTrails: Story = {
       { scopeId: '2', state: 'moved', fromProgress: 0.6, toProgress: 0.4, stepDelta: -3, label: 'Slid back' },
       // didn't move — no trail rendered
       { scopeId: '3', state: 'stagnant', fromProgress: 0.6, toProgress: 0.6, stepDelta: 0, label: "Didn't move" },
-      // crept over the crest
-      { scopeId: '4', state: 'moved', fromProgress: 0.5, toProgress: 0.85, stepDelta: 5, label: 'Over the hill' },
+      // crossed the crest onto the downhill side
+      { scopeId: '4', state: 'moved', fromProgress: 0.5, toProgress: 0.85, stepDelta: 5, label: 'Crossed the hill' },
     ],
   },
 }
