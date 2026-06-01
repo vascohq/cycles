@@ -324,7 +324,7 @@ describe('summarizeMovement', () => {
       [{ scopeId: 's1', hill_progress: 1 / 14 }],
       [{ id: 's1', hill_progress: 2 / 14 }]
     )
-    expect(summarizeMovement(nudge, new Map(), titles)).toBe('🔼 +1 nudged')
+    expect(summarizeMovement(nudge, new Map(), titles)).toBe('🔼 Checkout nudged up')
   })
 
   it('distinguishes sliding back a little from a lot', () => {
@@ -351,7 +351,7 @@ describe('summarizeMovement', () => {
     expect(line).toContain('❌ Auth')
   })
 
-  it('collapses small nudges into a single count', () => {
+  it('names each nudged scope', () => {
     const trails = diffHillTrail(
       [
         { scopeId: 's1', hill_progress: 1 / 14 },
@@ -362,7 +362,9 @@ describe('summarizeMovement', () => {
         { id: 's2', hill_progress: 3 / 14 },
       ]
     )
-    expect(summarizeMovement(trails, new Map(), titles)).toBe('🔼 +2 nudged')
+    expect(summarizeMovement(trails, new Map(), titles)).toBe(
+      '🔼 Checkout nudged up · 🔼 Login nudged up'
+    )
   })
 
   it('caps named movers and overflows the rest into "+N more"', () => {

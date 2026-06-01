@@ -80,11 +80,17 @@ describe('formatSlackMessage blocks', () => {
     expect(hasQuote).toBe(false)
   })
 
-  it('celebrates a forward needle move with the delta and from→to', () => {
-    const text = allText(
+  it('celebrates only when the needle reaches 100% (done)', () => {
+    const done = allText(
+      formatSlackMessage({ ...BASE_PARAMS, previousNeedleProgress: 0.9, needleProgress: 1 }).blocks
+    )
+    expect(done).toContain('🎉 Needle at 100% — done!')
+
+    // An ordinary forward move (not to 100%) gets no needle line.
+    const forward = allText(
       formatSlackMessage({ ...BASE_PARAMS, previousNeedleProgress: 0.48, needleProgress: 0.6 }).blocks
     )
-    expect(text).toContain('🎉 Needle moved forward 12% (48% → 60%)')
+    expect(forward).not.toContain('🎉')
   })
 
   it('reports a backward needle move as a neutral regression, not a celebration', () => {

@@ -130,44 +130,39 @@ function trailTitle(trail: ScopeTrail, titles: Map<string, string>): string {
   return trail.scopeId
 }
 
-// A single mover rendered with its emoji. Small forward nudges return kind
-// 'nudge' so they can be collapsed into one count; everything else is 'named'.
-function moverSegment(
-  trail: ScopeTrail,
-  titles: Map<string, string>
-): { kind: 'named' | 'nudge'; text: string } | null {
+// A single mover rendered with its emoji + named scope. Null for non-movers.
+function moverSegment(trail: ScopeTrail, titles: Map<string, string>): string | null {
   const name = trailTitle(trail, titles)
-  if (trail.state === 'new') return { kind: 'named', text: `${EMOJI.new} ${name}` }
-  if (trail.state === 'dropped') return { kind: 'named', text: `${EMOJI.dropped} ${name}` }
+  if (trail.state === 'new') return `${EMOJI.new} ${name}`
+  if (trail.state === 'dropped') return `${EMOJI.dropped} ${name}`
   if (trail.state !== 'moved') return null
 
-  const d = trail.stepDelta
   switch (trail.label) {
     case 'Done':
-      return { kind: 'named', text: `${EMOJI.done} ${name} done!` }
+      return `${EMOJI.done} ${name} done!`
     case 'At the top':
-      return { kind: 'named', text: `${EMOJI.atTop} ${name} at the top` }
+      return `${EMOJI.atTop} ${name} at the top`
     case 'Crossed the hill':
-      return { kind: 'named', text: `${EMOJI.crossed} ${name} crossed the hill` }
+      return `${EMOJI.crossed} ${name} crossed the hill`
     case 'Heading down':
-      return { kind: 'named', text: `${EMOJI.crossed} ${name} heading down` }
+      return `${EMOJI.crossed} ${name} heading down`
     case 'Lots of progress':
-      return { kind: 'named', text: `${EMOJI.bigClimb} ${name} big climb` }
+      return `${EMOJI.bigClimb} ${name} big climb`
     case 'Nudged forward':
-      return { kind: 'nudge', text: name }
+      return `${EMOJI.nudge} ${name} nudged up`
     case 'Slid back':
-      return d <= -BIG_MOVE_STEPS
-        ? { kind: 'named', text: `${EMOJI.slidWayBack} ${name} slid way back` }
-        : { kind: 'named', text: `${EMOJI.slidBack} ${name} slid back` }
+      return trail.stepDelta <= -BIG_MOVE_STEPS
+        ? `${EMOJI.slidWayBack} ${name} slid way back`
+        : `${EMOJI.slidBack} ${name} slid back`
     default:
       return null
   }
 }
 
 // Builds the digestible hill-movement summary: an emoji-led line naming the
-// movers (small nudges collapsed into a count, the rest capped with "+N more"),
-// and a separate line that collapses the quiet scopes into a count while naming
-// only the longest no-change streaks. Returns null when there's nothing to say.
+// movers (capped with "+N more"), and a separate line that collapses the quiet
+// scopes into a count while naming only the longest no-change streaks. Returns
+// null when there's nothing to say.
 export function summarizeMovement(
   trails: ScopeTrail[],
   streaks: Map<string, number>,
@@ -176,18 +171,14 @@ export function summarizeMovement(
   if (trails.length === 0) return null
 
   const named: string[] = []
-  let nudges = 0
   for (const trail of trails) {
     const seg = moverSegment(trail, titles)
-    if (!seg) continue
-    if (seg.kind === 'nudge') nudges++
-    else named.push(seg.text)
+    if (seg) named.push(seg)
   }
   const moverSegments =
     named.length > NAMED_CAP
       ? [...named.slice(0, NAMED_CAP), `+${named.length - NAMED_CAP} more`]
       : [...named]
-  if (nudges > 0) moverSegments.push(`${EMOJI.nudge} +${nudges} nudged`)
   const moversLine = moverSegments.join(' · ')
 
   const quiet = trails

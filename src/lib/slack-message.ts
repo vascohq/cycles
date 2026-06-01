@@ -61,20 +61,20 @@ function formatSlackDate(iso: string): string {
   return `<!date^${epoch}^{date_short_pretty} at {time}|${iso}>`
 }
 
-// The needle is "how far along": forward movement is progress worth celebrating,
-// backward movement is an honest regression worth surfacing. Returns a line for
-// either (compared in whole percent); a hold or no prior position stays silent.
-// Shared by Slack and the preview so they can't drift.
+// The needle is "how far along". Celebrate only when it reaches 100% (done);
+// surface a regression honestly; otherwise stay silent (ordinary forward
+// progress needs no line). Shared by Slack and the preview so they can't drift.
 export function needleProgressNote(
   previousProgress: number | null,
   progress: number
 ): string | null {
-  if (previousProgress === null) return null
-  const from = Math.round(previousProgress * 100)
   const to = Math.round(progress * 100)
-  if (to === from) return null
-  if (to > from) return `🎉 Needle moved forward ${to - from}% (${from}% → ${to}%)`
-  return `🔻 Needle slipped back ${from - to}% (${from}% → ${to}%)`
+  const from = previousProgress === null ? null : Math.round(previousProgress * 100)
+  // Reached the finish line this update.
+  if (to >= 100 && (from === null || from < 100)) return '🎉 Needle at 100% — done!'
+  if (from === null || to === from) return null
+  if (to < from) return `🔻 Needle slipped back ${from - to}% (${from}% → ${to}%)`
+  return null
 }
 
 export function formatSlackMessage(params: SlackMessageParams): {

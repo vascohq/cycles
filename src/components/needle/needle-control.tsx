@@ -15,7 +15,7 @@ import {
 import { ZONE_COLORS, NULL_COLOR } from './zone-colors'
 
 const WIDTH = 360
-const HEIGHT = 150
+const HEIGHT = 112
 const ARC: ArcConfig = { cx: 180, cy: 360, r: 300, sweepDeg: 60 }
 // The needle moves in discrete steps; drag and arrow keys both snap to them.
 const STEP = 1 / NEEDLE_STEP_COUNT

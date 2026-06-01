@@ -234,8 +234,8 @@ export function MoveNeedleModal({
                   {movementPreview}
                 </p>
               )}
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <div className="rounded-lg border bg-muted/20 p-2">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+                <div className="rounded-lg border bg-muted/20 p-2 h-full">
                   <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground mb-1 px-1">
                     Before · last update
                   </div>
@@ -247,14 +247,13 @@ export function MoveNeedleModal({
                     fadeOthers
                   />
                 </div>
-                <div className="text-muted-foreground text-lg px-1">→</div>
-                <div className="rounded-lg border bg-muted/20 p-2">
+                <div className="flex items-center text-muted-foreground text-lg px-1">→</div>
+                <div className="rounded-lg border bg-muted/20 p-2 h-full">
                   <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground mb-1 px-1">
                     After · now
                   </div>
                   <HillChart
                     scopes={hillScopes}
-                    trails={hillTrails}
                     dotRadius={7}
                     highlightedScopeId={highlightedScopeId}
                     onScopeHover={setHighlightedScopeId}
@@ -265,21 +264,6 @@ export function MoveNeedleModal({
             </div>
           )}
 
-          {/* On-demand Slack preview, toggled from the footer. */}
-          {slackEnabled && showPreview && (
-            <SlackPreview
-              pitchTitle={pitchTitle}
-              weekLabel={weekLabel}
-              zone={zone}
-              previousZone={previousZone}
-              narrative={narrative}
-              movement={movementPreview}
-              needleProgress={progress}
-              previousNeedleProgress={previousNeedleProgress}
-              authorName={userName}
-              daysLeft={daysLeft}
-            />
-          )}
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
@@ -309,6 +293,34 @@ export function MoveNeedleModal({
           </div>
         </DialogFooter>
       </DialogContent>
+
+      {/* Slack preview opens in its own dialog, off the "Preview" button. */}
+      {slackEnabled && (
+        <Dialog open={showPreview} onOpenChange={setShowPreview}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-semibold tracking-tight">
+                Slack preview
+              </DialogTitle>
+              <DialogDescription className="font-mono text-xs">
+                How this update will read in Slack
+              </DialogDescription>
+            </DialogHeader>
+            <SlackPreview
+              pitchTitle={pitchTitle}
+              weekLabel={weekLabel}
+              zone={zone}
+              previousZone={previousZone}
+              narrative={narrative}
+              movement={movementPreview}
+              needleProgress={progress}
+              previousNeedleProgress={previousNeedleProgress}
+              authorName={userName}
+              daysLeft={daysLeft}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   )
 }

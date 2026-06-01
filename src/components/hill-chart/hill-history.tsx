@@ -90,10 +90,9 @@ export function HillHistory({
 
       <HillChart
         scopes={isLive ? scopes : frame!.scopes}
-        // Live view shows clean current positions — no trail ghosts (jarring on
-        // the main chart). Movement now lives in the before/after charts. The
-        // historical scrub frames keep their trails for comparison.
-        trails={isLive ? [] : frame!.trails}
+        // No trail ghosts on any hill — movement now reads from the before/after
+        // charts in the modal and update cards.
+        trails={[]}
         highlightedScopeId={highlightedScopeId}
         onScopeHover={onScopeHover}
         dotRadius={7}
