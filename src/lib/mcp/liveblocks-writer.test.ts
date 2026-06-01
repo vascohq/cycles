@@ -22,7 +22,10 @@ import {
   deleteTask,
   deleteParkingItem,
   deleteUpdate,
+  pushUpdate,
+  markSlackDelivered,
 } from './liveblocks-writer'
+import type { PitchUpdate } from '@/cycle-liveblocks.config'
 
 const mockGetRoom = vi.mocked(liveblocks.getRoom)
 const mockCreateRoom = vi.mocked(liveblocks.createRoom)
@@ -433,5 +436,55 @@ describe('deleteUpdate', () => {
   it('throws when the update is not found', async () => {
     setupStorage()
     await expect(deleteUpdate(ROOM, 'nope')).rejects.toThrow('not found')
+  })
+})
+
+describe('pushUpdate', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mkBuilt = (overrides: Partial<PitchUpdate> = {}): PitchUpdate => ({
+    id: 'up_new',
+    pitchId: 'p1',
+    posted_at: '2026-06-10T10:00:00Z',
+    posted_by: 'user_1',
+    narrative: 'Shipped the gauge',
+    needle_snapshot: { progress: 0.8, zone: 'on_track' },
+    hill_snapshot: [],
+    task_snapshot: [],
+    timebox_snapshot: { daysLeft: 13, currentWeek: 3, totalWeeks: 6 },
+    ...overrides,
+  })
+
+  it('appends the update and denormalizes the pitch needle', async () => {
+    const pitch = makeMockItem({ id: 'p1', needle: { progress: 0.5, zone: 'some_risk' } })
+    const storage = setupStorage({ pitches: [pitch], updates: [] })
+
+    await pushUpdate(ROOM, mkBuilt())
+
+    expect(storage.updates.toArray()).toHaveLength(1)
+    expect(storage.updates.toArray()[0].get('id')).toBe('up_new')
+    expect(pitch.get('needle')).toEqual({ progress: 0.8, zone: 'on_track' })
+  })
+
+  it('preserves a slack_attempted flag set on the built update', async () => {
+    const pitch = makeMockItem({ id: 'p1', needle: null })
+    const storage = setupStorage({ pitches: [pitch], updates: [] })
+
+    await pushUpdate(ROOM, mkBuilt({ slack_attempted: true }))
+
+    expect(storage.updates.toArray()[0].get('slack_attempted')).toBe(true)
+  })
+})
+
+describe('markSlackDelivered', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('stamps slack_delivered_at on the matching update', async () => {
+    const update = makeMockItem({ id: 'up_new', pitchId: 'p1', slack_attempted: true })
+    setupStorage({ updates: [update] })
+
+    await markSlackDelivered(ROOM, 'up_new', '2026-06-10T10:05:00Z')
+
+    expect(update.get('slack_delivered_at')).toBe('2026-06-10T10:05:00Z')
   })
 })

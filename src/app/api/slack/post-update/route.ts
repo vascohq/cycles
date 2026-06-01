@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { formatSlackMessage, slackMessageSchema } from '@/lib/slack-message'
+import { slackMessageSchema } from '@/lib/slack-message'
+import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 
 export async function POST(request: Request) {
   const { userId } = await auth()
@@ -8,8 +9,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL
-  if (!webhookUrl) {
+  if (!isSlackConfigured()) {
     return NextResponse.json(
       { error: 'SLACK_WEBHOOK_URL not configured' },
       { status: 503 }
@@ -24,24 +24,14 @@ export async function POST(request: Request) {
     )
   }
 
-  const payload = formatSlackMessage(parsed.data)
+  const result = await deliverSlackUpdate(parsed.data)
 
-  const slackRes = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-
-  if (!slackRes.ok) {
-    const slackBody = await slackRes.text()
+  if (!result.ok) {
     return NextResponse.json(
-      { error: 'Slack delivery failed', detail: slackBody },
+      { error: 'Slack delivery failed', detail: result.error },
       { status: 502 }
     )
   }
 
-  return NextResponse.json({
-    ok: true,
-    delivered_at: new Date().toISOString(),
-  })
+  return NextResponse.json({ ok: true, delivered_at: result.delivered_at })
 }
