@@ -4,6 +4,13 @@ import { parseSlugPath, isValidSlugSegment } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
 import { slugify } from '@/lib/slugify'
 import { derivePitchCards } from '@/lib/mission-control-helpers'
+import { deriveTotalTaskProgress } from '@/lib/scope-map-helpers'
+import { buildUpdate } from '@/lib/update-engine'
+import { computeTimebox } from '@/lib/timebox-engine'
+import { formatSlackMessage, type SlackMessageParams } from '@/lib/slack-message'
+import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
+import { resolveOrigin } from './origin'
+import type { Zone } from '@/cycle-liveblocks.config'
 import {
   createCycle,
   upsertPitch,
@@ -15,6 +22,8 @@ import {
   deleteTask,
   deleteParkingItem,
   deleteUpdate,
+  pushUpdate,
+  markSlackDelivered,
 } from './liveblocks-writer'
 
 const orgArg = {
@@ -157,7 +166,7 @@ export async function handleGetPitch(
   }
 }
 
-export async function handleGetPitchUpdates(
+export async function handleListUpdates(
   orgId: string,
   cycleSlug: string,
   pitchSlug: string
@@ -177,6 +186,150 @@ export async function handleGetPitchUpdates(
   }
 }
 
+// ── Post / preview update ──
+
+type UpdateInput = { progress: number; zone: Zone; narrative: string }
+
+// Shared context both preview and post resolve from current storage: the live
+// task rollup, the timebox-derived week/days-left, and the Slack params (minus
+// postedAt, which each caller stamps — post uses the built update's timestamp).
+function resolveUpdateContext(
+  storage: Awaited<ReturnType<typeof getCycleStorage>>,
+  pitch: { id: string; title: string; timebox_start: string; timebox_end: string },
+  orgSlug: string,
+  cycleSlug: string,
+  input: UpdateInput
+) {
+  const pitchScopes = storage.scopes.filter((s) => s.pitchId === pitch.id)
+  const pitchTasks = storage.tasks.filter((t) =>
+    pitchScopes.some((s) => s.id === t.scopeId)
+  )
+  const today = new Date().toISOString().slice(0, 10)
+  const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
+  const totals = deriveTotalTaskProgress(storage.scopes, storage.tasks, pitch.id)
+  const pitchUrl = `${resolveOrigin()}/${orgSlug}/cycles/${cycleSlug}/${slugify(pitch.title)}`
+
+  const slackParams = (postedAt: string): SlackMessageParams => ({
+    pitchTitle: pitch.title,
+    weekNumber: timebox.currentWeek,
+    totalWeeks: timebox.totalWeeks,
+    zone: input.zone,
+    narrative: input.narrative,
+    tasksDone: totals.done,
+    tasksTotal: totals.total,
+    daysLeft: timebox.daysLeft,
+    pitchUrl,
+    postedAt,
+  })
+
+  return { pitchScopes, pitchTasks, timebox, totals, pitchUrl, slackParams }
+}
+
+export async function handlePreviewUpdate(
+  orgId: string,
+  orgSlug: string,
+  cycleSlug: string,
+  pitchSlug: string,
+  input: UpdateInput
+): Promise<ToolResult> {
+  let storage: Awaited<ReturnType<typeof getCycleStorage>>
+  try {
+    storage = await getCycleStorage(orgId, cycleSlug)
+  } catch {
+    return errorResult(`Cycle not found: "${cycleSlug}"`)
+  }
+  const pitch = resolvePitch(storage, pitchSlug)
+  if (!pitch) return errorResult(`Pitch not found: "${pitchSlug}" in cycle "${cycleSlug}"`)
+
+  const ctx = resolveUpdateContext(storage, pitch, orgSlug, cycleSlug, input)
+  const postedAt = new Date().toISOString()
+  const slack_text = formatSlackMessage(ctx.slackParams(postedAt)).text
+
+  return jsonResult({
+    slack_text,
+    would_deliver: isSlackConfigured(),
+    resolved: {
+      weekNumber: ctx.timebox.currentWeek,
+      totalWeeks: ctx.timebox.totalWeeks,
+      tasksDone: ctx.totals.done,
+      tasksTotal: ctx.totals.total,
+      daysLeft: ctx.timebox.daysLeft,
+      pitch_url: ctx.pitchUrl,
+    },
+  })
+}
+
+export async function handlePostUpdate(
+  orgId: string,
+  orgSlug: string,
+  cycleSlug: string,
+  pitchSlug: string,
+  userId: string,
+  input: UpdateInput
+): Promise<ToolResult> {
+  let storage: Awaited<ReturnType<typeof getCycleStorage>>
+  try {
+    storage = await getCycleStorage(orgId, cycleSlug)
+  } catch {
+    return errorResult(`Cycle not found: "${cycleSlug}"`)
+  }
+  const pitch = resolvePitch(storage, pitchSlug)
+  if (!pitch) return errorResult(`Pitch not found: "${pitchSlug}" in cycle "${cycleSlug}"`)
+
+  const ctx = resolveUpdateContext(storage, pitch, orgSlug, cycleSlug, input)
+  const roomId = `${orgId}:cycle:${cycleSlug}`
+
+  const built = buildUpdate({
+    pitchId: pitch.id,
+    userId,
+    progress: input.progress,
+    zone: input.zone,
+    narrative: input.narrative,
+    currentNeedle: pitch.needle,
+    scopes: ctx.pitchScopes.map((s) => ({
+      id: s.id,
+      hill_progress: s.hill_progress,
+      title: s.title,
+      tier: s.tier,
+    })),
+    tasks: ctx.pitchTasks.map((t) => ({ scopeId: t.scopeId, done: t.done })),
+    timebox: {
+      daysLeft: ctx.timebox.daysLeft,
+      currentWeek: ctx.timebox.currentWeek,
+      totalWeeks: ctx.timebox.totalWeeks,
+    },
+  })
+
+  // Mark the intent to deliver before persisting, mirroring the app's
+  // markSlackAttempted → deliver → markSlackDelivered sequence.
+  const enabled = isSlackConfigured()
+  if (enabled) built.slack_attempted = true
+
+  try {
+    await pushUpdate(roomId, built)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+
+  // Slack failure is non-fatal — the update is already persisted.
+  let slack: 'delivered' | 'failed' | 'disabled' = 'disabled'
+  if (enabled) {
+    const result = await deliverSlackUpdate(ctx.slackParams(built.posted_at))
+    if (result.ok) {
+      await markSlackDelivered(roomId, built.id, result.delivered_at)
+      slack = 'delivered'
+    } else {
+      slack = 'failed'
+    }
+  }
+
+  return jsonResult({
+    update_id: built.id,
+    needle: { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone },
+    slack,
+  })
+}
+
 // ── Write tool handlers ──
 
 type BatchOp = { tool: string; params: Record<string, unknown> }
@@ -194,7 +347,7 @@ const WRITE_TOOLS: Record<
   delete_scope: (roomId, p) => deleteScope(roomId, p.id).then(() => undefined),
   delete_task: (roomId, p) => deleteTask(roomId, p.id).then(() => undefined),
   delete_parking_item: (roomId, p) => deleteParkingItem(roomId, p.id).then(() => undefined),
-  delete_update: (roomId, p) => deleteUpdate(roomId, p.id).then(() => undefined),
+  undo_update: (roomId, p) => deleteUpdate(roomId, p.id).then(() => undefined),
 }
 
 export async function handleBatch(
@@ -358,10 +511,10 @@ export function registerCyclesTools(server: any): void {
 
   defineTool(
     server,
-    'get_pitch_updates',
+    'list_updates',
     'Get update history for a pitch, newest first',
     { ...orgArg, ...slugPathArg },
-    { title: 'Get pitch updates', readOnlyHint: true, openWorldHint: false },
+    { title: 'List updates', readOnlyHint: true, openWorldHint: false },
     async (
       { org, slug_path }: { org?: string; slug_path: string },
       extra: ToolExtra
@@ -373,7 +526,94 @@ export function registerCyclesTools(server: any): void {
       if (parsed.kind !== 'pitch') {
         return errorResult('slug_path must include both cycle and pitch slug: "cycle-slug/pitch-slug"')
       }
-      return handleGetPitchUpdates(resolved.org.id, parsed.cycleSlug, parsed.pitchSlug)
+      return handleListUpdates(resolved.org.id, parsed.cycleSlug, parsed.pitchSlug)
+    }
+  )
+
+  const updateInputArgs = {
+    progress: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe('Needle position 0–1 (0 = just started, 1 = shipped).'),
+    zone: z
+      .enum(['on_track', 'some_risk', 'concerned'])
+      .describe('How the team feels about the pitch right now.'),
+    narrative: z
+      .string()
+      .min(1)
+      .describe('What changed this week — shown verbatim in the update and Slack post.'),
+  }
+
+  defineTool(
+    server,
+    'preview_update',
+    'Dry-run a needle update: returns the exact Slack message text that post_update would send, whether it would actually reach Slack (would_deliver), and the resolved week/task/days-left fields. Writes nothing and does not move the needle. Same arguments as post_update.',
+    { ...orgArg, ...slugPathArg, ...updateInputArgs },
+    { title: 'Preview update', readOnlyHint: true, openWorldHint: false },
+    async (
+      {
+        org,
+        slug_path,
+        progress,
+        zone,
+        narrative,
+      }: { org?: string; slug_path: string; progress: number; zone: Zone; narrative: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      if (parsed.kind !== 'pitch') {
+        return errorResult('slug_path must include both cycle and pitch slug: "cycle-slug/pitch-slug"')
+      }
+      return handlePreviewUpdate(resolved.org.id, resolved.org.slug, parsed.cycleSlug, parsed.pitchSlug, {
+        progress,
+        zone,
+        narrative,
+      })
+    }
+  )
+
+  defineTool(
+    server,
+    'post_update',
+    'Post a needle update for a pitch (the "move the needle" action): records the update, moves the pitch needle, snapshots hill/task progress, and — if a Slack webhook is configured — posts it to the channel. Slack delivery is best-effort: the update always persists even if Slack fails. Use preview_update first to see exactly what will be sent. Each call creates a new update; to undo a misfire (wrong pitch, fat-fingered position), call undo_update on the returned update_id (latest-only).',
+    { ...orgArg, ...slugPathArg, ...updateInputArgs },
+    {
+      title: 'Post update',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      // The only Cycles tool that reaches an external service (Slack).
+      openWorldHint: true,
+    },
+    async (
+      {
+        org,
+        slug_path,
+        progress,
+        zone,
+        narrative,
+      }: { org?: string; slug_path: string; progress: number; zone: Zone; narrative: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      if (parsed.kind !== 'pitch') {
+        return errorResult('slug_path must include both cycle and pitch slug: "cycle-slug/pitch-slug"')
+      }
+      return handlePostUpdate(
+        resolved.org.id,
+        resolved.org.slug,
+        parsed.cycleSlug,
+        parsed.pitchSlug,
+        getUserId(extra),
+        { progress, zone, narrative }
+      )
     }
   )
 
@@ -646,11 +886,11 @@ export function registerCyclesTools(server: any): void {
 
   defineTool(
     server,
-    'delete_update',
-    'Delete the latest needle update on a pitch (a misfire undo — wrong pitch, fat-fingered position, duplicate post). Only the latest update for a pitch can be deleted; passing any older update fails. Reverts the pitch needle to the prior update (or unset if it was the only one). Does not remove the Slack message that was posted.',
-    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Update id to delete (must be the latest update for its pitch)') },
+    'undo_update',
+    'Undo the latest needle update on a pitch (a misfire undo — wrong pitch, fat-fingered position, duplicate post). Only the latest update for a pitch can be undone; passing any older update fails. Reverts the pitch needle to the prior update (or unset if it was the only one). Does not remove the Slack message that was posted.',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Update id to undo (must be the latest update for its pitch)') },
     {
-      title: 'Delete latest update',
+      title: 'Undo latest update',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: true,
@@ -681,7 +921,7 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       operations: z.array(
         z.object({
-          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_update'),
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, delete_pitch, delete_scope, delete_task, delete_parking_item, undo_update'),
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { handleListCycles, handleGetCycle, handleGetPitch, handleGetPitchUpdates, handleBatch, handleCreateCycle, registerCyclesTools } from './tools'
+import { handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -20,15 +20,27 @@ vi.mock('./liveblocks-writer', () => ({
   deleteTask: vi.fn(),
   deleteParkingItem: vi.fn(),
   deleteUpdate: vi.fn(),
+  pushUpdate: vi.fn(),
+  markSlackDelivered: vi.fn(),
+}))
+
+vi.mock('@/lib/slack-delivery', () => ({
+  deliverSlackUpdate: vi.fn(),
+  isSlackConfigured: vi.fn(),
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
-import { deleteUpdate } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered } from './liveblocks-writer'
+import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 
 const mockListRooms = vi.mocked(listCycleRooms)
 const mockGetStorage = vi.mocked(getCycleStorage)
 const mockResolvePitch = vi.mocked(resolvePitch)
 const mockDeleteUpdate = vi.mocked(deleteUpdate)
+const mockPushUpdate = vi.mocked(pushUpdate)
+const mockMarkSlackDelivered = vi.mocked(markSlackDelivered)
+const mockDeliverSlack = vi.mocked(deliverSlackUpdate)
+const mockIsSlackConfigured = vi.mocked(isSlackConfigured)
 
 const ORG_ID = 'org_test'
 
@@ -137,20 +149,152 @@ describe('handleGetPitch', () => {
   })
 })
 
-describe('handleGetPitchUpdates', () => {
+describe('handleListUpdates', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('returns updates sorted newest-first', async () => {
     mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
     mockResolvePitch.mockReturnValue(FIXTURE_STORAGE.pitches[0])
 
-    const result = await handleGetPitchUpdates(ORG_ID, '2026-q2-build', 'mission-control')
+    const result = await handleListUpdates(ORG_ID, '2026-q2-build', 'mission-control')
 
     expect(result.isError).toBeUndefined()
     const data = JSON.parse(result.content[0].text as string) as any
     expect(data.updates).toHaveLength(2)
     expect(data.updates[0].id).toBe('u2')
     expect(data.updates[1].id).toBe('u1')
+  })
+})
+
+const ORG_SLUG = 'vasco'
+
+describe('handlePreviewUpdate', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns the Slack text, delivery flag, and resolved fields without writing', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(FIXTURE_STORAGE.pitches[0])
+    mockIsSlackConfigured.mockReturnValue(true)
+
+    const result = await handlePreviewUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'mission-control', {
+      progress: 0.7,
+      zone: 'on_track',
+      narrative: 'Gauge shipped',
+    })
+
+    expect(result.isError).toBeUndefined()
+    const data = JSON.parse(result.content[0].text as string) as any
+    expect(data.slack_text).toContain('Mission Control')
+    expect(data.slack_text).toContain('Gauge shipped')
+    expect(data.would_deliver).toBe(true)
+    expect(data.resolved.pitch_url).toBe(
+      'http://localhost:3000/vasco/cycles/2026-q2-build/mission-control'
+    )
+    expect(typeof data.resolved.weekNumber).toBe('number')
+    expect(data.resolved.tasksTotal).toBe(3)
+    // Pure dry-run: nothing is persisted.
+    expect(mockPushUpdate).not.toHaveBeenCalled()
+    expect(mockDeliverSlack).not.toHaveBeenCalled()
+  })
+
+  it('reports would_deliver:false when Slack is not configured', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(FIXTURE_STORAGE.pitches[0])
+    mockIsSlackConfigured.mockReturnValue(false)
+
+    const result = await handlePreviewUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'mission-control', {
+      progress: 0.7,
+      zone: 'on_track',
+      narrative: 'Gauge shipped',
+    })
+
+    const data = JSON.parse(result.content[0].text as string) as any
+    expect(data.would_deliver).toBe(false)
+  })
+
+  it('errors when the pitch does not exist', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(undefined)
+
+    const result = await handlePreviewUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'ghost', {
+      progress: 0.5,
+      zone: 'some_risk',
+      narrative: 'x',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('ghost')
+  })
+})
+
+describe('handlePostUpdate', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const params = { progress: 0.8, zone: 'on_track' as const, narrative: 'Shipped the gauge' }
+
+  it('persists the update, delivers to Slack, and reports delivered', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(FIXTURE_STORAGE.pitches[0])
+    mockIsSlackConfigured.mockReturnValue(true)
+    mockDeliverSlack.mockResolvedValue({ ok: true, delivered_at: '2026-06-10T10:05:00Z' })
+
+    const result = await handlePostUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'mission-control', 'user_1', params)
+
+    expect(result.isError).toBeUndefined()
+    const data = JSON.parse(result.content[0].text as string) as any
+    expect(typeof data.update_id).toBe('string')
+    expect(data.needle).toEqual({ progress: 0.8, zone: 'on_track' })
+    expect(data.slack).toBe('delivered')
+
+    expect(mockPushUpdate).toHaveBeenCalledOnce()
+    const built = mockPushUpdate.mock.calls[0][1]
+    expect(built.slack_attempted).toBe(true)
+    expect(built.posted_by).toBe('user_1')
+    expect(mockDeliverSlack).toHaveBeenCalledOnce()
+    expect(mockMarkSlackDelivered).toHaveBeenCalledWith(
+      `${ORG_ID}:cycle:2026-q2-build`,
+      data.update_id,
+      '2026-06-10T10:05:00Z'
+    )
+  })
+
+  it('persists the update and reports disabled when Slack is off, without delivering', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(FIXTURE_STORAGE.pitches[0])
+    mockIsSlackConfigured.mockReturnValue(false)
+
+    const result = await handlePostUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'mission-control', 'user_1', params)
+
+    const data = JSON.parse(result.content[0].text as string) as any
+    expect(data.slack).toBe('disabled')
+    expect(mockPushUpdate).toHaveBeenCalledOnce()
+    expect(mockPushUpdate.mock.calls[0][1].slack_attempted).toBeUndefined()
+    expect(mockDeliverSlack).not.toHaveBeenCalled()
+    expect(mockMarkSlackDelivered).not.toHaveBeenCalled()
+  })
+
+  it('still persists the update but reports failed when delivery fails', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(FIXTURE_STORAGE.pitches[0])
+    mockIsSlackConfigured.mockReturnValue(true)
+    mockDeliverSlack.mockResolvedValue({ ok: false, error: 'no_service' })
+
+    const result = await handlePostUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'mission-control', 'user_1', params)
+
+    const data = JSON.parse(result.content[0].text as string) as any
+    expect(data.slack).toBe('failed')
+    expect(mockPushUpdate).toHaveBeenCalledOnce()
+    expect(mockMarkSlackDelivered).not.toHaveBeenCalled()
+  })
+
+  it('errors when the pitch does not exist', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+    mockResolvePitch.mockReturnValue(undefined)
+
+    const result = await handlePostUpdate(ORG_ID, ORG_SLUG, '2026-q2-build', 'ghost', 'user_1', params)
+
+    expect(result.isError).toBe(true)
+    expect(mockPushUpdate).not.toHaveBeenCalled()
   })
 })
 
@@ -312,15 +456,15 @@ describe('handleBatch', () => {
     expect(data.results[2].ok).toBe(true)
   })
 
-  it('routes delete_update through the writer and surfaces latest-only errors', async () => {
+  it('routes undo_update through the writer and surfaces latest-only errors', async () => {
     mockDeleteUpdate.mockResolvedValueOnce(undefined)
     mockDeleteUpdate.mockRejectedValueOnce(
       new Error('Only the latest update can be deleted: "u1" is not the latest update for its pitch')
     )
 
     const result = await handleBatch(ORG_ID, 'q2-build', [
-      { tool: 'delete_update', params: { id: 'u2' } },
-      { tool: 'delete_update', params: { id: 'u1' } },
+      { tool: 'undo_update', params: { id: 'u2' } },
+      { tool: 'undo_update', params: { id: 'u1' } },
     ])
 
     const data = JSON.parse(result.content[0].text) as any
@@ -358,8 +502,8 @@ describe('tool annotations', () => {
     return tools
   }
 
-  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'get_pitch_updates']
-  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'delete_update', 'batch']
+  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update']
+  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
     const tools = collectTools()
@@ -386,6 +530,14 @@ describe('tool annotations', () => {
     const byName = Object.fromEntries(collectTools().map((t) => [t.name, t.annotations]))
     for (const name of DESTRUCTIVE_TOOLS) {
       expect(byName[name]?.destructiveHint, `${name} should be destructive`).toBe(true)
+    }
+  })
+
+  it('marks post_update as the only outward-facing tool (reaches Slack)', () => {
+    const byName = Object.fromEntries(collectTools().map((t) => [t.name, t.annotations]))
+    expect(byName['post_update']?.openWorldHint, 'post_update reaches Slack').toBe(true)
+    for (const name of Object.keys(byName).filter((n) => n !== 'post_update')) {
+      expect(byName[name]?.openWorldHint ?? false, `${name} only touches Liveblocks`).toBe(false)
     }
   })
 })
