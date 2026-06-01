@@ -107,17 +107,15 @@ export function noChangeStreaks(
 
 const NAMED_CAP = 3 // most movers named before overflowing to "+N more"
 const QUIET_NAME_CAP = 3 // most longest-streak names listed for the quiet group
-const BIG_MOVE_STEPS = 3 // step delta that counts as a "big" climb / slide
 
-// Emoji vocabulary for the hill metaphor — magnitude and stage are built in.
+// Emoji vocabulary for the Shape Up hill: figuring it out (unknown side) →
+// over the hill (crest) → making it happen (known side) → done.
 const EMOJI = {
+  figuringOut: '🔍',
+  overHill: '⛰️',
+  makingItHappen: '🛠️',
   done: '🎉',
-  atTop: '⛰️',
-  crossed: '🏂',
-  bigClimb: '⏫',
-  nudge: '🔼',
   slidBack: '🔻',
-  slidWayBack: '⏬',
   unchanged: '⏸️',
   new: '🆕',
   dropped: '❌',
@@ -130,30 +128,35 @@ function trailTitle(trail: ScopeTrail, titles: Map<string, string>): string {
   return trail.scopeId
 }
 
-// A single mover rendered with its emoji + named scope. Null for non-movers.
+// Phase-relative position: figuring it out runs 0→100% up to the crest, then
+// making it happen restarts at 0% at the top and runs to 100% at done.
+function phasePercent(progress: number): number {
+  const within = progress <= 0.5 ? progress / 0.5 : (progress - 0.5) / 0.5
+  return Math.round(Math.min(1, Math.max(0, within)) * 100)
+}
+
+// A single mover in Shape Up language: a quoted scope name, the hill stage, and
+// its phase-relative position. Null for non-movers.
 function moverSegment(trail: ScopeTrail, titles: Map<string, string>): string | null {
-  const name = trailTitle(trail, titles)
-  if (trail.state === 'new') return `${EMOJI.new} ${name}`
-  if (trail.state === 'dropped') return `${EMOJI.dropped} ${name}`
+  const name = `"${trailTitle(trail, titles)}"`
+  if (trail.state === 'new') return `${EMOJI.new} ${name} added`
+  if (trail.state === 'dropped') return `${EMOJI.dropped} ${name} dropped`
   if (trail.state !== 'moved') return null
 
+  const now = `now ${phasePercent(trail.toProgress)}%`
   switch (trail.label) {
     case 'Done':
       return `${EMOJI.done} ${name} done!`
     case 'At the top':
-      return `${EMOJI.atTop} ${name} at the top`
+      return `${EMOJI.overHill} ${name} over the hill`
     case 'Crossed the hill':
-      return `${EMOJI.crossed} ${name} crossed the hill`
     case 'Heading down':
-      return `${EMOJI.crossed} ${name} heading down`
+      return `${EMOJI.makingItHappen} ${name} making it happen (${now})`
     case 'Lots of progress':
-      return `${EMOJI.bigClimb} ${name} big climb`
     case 'Nudged forward':
-      return `${EMOJI.nudge} ${name} nudged up`
+      return `${EMOJI.figuringOut} ${name} figuring it out (${now})`
     case 'Slid back':
-      return trail.stepDelta <= -BIG_MOVE_STEPS
-        ? `${EMOJI.slidWayBack} ${name} slid way back`
-        : `${EMOJI.slidBack} ${name} slid back`
+      return `${EMOJI.slidBack} ${name} slid back (${now})`
     default:
       return null
   }
@@ -183,7 +186,7 @@ export function summarizeMovement(
 
   const quiet = trails
     .filter((t) => t.state === 'stagnant')
-    .map((t) => ({ name: trailTitle(t, titles), streak: streaks.get(t.scopeId) ?? 1 }))
+    .map((t) => ({ name: `"${trailTitle(t, titles)}"`, streak: streaks.get(t.scopeId) ?? 1 }))
     .sort((a, b) => b.streak - a.streak)
 
   // No quiet scopes: just the movers line (always present here, since trails

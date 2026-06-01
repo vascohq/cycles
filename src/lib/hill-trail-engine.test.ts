@@ -295,13 +295,13 @@ describe('summarizeMovement', () => {
     ['s3', 'Auth'],
   ])
 
-  it('names a scope that reached the top', () => {
+  it('names a scope that reached the top in Shape Up terms', () => {
     const trails = diffHillTrail(
       [{ scopeId: 's1', hill_progress: 3 / 14 }],
       [{ id: 's1', hill_progress: 0.5 }]
     )
     const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
-    expect(line).toContain('⛰️ Checkout at the top')
+    expect(line).toContain('⛰️ "Checkout" over the hill')
   })
 
   it('celebrates a scope that reached done', () => {
@@ -310,35 +310,37 @@ describe('summarizeMovement', () => {
       [{ id: 's1', hill_progress: 1 }]
     )
     const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
-    expect(line).toContain('🎉 Checkout done!')
+    expect(line).toContain('🎉 "Checkout" done!')
   })
 
-  it('distinguishes a big climb from a small nudge', () => {
+  it('frames climbing the unknown side as figuring it out, with position', () => {
     const bigClimb = diffHillTrail(
       [{ scopeId: 's1', hill_progress: 1 / 14 }],
       [{ id: 's1', hill_progress: 5 / 14 }]
     )
-    expect(summarizeMovement(bigClimb, new Map(), titles)).toBe('⏫ Checkout big climb')
-
-    const nudge = diffHillTrail(
-      [{ scopeId: 's1', hill_progress: 1 / 14 }],
-      [{ id: 's1', hill_progress: 2 / 14 }]
+    expect(summarizeMovement(bigClimb, new Map(), titles)).toBe(
+      '🔍 "Checkout" figuring it out (now 71%)'
     )
-    expect(summarizeMovement(nudge, new Map(), titles)).toBe('🔼 Checkout nudged up')
   })
 
-  it('distinguishes sliding back a little from a lot', () => {
-    const little = diffHillTrail(
+  it('frames the known side as making it happen, with position', () => {
+    const trail = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 5 / 14 }],
+      [{ id: 's1', hill_progress: 9 / 14 }]
+    )
+    expect(summarizeMovement(trail, new Map(), titles)).toBe(
+      '🛠️ "Checkout" making it happen (now 29%)'
+    )
+  })
+
+  it('frames a slide back with position', () => {
+    const trail = diffHillTrail(
       [{ scopeId: 's2', hill_progress: 5 / 14 }],
       [{ id: 's2', hill_progress: 3 / 14 }]
     )
-    expect(summarizeMovement(little, new Map(), titles)).toBe('🔻 Login slid back')
-
-    const lot = diffHillTrail(
-      [{ scopeId: 's2', hill_progress: 9 / 14 }],
-      [{ id: 's2', hill_progress: 3 / 14 }]
+    expect(summarizeMovement(trail, new Map(), titles)).toBe(
+      '🔻 "Login" slid back (now 43%)'
     )
-    expect(summarizeMovement(lot, new Map(), titles)).toBe('⏬ Login slid way back')
   })
 
   it('names new and dropped scopes with their emoji', () => {
@@ -347,24 +349,8 @@ describe('summarizeMovement', () => {
       [{ id: 's1', hill_progress: 0.2 }]
     )
     const line = summarizeMovement(trails, new Map(), titles) ?? ''
-    expect(line).toContain('🆕 Checkout')
-    expect(line).toContain('❌ Auth')
-  })
-
-  it('names each nudged scope', () => {
-    const trails = diffHillTrail(
-      [
-        { scopeId: 's1', hill_progress: 1 / 14 },
-        { scopeId: 's2', hill_progress: 1 / 14 },
-      ],
-      [
-        { id: 's1', hill_progress: 2 / 14 },
-        { id: 's2', hill_progress: 3 / 14 },
-      ]
-    )
-    expect(summarizeMovement(trails, new Map(), titles)).toBe(
-      '🔼 Checkout nudged up · 🔼 Login nudged up'
-    )
+    expect(line).toContain('🆕 "Checkout" added')
+    expect(line).toContain('❌ "Auth" dropped')
   })
 
   it('caps named movers and overflows the rest into "+N more"', () => {
@@ -393,7 +379,7 @@ describe('summarizeMovement', () => {
     ]
     const line = summarizeMovement(diffHillTrail(snapshots[0], live), noChangeStreaks(snapshots, live), titles)
     // s1 & s2 held for 2 updates (longest), s3 only 1.
-    expect(line).toBe('⏸️ No hill movement · 3 unchanged\nlongest 2 updates: Checkout, Login (+1)')
+    expect(line).toBe('⏸️ No hill movement · 3 unchanged\nlongest 2 updates: "Checkout", "Login" (+1)')
   })
 
   it('puts movers and a quiet count on separate lines when both occur', () => {
@@ -403,13 +389,13 @@ describe('summarizeMovement', () => {
         { scopeId: 's2', hill_progress: 0.5 },
       ],
       [
-        { id: 's1', hill_progress: 9 / 14 }, // crossed the hill
+        { id: 's1', hill_progress: 9 / 14 }, // crossed to the known side
         { id: 's2', hill_progress: 0.5 }, // unchanged
       ]
     )
     const line = summarizeMovement(trails, noChangeStreaks([], []), titles) ?? ''
     const [movers, quiet] = line.split('\n')
-    expect(movers).toContain('🏂 Checkout crossed the hill')
+    expect(movers).toContain('🛠️ "Checkout" making it happen (now 29%)')
     expect(quiet).toBe('⏸️ 1 unchanged')
   })
 
