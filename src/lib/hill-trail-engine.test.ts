@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { diffHillTrail, rollupHillTrails } from './hill-trail-engine'
+import {
+  diffHillTrail,
+  rollupHillTrails,
+  noChangeStreaks,
+  summarizeMovement,
+} from './hill-trail-engine'
 import type { HillSnapshot } from '@/cycle-liveblocks.config'
 
 describe('diffHillTrail', () => {
@@ -214,5 +219,133 @@ describe('diffHillTrail', () => {
     const rollup = rollupHillTrails(diffHillTrail(previous, current))
 
     expect(rollup).toEqual({ moved: 1, stalled: 1, new: 1, dropped: 1 })
+  })
+})
+
+describe('noChangeStreaks', () => {
+  it('counts consecutive updates a scope held its current step', () => {
+    const snapshotsNewestFirst: HillSnapshot[][] = [
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+    ]
+    const live = [{ id: 's1', hill_progress: 0.5 }]
+
+    expect(noChangeStreaks(snapshotsNewestFirst, live).get('s1')).toBe(2)
+  })
+
+  it('reports a streak of 0 for a scope that moved since the last update', () => {
+    const snapshots: HillSnapshot[][] = [[{ scopeId: 's1', hill_progress: 0.3 }]]
+    const live = [{ id: 's1', hill_progress: 0.6 }]
+
+    expect(noChangeStreaks(snapshots, live).get('s1')).toBe(0)
+  })
+
+  it('stops counting at the first update where the step differs', () => {
+    const snapshots: HillSnapshot[][] = [
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [{ scopeId: 's1', hill_progress: 0.2 }],
+    ]
+    const live = [{ id: 's1', hill_progress: 0.5 }]
+
+    expect(noChangeStreaks(snapshots, live).get('s1')).toBe(2)
+  })
+
+  it('stops counting when the scope is absent from an older snapshot', () => {
+    const snapshots: HillSnapshot[][] = [
+      [{ scopeId: 's1', hill_progress: 0.5 }],
+      [], // scope did not exist this far back
+    ]
+    const live = [{ id: 's1', hill_progress: 0.5 }]
+
+    expect(noChangeStreaks(snapshots, live).get('s1')).toBe(1)
+  })
+})
+
+describe('summarizeMovement', () => {
+  const titles = new Map([
+    ['s1', 'Checkout'],
+    ['s2', 'Login'],
+    ['s3', 'Auth'],
+  ])
+
+  it('names a scope that went over the hill', () => {
+    const trails = diffHillTrail(
+      [{ scopeId: 's1', hill_progress: 5 / 14 }],
+      [{ id: 's1', hill_progress: 9 / 14 }]
+    )
+    const line = summarizeMovement(trails, noChangeStreaks([], []), titles)
+    expect(line).toContain('Checkout over the hill')
+  })
+
+  it('names slid-back, new and dropped scopes', () => {
+    const trails = diffHillTrail(
+      [
+        { scopeId: 's2', hill_progress: 9 / 14 },
+        { scopeId: 's3', hill_progress: 0.5, title: 'Auth' },
+      ],
+      [
+        { id: 's2', hill_progress: 5 / 14 }, // slid back
+        { id: 's1', hill_progress: 0.2 }, // new
+      ]
+    )
+    const line = summarizeMovement(trails, new Map(), titles) ?? ''
+    expect(line).toContain('Login slid back')
+    expect(line).toContain('Checkout added')
+    expect(line).toContain('Auth dropped')
+  })
+
+  it('lists a quiet scope with its no-change count', () => {
+    const snapshots: HillSnapshot[][] = [
+      [{ scopeId: 's3', hill_progress: 0.5 }],
+      [{ scopeId: 's3', hill_progress: 0.5 }],
+      [{ scopeId: 's3', hill_progress: 0.5 }],
+    ]
+    const live = [{ id: 's3', hill_progress: 0.5 }]
+    const trails = diffHillTrail(snapshots[0], live)
+    const line = summarizeMovement(trails, noChangeStreaks(snapshots, live), titles)
+    expect(line).toBe('Auth no change for 3 updates')
+  })
+
+  it('lists a scope quiet for a single update without a count', () => {
+    const snapshots: HillSnapshot[][] = [[{ scopeId: 's3', hill_progress: 0.5 }]]
+    const live = [{ id: 's3', hill_progress: 0.5 }]
+    const trails = diffHillTrail(snapshots[0], live)
+    const line = summarizeMovement(trails, noChangeStreaks(snapshots, live), titles)
+    expect(line).toBe('Auth no change')
+  })
+
+  it('collapses routine forward nudges into a single count', () => {
+    const trails = diffHillTrail(
+      [
+        { scopeId: 's1', hill_progress: 1 / 14 },
+        { scopeId: 's2', hill_progress: 1 / 14 },
+      ],
+      [
+        { id: 's1', hill_progress: 2 / 14 },
+        { id: 's2', hill_progress: 4 / 14 },
+      ]
+    )
+    const line = summarizeMovement(trails, new Map(), titles)
+    expect(line).toBe('+2 nudged forward')
+  })
+
+  it('caps named events and overflows the rest into "+N more"', () => {
+    const previous: HillSnapshot[] = []
+    const current = [
+      { id: 'a', hill_progress: 0.1 },
+      { id: 'b', hill_progress: 0.1 },
+      { id: 'c', hill_progress: 0.1 },
+      { id: 'd', hill_progress: 0.1 },
+      { id: 'e', hill_progress: 0.1 },
+    ]
+    // All five are "New" (added).
+    const line = summarizeMovement(diffHillTrail(previous, current), new Map(), new Map()) ?? ''
+    expect(line.match(/added/g)?.length).toBe(3)
+    expect(line).toContain('+2 more')
+  })
+
+  it('returns null when there are no scopes to report on', () => {
+    expect(summarizeMovement([], new Map(), new Map())).toBeNull()
   })
 })

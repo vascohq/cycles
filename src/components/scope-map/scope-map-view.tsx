@@ -64,6 +64,10 @@ export type ScopeMapViewProps = {
   onParkingToggle?: (itemId: string, resolved: boolean) => void
   onPostUpdate?: (progress: number, zone: Zone, narrative: string) => void | Promise<void>
   userName?: string
+  /** Zone at the last update — drives the preview's zone-transition line. */
+  previousZone?: Zone | null
+  /** Pre-computed hill-movement summary for the Slack preview. */
+  movementPreview?: string | null
   timelineCards?: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
   onDeleteUpdate?: (updateId: string) => void
@@ -96,6 +100,8 @@ export function ScopeMapView({
   onParkingToggle,
   onPostUpdate,
   userName = 'You',
+  previousZone = null,
+  movementPreview = null,
   timelineCards = [],
   onRetrySlack,
   onDeleteUpdate,
@@ -158,11 +164,11 @@ export function ScopeMapView({
                   dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   userName={userName}
                   pitchTitle={pitch.title}
-                  tasksDone={totalProgress.done}
-                  tasksTotal={totalProgress.total}
                   daysLeft={timebox.daysLeft}
                   currentProgress={pitch.needle?.progress ?? 0.02}
                   currentZone={pitch.needle?.zone ?? null}
+                  previousZone={previousZone}
+                  movementPreview={movementPreview}
                   hillScopes={hillScopes}
                   hillTrails={hillTrails}
                   onPost={onPostUpdate}

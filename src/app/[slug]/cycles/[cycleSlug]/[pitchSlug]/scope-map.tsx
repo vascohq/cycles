@@ -20,7 +20,7 @@ import {
   buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost, needleAfterDeletingLatest } from '@/lib/needle-engine'
-import { diffHillTrail } from '@/lib/hill-trail-engine'
+import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
@@ -32,7 +32,7 @@ import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { slugify } from '@/lib/slugify'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 
 type ScopeMapProps = {
   roomId: string
@@ -334,8 +334,12 @@ function ScopeMapWired({
     [markSlackDelivered]
   )
 
-  const usersMap = new Map(
-    (orgUsers ?? []).map((u) => [u.userId, { name: u.name, initials: u.initials }])
+  const usersMap = useMemo(
+    () =>
+      new Map(
+        (orgUsers ?? []).map((u) => [u.userId, { name: u.name, initials: u.initials }])
+      ),
+    [orgUsers]
   )
 
   const scopeGridItems = deriveScopeGridItems(allScopes, allTasks, pitchId)
@@ -350,6 +354,17 @@ function ScopeMapWired({
   const hillTrails = latestUpdate
     ? diffHillTrail(latestUpdate.hill_snapshot, hillScopes)
     : []
+  // Zone delta and hill movement are framed against the previous update; both
+  // feed the Slack message and its live preview, so derive them once here.
+  const previousZone = latestUpdate?.needle_snapshot.zone ?? null
+  const snapshotsNewestFirst = [...pitchUpdates]
+    .sort((a, b) => (a.posted_at > b.posted_at ? -1 : 1))
+    .map((u) => u.hill_snapshot)
+  const movement = summarizeMovement(
+    hillTrails,
+    noChangeStreaks(snapshotsNewestFirst, hillScopes),
+    new Map(hillScopes.map((s) => [s.id, s.title]))
+  )
   const hillHistory = buildHillHistoryFrames(pitchUpdates, hillScopes, usersMap)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
   const today = new Date().toISOString().slice(0, 10)
@@ -389,9 +404,10 @@ function ScopeMapWired({
           weekNumber: timebox.currentWeek,
           totalWeeks: timebox.totalWeeks,
           zone,
+          previousZone,
+          authorName: userName,
           narrative,
-          tasksDone: totalProgress.done,
-          tasksTotal: totalProgress.total,
+          movement,
           daysLeft: timebox.daysLeft,
           pitchUrl,
           postedAt: built.posted_at,
@@ -399,26 +415,47 @@ function ScopeMapWired({
         built.id
       )
     },
-    [pushUpdate, markSlackAttempted, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, timebox, totalProgress, pitchUrl, slackEnabled]
+    [pushUpdate, markSlackAttempted, deliverToSlack, pitchId, userId, pitch, pitchScopes, pitchTasks, timebox, pitchUrl, slackEnabled, previousZone, movement, userName]
   )
 
   const onRetrySlack = useCallback(
     async (updateId: string) => {
       if (!pitch) return
-      const update = pitchUpdates.find((u) => u.id === updateId)
-      if (!update) return
-      const snapshotDone = update.task_snapshot.reduce((sum, s) => sum + s.done, 0)
-      const snapshotTotal = update.task_snapshot.reduce((sum, s) => sum + s.total, 0)
+      // Reconstruct the message exactly as it would have read when first posted:
+      // ordered by post time, the prior update supplies the zone delta and the
+      // hill diff, and earlier snapshots supply the no-change streaks.
+      const ordered = [...pitchUpdates].sort((a, b) =>
+        a.posted_at < b.posted_at ? -1 : 1
+      )
+      const idx = ordered.findIndex((u) => u.id === updateId)
+      if (idx === -1) return
+      const update = ordered[idx]
+      const prev = idx > 0 ? ordered[idx - 1] : null
       const tb = update.timebox_snapshot
+
+      const scopesAtPost = update.hill_snapshot.map((h) => ({
+        id: h.scopeId,
+        hill_progress: h.hill_progress,
+      }))
+      let movement: string | null = null
+      if (prev) {
+        const trails = diffHillTrail(prev.hill_snapshot, scopesAtPost)
+        const priorSnapshots = ordered.slice(0, idx).map((u) => u.hill_snapshot).reverse()
+        const streaks = noChangeStreaks(priorSnapshots, scopesAtPost)
+        const titles = new Map(update.hill_snapshot.map((h) => [h.scopeId, h.title ?? h.scopeId]))
+        movement = summarizeMovement(trails, streaks, titles)
+      }
+
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
           weekNumber: tb.currentWeek,
           totalWeeks: tb.totalWeeks,
           zone: update.needle_snapshot.zone,
+          previousZone: prev?.needle_snapshot.zone ?? null,
+          authorName: usersMap.get(update.posted_by)?.name ?? 'Teammate',
           narrative: update.narrative,
-          tasksDone: snapshotDone,
-          tasksTotal: snapshotTotal,
+          movement,
           daysLeft: tb.daysLeft,
           pitchUrl,
           postedAt: update.posted_at,
@@ -426,7 +463,7 @@ function ScopeMapWired({
         updateId
       )
     },
-    [deliverToSlack, pitchUpdates, pitch, pitchUrl]
+    [deliverToSlack, pitchUpdates, pitch, pitchUrl, usersMap]
   )
 
   if (!pitch) {
@@ -465,6 +502,8 @@ function ScopeMapWired({
       onParkingToggle={onParkingToggle}
       onPostUpdate={onPostUpdate}
       userName={userName}
+      previousZone={previousZone}
+      movementPreview={movement}
       timelineCards={timelineCards}
       onRetrySlack={slackEnabled ? onRetrySlack : undefined}
       onDeleteUpdate={onDeleteUpdate}

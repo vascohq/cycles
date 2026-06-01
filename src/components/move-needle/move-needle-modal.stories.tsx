@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { MoveNeedleModal } from './move-needle-modal'
 import type { Zone } from '@/cycle-liveblocks.config'
 import type { HillScope } from '@/components/hill-chart'
-import { diffHillTrail } from '@/lib/hill-trail-engine'
+import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import type { HillSnapshot } from '@/cycle-liveblocks.config'
 
 // A snapshot from the last update, then the live scopes now — fed through the
@@ -23,6 +23,11 @@ const hillScopes: HillScope[] = [
 ]
 
 const hillTrails = diffHillTrail(previousSnapshot, hillScopes)
+const movementPreview = summarizeMovement(
+  hillTrails,
+  noChangeStreaks([previousSnapshot], hillScopes),
+  new Map(hillScopes.map((s) => [s.id, s.title]))
+)
 
 const meta: Meta<typeof MoveNeedleModal> = {
   title: 'Components/MoveNeedleModal',
@@ -40,11 +45,10 @@ export const Default: Story = {
     dateLabel: 'May 27, 2025',
     userName: 'Seb',
     pitchTitle: 'Mission Control',
-    tasksDone: 9,
-    tasksTotal: 13,
     daysLeft: 21,
     currentProgress: 0.5,
     currentZone: 'some_risk',
+    previousZone: 'on_track',
     onOpenChange: () => {},
     onPost: () => {},
   },
@@ -57,9 +61,11 @@ export const WithHillDiff: Story = {
     dateLabel: 'May 27, 2025',
     userName: 'Seb',
     pitchTitle: 'Mission Control',
-    tasksDone: 9,
-    tasksTotal: 13,
     daysLeft: 21,
+    currentProgress: 0.5,
+    currentZone: 'some_risk',
+    previousZone: 'on_track',
+    movementPreview,
     hillScopes,
     hillTrails,
     onOpenChange: () => {},
@@ -91,8 +97,6 @@ export const Interactive: Story = {
           dateLabel="May 27, 2025"
           userName="Seb"
           pitchTitle="Mission Control"
-          tasksDone={9}
-          tasksTotal={13}
           daysLeft={21}
           currentProgress={0.5}
           currentZone={null}

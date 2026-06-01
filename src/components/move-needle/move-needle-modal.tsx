@@ -30,11 +30,13 @@ export type MoveNeedleModalProps = {
   dateLabel: string
   userName: string
   pitchTitle: string
-  tasksDone: number
-  tasksTotal: number
   daysLeft: number
   currentProgress: number
   currentZone: Zone | null
+  /** Zone at the last update — drives the preview's zone-transition line. */
+  previousZone?: Zone | null
+  /** Pre-computed hill-movement summary for the Slack preview. */
+  movementPreview?: string | null
   /** Live scopes for the read-only hill diff (since the last update). */
   hillScopes?: HillScope[]
   /** Trails computed by the Hill Trail engine — drives the read-only diff. */
@@ -49,11 +51,11 @@ export function MoveNeedleModal({
   dateLabel,
   userName,
   pitchTitle,
-  tasksDone,
-  tasksTotal,
   daysLeft,
   currentProgress,
   currentZone,
+  previousZone = null,
+  movementPreview = null,
   hillScopes = [],
   hillTrails = [],
   onPost,
@@ -173,9 +175,10 @@ export function MoveNeedleModal({
               pitchTitle={pitchTitle}
               weekLabel={weekLabel}
               zone={zone}
+              previousZone={previousZone}
               narrative={narrative}
-              tasksDone={tasksDone}
-              tasksTotal={tasksTotal}
+              movement={movementPreview}
+              authorName={userName}
               daysLeft={daysLeft}
             />
           )}

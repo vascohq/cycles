@@ -9,13 +9,23 @@ const ZONE_LABEL: Record<Zone, string> = {
   concerned: 'Concerned',
 }
 
+function ZoneDot({ zone }: { zone: Zone }) {
+  return (
+    <span
+      className="w-2 h-2 rounded-full inline-block"
+      style={{ backgroundColor: ZONE_COLORS[zone] }}
+    />
+  )
+}
+
 export type SlackPreviewProps = {
   pitchTitle: string
   weekLabel: string
   zone: Zone | null
+  previousZone?: Zone | null
   narrative: string
-  tasksDone: number
-  tasksTotal: number
+  movement?: string | null
+  authorName: string
   daysLeft: number
 }
 
@@ -23,11 +33,16 @@ export function SlackPreview({
   pitchTitle,
   weekLabel,
   zone,
+  previousZone = null,
   narrative,
-  tasksDone,
-  tasksTotal,
+  movement = null,
+  authorName,
   daysLeft,
 }: SlackPreviewProps) {
+  // Mirror the Block Kit zone line: a neutral transition when the zone changed,
+  // a flat label otherwise. Direction is never styled as good or bad.
+  const changed = zone !== null && previousZone !== null && previousZone !== zone
+
   return (
     <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-2">
       <div className="text-[10px] font-mono text-muted-foreground">
@@ -35,29 +50,33 @@ export function SlackPreview({
       </div>
 
       <div className="flex flex-col gap-1.5 text-xs">
-        <div className="font-semibold">
-          📌 {pitchTitle} · {weekLabel}
-        </div>
+        <div className="font-semibold">📌 {pitchTitle}</div>
 
         {zone && (
-          <span
-            className="inline-flex items-center gap-1.5 w-fit rounded-full px-2 py-0.5 text-[11px] font-medium"
-            style={{
-              backgroundColor: ZONE_COLORS[zone] + '20',
-              color: ZONE_COLORS[zone],
-              border: `1px solid ${ZONE_COLORS[zone]}40`,
-            }}
-          >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: ZONE_COLORS[zone] }}
-            />
-            {ZONE_LABEL[zone]}
-          </span>
+          <div className="flex items-center gap-1.5 text-[11px] font-medium">
+            {changed && previousZone ? (
+              <>
+                <ZoneDot zone={previousZone} />
+                <span className="text-muted-foreground">→</span>
+                <ZoneDot zone={zone} />
+                <span style={{ color: ZONE_COLORS[zone] }}>
+                  Now {ZONE_LABEL[zone].toLowerCase()}
+                </span>
+                <span className="text-muted-foreground">
+                  (was {ZONE_LABEL[previousZone].toLowerCase()})
+                </span>
+              </>
+            ) : (
+              <>
+                <ZoneDot zone={zone} />
+                <span style={{ color: ZONE_COLORS[zone] }}>{ZONE_LABEL[zone]}</span>
+              </>
+            )}
+          </div>
         )}
 
         {narrative ? (
-          <p className="whitespace-pre-wrap text-foreground/80 leading-relaxed">
+          <p className="whitespace-pre-wrap text-foreground/80 leading-relaxed border-l-2 border-border pl-2">
             {narrative}
           </p>
         ) : (
@@ -66,8 +85,12 @@ export function SlackPreview({
           </p>
         )}
 
+        {movement && (
+          <div className="text-[10px] text-muted-foreground">{movement}</div>
+        )}
+
         <div className="text-[10px] text-muted-foreground font-mono pt-1 border-t border-border/50">
-          {tasksDone}/{tasksTotal} tasks done · {daysLeft} days left · View pitch →
+          {authorName} · {weekLabel} · {daysLeft} days left · View pitch →
         </div>
       </div>
     </div>

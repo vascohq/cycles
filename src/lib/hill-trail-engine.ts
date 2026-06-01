@@ -73,6 +73,82 @@ export function rollupHillTrails(trails: ScopeTrail[]): HillTrailRollup {
   }
 }
 
+// How many consecutive past updates each live scope has held its current hill
+// step. Walks snapshots newest→oldest, counting matches until the step changes
+// or the scope is absent. 0 means it moved since the last update. The number is
+// reported as a neutral fact — long streaks signal "quiet", never a verdict.
+export function noChangeStreaks(
+  snapshotsNewestFirst: HillSnapshot[][],
+  liveScopes: TrailScope[]
+): Map<string, number> {
+  const streaks = new Map<string, number>()
+  for (const scope of liveScopes) {
+    const liveStep = hillStepIndex(scope.hill_progress)
+    let streak = 0
+    for (const snapshot of snapshotsNewestFirst) {
+      const prev = snapshot.find((s) => s.scopeId === scope.id)
+      if (!prev || hillStepIndex(prev.hill_progress) !== liveStep) break
+      streak++
+    }
+    streaks.set(scope.id, streak)
+  }
+  return streaks
+}
+
+// Notable trail labels get named in the movement line; routine forward moves
+// are collapsed into a count, and quiet scopes are listed separately.
+const NOTABLE_PHRASE: Partial<Record<TrailLabel, string>> = {
+  'Over the hill': 'over the hill',
+  'Slid back': 'slid back',
+  New: 'added',
+  Dropped: 'dropped',
+}
+
+const NAMED_CAP = 3
+
+function trailTitle(trail: ScopeTrail, titles: Map<string, string>): string {
+  const fromMap = titles.get(trail.scopeId)
+  if (fromMap) return fromMap
+  if ('title' in trail && trail.title) return trail.title
+  return trail.scopeId
+}
+
+// Builds the human movement line from trails + streaks + scope titles. Names
+// notable events (capped, overflow → "+N more"), always lists quiet scopes with
+// their no-change count (longest streak first), and collapses routine forward
+// moves into a count. Returns null when there are no scopes to report on.
+export function summarizeMovement(
+  trails: ScopeTrail[],
+  streaks: Map<string, number>,
+  titles: Map<string, string>
+): string | null {
+  if (trails.length === 0) return null
+
+  const notable = trails
+    .filter((t) => NOTABLE_PHRASE[t.label])
+    .map((t) => `${trailTitle(t, titles)} ${NOTABLE_PHRASE[t.label]}`)
+  const notableSegments =
+    notable.length > NAMED_CAP
+      ? [...notable.slice(0, NAMED_CAP), `+${notable.length - NAMED_CAP} more`]
+      : notable
+
+  const quietSegments = trails
+    .filter((t) => t.state === 'stagnant')
+    .map((t) => ({ name: trailTitle(t, titles), streak: streaks.get(t.scopeId) ?? 1 }))
+    .sort((a, b) => b.streak - a.streak)
+    .map(({ name, streak }) =>
+      streak >= 2 ? `${name} no change for ${streak} updates` : `${name} no change`
+    )
+
+  const nudged = trails.filter(
+    (t) => t.label === 'Nudged forward' || t.label === 'Lots of progress'
+  ).length
+  const routineSegment = nudged > 0 ? [`+${nudged} nudged forward`] : []
+
+  const segments = [...notableSegments, ...quietSegments, ...routineSegment]
+  return segments.length > 0 ? segments.join(' · ') : null
+}
+
 export function diffHillTrail(
   previous: HillSnapshot[],
   current: TrailScope[]
