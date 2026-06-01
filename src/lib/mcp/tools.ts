@@ -9,8 +9,9 @@ import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { formatSlackMessage, type SlackMessageParams } from '@/lib/slack-message'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
+import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
-import type { Zone } from '@/cycle-liveblocks.config'
+import type { Zone, Needle } from '@/cycle-liveblocks.config'
 import {
   createCycle,
   upsertPitch,
@@ -195,7 +196,13 @@ type UpdateInput = { progress: number; zone: Zone; narrative: string }
 // postedAt, which each caller stamps — post uses the built update's timestamp).
 function resolveUpdateContext(
   storage: Awaited<ReturnType<typeof getCycleStorage>>,
-  pitch: { id: string; title: string; timebox_start: string; timebox_end: string },
+  pitch: {
+    id: string
+    title: string
+    timebox_start: string
+    timebox_end: string
+    needle: Needle | null
+  },
   orgSlug: string,
   cycleSlug: string,
   input: UpdateInput
@@ -209,14 +216,42 @@ function resolveUpdateContext(
   const totals = deriveTotalTaskProgress(storage.scopes, storage.tasks, pitch.id)
   const pitchUrl = `${resolveOrigin()}/${orgSlug}/cycles/${cycleSlug}/${slugify(pitch.title)}`
 
+  // Hill movement, framed against the previous update — mirrors the app so an
+  // MCP-posted update reads the same in Slack. Baseline at 0% on the first one.
+  const pitchUpdates = storage.updates.filter((u) => u.pitchId === pitch.id)
+  const latestUpdate = pitchUpdates.length
+    ? pitchUpdates.reduce((a, b) => (a.posted_at > b.posted_at ? a : b))
+    : null
+  const scopesForDiff = pitchScopes.map((s) => ({ id: s.id, hill_progress: s.hill_progress }))
+  const baselineSnapshot = latestUpdate
+    ? latestUpdate.hill_snapshot
+    : pitchScopes.map((s) => ({
+        scopeId: s.id,
+        hill_progress: 0,
+        title: s.title,
+        tier: s.tier,
+      }))
+  const trails = scopesForDiff.length ? diffHillTrail(baselineSnapshot, scopesForDiff) : []
+  const snapshotsNewestFirst = [...pitchUpdates]
+    .sort((a, b) => (a.posted_at > b.posted_at ? -1 : 1))
+    .map((u) => u.hill_snapshot)
+  const movement = summarizeMovement(
+    trails,
+    noChangeStreaks(snapshotsNewestFirst, scopesForDiff),
+    new Map(pitchScopes.map((s) => [s.id, s.title]))
+  )
+
   const slackParams = (postedAt: string): SlackMessageParams => ({
     pitchTitle: pitch.title,
     weekNumber: timebox.currentWeek,
     totalWeeks: timebox.totalWeeks,
     zone: input.zone,
+    previousZone: pitch.needle?.zone ?? null,
+    authorName: 'Cycles',
     narrative: input.narrative,
-    tasksDone: totals.done,
-    tasksTotal: totals.total,
+    movement,
+    needleProgress: input.progress,
+    previousNeedleProgress: pitch.needle?.progress ?? null,
     daysLeft: timebox.daysLeft,
     pitchUrl,
     postedAt,
