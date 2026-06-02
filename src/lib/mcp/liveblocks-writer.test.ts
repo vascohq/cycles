@@ -167,6 +167,7 @@ describe('upsertPitch', () => {
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
       emoji: '',
+      notion_url: '',
     })
 
     expect(result.created).toBe(true)
@@ -190,6 +191,7 @@ describe('upsertPitch', () => {
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
       emoji: '',
+      notion_url: '',
     })
 
     expect(result.created).toBe(false)
@@ -211,6 +213,7 @@ describe('upsertPitch', () => {
         timebox_start: '',
         timebox_end: '',
         emoji: '',
+        notion_url: '',
       })
     ).rejects.toThrow('not found')
   })

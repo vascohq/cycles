@@ -34,6 +34,8 @@ export type CyclePitch = {
   timebox_end: string
   /** Identity emoji (single grapheme), or '' when unset. */
   emoji: string
+  /** Outbound link to the pitch's Notion doc, or '' when unset. */
+  notion_url: string
 }
 
 export type CycleScope = {

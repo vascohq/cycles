@@ -31,6 +31,7 @@ export const FIXTURE: Omit<
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
     emoji: '🚀',
+    notion_url: 'https://www.notion.so/Mission-Control-abc123',
   },
   hillScopes: [
     { id: 'scope-needle', title: 'Needle engine & gauge', tier: 'must', color: '#e5484d', hill_progress: 0.85, order: 1 },

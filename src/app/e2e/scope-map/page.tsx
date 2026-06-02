@@ -27,6 +27,9 @@ export default function ScopeMapE2EPage() {
         setPitch((p) => ({ ...p, stage }))
       }
       onEmojiChange={(emoji) => setPitch((p) => ({ ...p, emoji }))}
+      onNotionUrlChange={(notion_url) =>
+        setPitch((p) => ({ ...p, notion_url }))
+      }
       onTaskToggle={(scopeId, taskId, done) =>
         setScopeGridItems((items) =>
           items.map((s) =>

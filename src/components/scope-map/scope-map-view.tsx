@@ -13,6 +13,7 @@ import { ScopeDrawer } from '@/components/scope-card/scope-drawer'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
 import { MoveNeedleModal } from '@/components/move-needle'
 import { PitchEmoji } from '@/components/pitch-emoji'
+import { NotionLinkPill } from '@/components/notion-link-pill'
 import { UpdatesTimeline } from '@/components/updates-timeline'
 import {
   Dialog,
@@ -44,6 +45,7 @@ export type ScopeMapViewProps = {
     timebox_start: string
     timebox_end: string
     emoji: string
+    notion_url: string
   }
   hillScopes: HillScope[]
   hillTrails?: ScopeTrail[]
@@ -55,6 +57,7 @@ export type ScopeMapViewProps = {
   today: string
   onStageChange?: (stage: Stage) => void
   onEmojiChange?: (emoji: string) => void
+  onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
   onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
@@ -99,6 +102,7 @@ export function ScopeMapView({
   today,
   onStageChange,
   onEmojiChange,
+  onNotionUrlChange,
   onHillProgressChange,
   onTaskToggle,
   onTaskEdit,
@@ -155,6 +159,7 @@ export function ScopeMapView({
         today={today}
         onStageChange={onStageChange}
         onEmojiChange={onEmojiChange}
+        onNotionUrlChange={onNotionUrlChange}
         isDone={isDone}
       />
 
@@ -365,6 +370,7 @@ function HeroCard({
   today,
   onStageChange,
   onEmojiChange,
+  onNotionUrlChange,
   isDone,
 }: {
   pitch: {
@@ -375,10 +381,12 @@ function HeroCard({
     timebox_start: string
     timebox_end: string
     emoji: string
+    notion_url: string
   }
   today: string
   onStageChange?: (stage: Stage) => void
   onEmojiChange?: (emoji: string) => void
+  onNotionUrlChange?: (url: string) => void
   isDone?: boolean
 }) {
   const stageIndex = STAGES.indexOf(pitch.stage)
@@ -429,9 +437,15 @@ function HeroCard({
               {pitch.title}
             </h1>
           </div>
-          {onStageChange && (
-            <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <NotionLinkPill
+              url={pitch.notion_url}
+              onChange={onNotionUrlChange}
+            />
+            {onStageChange && (
+              <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">

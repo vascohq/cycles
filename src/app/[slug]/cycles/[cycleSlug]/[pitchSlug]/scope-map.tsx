@@ -142,6 +142,14 @@ function ScopeMapWired({
     [pitchId]
   )
 
+  const onNotionUrlChange = useCycleMutation(
+    ({ storage }, url: string) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('notion_url', url)
+    },
+    [pitchId]
+  )
+
   const onHillProgressChange = useCycleMutation(
     ({ storage }, scopeId: string, progress: number) => {
       const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
@@ -554,7 +562,11 @@ function ScopeMapWired({
       slug={slug}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
-      pitch={{ ...pitch, emoji: pitch.emoji ?? '' }}
+      pitch={{
+        ...pitch,
+        emoji: pitch.emoji ?? '',
+        notion_url: pitch.notion_url ?? '',
+      }}
       hillScopes={hillScopes}
       hillTrails={hillTrails}
       hillHistory={hillHistory}
@@ -565,6 +577,7 @@ function ScopeMapWired({
       today={today}
       onStageChange={onStageChange}
       onEmojiChange={onEmojiChange}
+      onNotionUrlChange={onNotionUrlChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
       onTaskEdit={onTaskEdit}

@@ -7,7 +7,7 @@ import { derivePitchCards } from '@/lib/mission-control-helpers'
 import { deriveTotalTaskProgress } from '@/lib/scope-map-helpers'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
-import { normalizeEmoji } from '@/lib/pitch-identity-engine'
+import { normalizeEmoji, validateNotionUrl } from '@/lib/pitch-identity-engine'
 import { formatSlackMessage, type SlackMessageParams } from '@/lib/slack-message'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
@@ -677,6 +677,12 @@ export function registerCyclesTools(server: any): void {
         .string()
         .default('')
         .describe('Identity emoji (single emoji). Anything else is ignored.'),
+      notion_url: z
+        .string()
+        .default('')
+        .describe(
+          'Outbound link to the pitch’s Notion doc. Must be a valid https URL or it is ignored.'
+        ),
     },
     {
       title: 'Create or update pitch',
@@ -686,17 +692,19 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string; emoji: string },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string; emoji: string; notion_url: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
+      const notion = validateNotionUrl(params.notion_url)
       try {
         const result = await upsertPitch(roomId, {
           ...params,
           emoji: normalizeEmoji(params.emoji),
+          notion_url: notion.isValidUrl ? notion.value : '',
         })
         return jsonResult(result)
       } catch (err) {
