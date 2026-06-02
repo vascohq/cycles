@@ -110,6 +110,20 @@ _Avoid_: Scope snapshot (conflicts with existing PitchSnapshot)
 The arrow-scrubbable sequence of past Hill Snapshots. Stepping back shows a read-only historical frame — that update's positions with the trail from the update before it. There is no continuous log of every drag; the heartbeat is the needle update, so history advances one update at a time.
 _Avoid_: Timeline (reserved for the updates feed), movement log, playback
 
+### Squads
+
+**Squad**:
+A named, color-coded team that owns pitches within a cycle. A pitch belongs to zero or one squad. Squads are defined **per-cycle** (stored in the cycle's room), so a pitch's ownership is preserved historically for free and every new cycle starts with a fresh squad list. A squad has no member roster — people remain Clerk org users, tracked separately. Names are unique within a cycle, matched case-insensitively via slugify ("Platform", "platform", "  PLATFORM  " are the same squad); a rename that collides with another squad's name is rejected, never silently duplicated.
+_Avoid_: Team (ambiguous with the Clerk organization), group, pod, roster
+
+**Squad Color**:
+A squad's identity color, used to tell squads apart across a cycle — shown on the squad chip (Scope Map), the squad's Mission Control section header, and each pitch card. Drawn from the same curated palette as **Scope Color** but a conceptually distinct concept: Squad Color groups pitches across a cycle, Scope Color distinguishes scopes within one pitch. Auto-assigned (hue-distant from sibling squads) when not chosen; overridable from the palette only — no free hex (parity with ADR 0008).
+_Avoid_: Scope color, tier color, zone color, theme color
+
+**Unassigned**:
+The implicit bucket for pitches with no squad (`squadId` null) — not a stored squad. Always rendered last in Mission Control. Deleting a squad moves its pitches here rather than deleting them, so work is never lost by removing a team.
+_Avoid_: No squad, null squad, default squad, backlog
+
 ### Views
 
 **Mission Control**:
@@ -139,6 +153,9 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **Mission Control** renders all **Pitches** in a **Cycle**
 - **Scope Map** renders one **Pitch** in detail
 - A **Cycle** has one Slack channel; all pitch **Updates** in that cycle post there
+- A **Cycle** contains zero or more **Squads**; a **Pitch** belongs to zero or one **Squad**
+- **Mission Control** groups **Pitches** into a section per **Squad**, with **Unassigned** last
+- Deleting a **Squad** moves its **Pitches** to **Unassigned** (never deletes them)
 
 ## Example dialogue
 
@@ -161,3 +178,4 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **"snapshot"** was used for the existing `PitchSnapshot` type (legacy board feature) and for the new update snapshots. Resolved: the legacy type is retired. New terms are **Needle Snapshot** and **Hill Snapshot**, both part of an **Update**.
 - **"color"** historically meant tier color (red/orange/grey on scope dots) vs zone color (green/yellow/red on the needle). Resolved + superseded: tier is no longer color-encoded (it is now a text **badge**). The scope dot and order badge now show the scope's unique **Scope Color**; zone color still appears on the needle and update cards (see [ADR 0008](docs/adr/0008-scope-identity-color.md)).
 - **needle position vs. zone** were coupled: position was auto-snapped from the chosen zone (on_track→0.85, some_risk→0.5, concerned→0.2). Resolved: they are independent — position is slid manually, zone is chosen separately, and the snapping derivation is removed. The needle's filled arc encodes both at once: length = position, color = zone.
+- **"team"** is ambiguous: it can mean the Clerk **organization** (the workspace tenant) or the per-cycle ownership label. Resolved: always use **Squad** for the per-cycle, color-coded group that owns pitches. Reserve "organization" for the Clerk tenant. Never use "team" unqualified in product copy or code.
