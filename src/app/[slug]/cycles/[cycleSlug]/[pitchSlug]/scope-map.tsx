@@ -190,6 +190,47 @@ function ScopeMapWired({
     [pitchId]
   )
 
+  // Cycle-wide pitch count per squad — drives the delete blast-radius copy.
+  const squadPitchCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const p of allPitches) {
+      if (p.squadId) counts[p.squadId] = (counts[p.squadId] ?? 0) + 1
+    }
+    return counts
+  }, [allPitches])
+
+  // Rename/recolor mutate the squad in place; because pitches reference a squad
+  // by id, the change propagates to every chip, card, and section header for free.
+  const onRenameSquad = useCycleMutation(({ storage }, squadId: string, name: string) => {
+    const sq = storage.get('squads').find((x) => x.get('id') === squadId)
+    sq?.set('name', name)
+  }, [])
+
+  const onRecolorSquad = useCycleMutation(({ storage }, squadId: string, color: string) => {
+    const sq = storage.get('squads').find((x) => x.get('id') === squadId)
+    sq?.set('color', color)
+  }, [])
+
+  // Delete unassigns every pitch in the cycle that referenced the squad (→
+  // Unassigned) before removing it, mirroring the MCP writer's deleteSquad.
+  const onDeleteSquad = useCycleMutation(({ storage }, squadId: string) => {
+    const squadsList = storage.get('squads')
+    let idx = -1
+    for (let i = 0; i < squadsList.length; i++) {
+      if (squadsList.get(i)!.get('id') === squadId) {
+        idx = i
+        break
+      }
+    }
+    if (idx === -1) return
+    squadsList.delete(idx)
+    const pitchesList = storage.get('pitches')
+    for (let i = 0; i < pitchesList.length; i++) {
+      const p = pitchesList.get(i)!
+      if (p.get('squadId') === squadId) p.delete('squadId')
+    }
+  }, [])
+
   const onHillProgressChange = useCycleMutation(
     ({ storage }, scopeId: string, progress: number) => {
       const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
@@ -613,6 +654,10 @@ function ScopeMapWired({
       currentSquadId={pitch.squadId}
       onAssignSquad={onAssignSquad}
       onClearSquad={onClearSquad}
+      squadPitchCounts={squadPitchCounts}
+      onRenameSquad={onRenameSquad}
+      onRecolorSquad={onRecolorSquad}
+      onDeleteSquad={onDeleteSquad}
       hillScopes={hillScopes}
       hillTrails={hillTrails}
       hillHistory={hillHistory}

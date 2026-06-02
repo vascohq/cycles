@@ -553,6 +553,37 @@ describe('upsertSquad', () => {
       upsertSquad(ROOM, { id: 'nope', name: 'X' })
     ).rejects.toThrow(/not found/i)
   })
+
+  it('rejects renaming a squad to a name another squad already uses', async () => {
+    const a = makeMockItem({ id: 'sq1', name: 'Platform', color: '#000000' })
+    const b = makeMockItem({ id: 'sq2', name: 'Growth', color: '#111111' })
+    setupStorage({ squads: [a, b] })
+
+    await expect(
+      upsertSquad(ROOM, { id: 'sq1', name: 'growth' })
+    ).rejects.toThrow(/already/i)
+    // The colliding rename must not have mutated the squad.
+    expect(a.get('name')).toBe('Platform')
+  })
+
+  it('allows renaming a squad to a case/whitespace variant of its own name', async () => {
+    const a = makeMockItem({ id: 'sq1', name: 'Platform', color: '#000000' })
+    setupStorage({ squads: [a] })
+
+    await upsertSquad(ROOM, { id: 'sq1', name: '  platform  ' })
+
+    expect(a.get('name')).toBe('  platform  ')
+  })
+
+  it('rejects creating a squad whose name a squad already uses', async () => {
+    const a = makeMockItem({ id: 'sq1', name: 'Platform', color: '#000000' })
+    const storage = setupStorage({ squads: [a] })
+
+    await expect(upsertSquad(ROOM, { name: 'platform' })).rejects.toThrow(
+      /already/i
+    )
+    expect(storage.squads.toArray()).toHaveLength(1)
+  })
 })
 
 describe('deleteSquad', () => {

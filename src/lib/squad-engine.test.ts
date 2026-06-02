@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { resolveSquadByName, assignSquadColor } from './squad-engine'
+import {
+  resolveSquadByName,
+  assignSquadColor,
+  isSquadNameTaken,
+} from './squad-engine'
 import { SCOPE_PALETTE } from './color-engine'
 
 const squads = [
@@ -29,6 +33,23 @@ describe('resolveSquadByName', () => {
   it('returns null for an empty or whitespace-only name', () => {
     expect(resolveSquadByName(squads, '')).toBeNull()
     expect(resolveSquadByName(squads, '   ')).toBeNull()
+  })
+})
+
+describe('isSquadNameTaken', () => {
+  it('is true when another squad already uses the name', () => {
+    expect(isSquadNameTaken(squads, 'Growth')).toBe(true)
+  })
+
+  it('is false when the name resolves to the squad being renamed (exceptId)', () => {
+    // Renaming s1 to a case/whitespace variant of its own name is allowed.
+    expect(isSquadNameTaken(squads, '  platform  ', 's1')).toBe(false)
+  })
+
+  it('is false for an unused name or an empty/whitespace name', () => {
+    expect(isSquadNameTaken(squads, 'Design')).toBe(false)
+    expect(isSquadNameTaken(squads, '')).toBe(false)
+    expect(isSquadNameTaken(squads, '   ')).toBe(false)
   })
 })
 

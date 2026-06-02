@@ -10,7 +10,12 @@ import type {
   Squad,
 } from '@/cycle-liveblocks.config'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
-import { assignSquadColor, resolveSquadByName, squadKey } from '@/lib/squad-engine'
+import {
+  assignSquadColor,
+  resolveSquadByName,
+  squadKey,
+  isSquadNameTaken,
+} from '@/lib/squad-engine'
 
 type UpsertResult = { created: boolean; id: string }
 
@@ -191,15 +196,25 @@ export async function upsertSquad(
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
+  let nameTaken = false
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const squads = root.get('squads')
 
+    // Enforce the "names are unique within a cycle" invariant on both paths,
+    // using the same guard as the Scope Map rename UI (see squad-engine).
+    const arr = squads.toArray().map((s: any) => ({
+      id: getField(s, 'id'),
+      name: getField(s, 'name'),
+      color: getField(s, 'color'),
+    }))
+    if (isSquadNameTaken(arr, params.name, created ? undefined : id)) {
+      nameTaken = true
+      return
+    }
+
     if (created) {
-      const usedColors = squads
-        .toArray()
-        .map((s: any) => getField(s, 'color'))
-        .filter(Boolean)
+      const usedColors = arr.map((s: any) => s.color).filter(Boolean)
       const squad: Squad = {
         id,
         name: params.name,
@@ -217,6 +232,7 @@ export async function upsertSquad(
     }
   })
 
+  if (nameTaken) throw new Error(`Squad name already in use: "${params.name}"`)
   if (notFound) throw new Error(`Squad not found: "${id}"`)
   return { created, id }
 }
