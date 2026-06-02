@@ -4,6 +4,9 @@ import {
   partitionByStage,
   sortByStageProgression,
   groupBySquad,
+  sectionKey,
+  filterSquadSections,
+  UNASSIGNED_KEY,
 } from './mission-control-helpers'
 import type {
   CyclePitch,
@@ -12,7 +15,7 @@ import type {
   PitchUpdate,
   Stage,
 } from '@/cycle-liveblocks.config'
-import type { PitchCard } from './mission-control-helpers'
+import type { PitchCard, SquadSection } from './mission-control-helpers'
 
 const pitches: CyclePitch[] = [
   {
@@ -222,5 +225,38 @@ describe('groupBySquad', () => {
     expect(sections).toHaveLength(1)
     expect(sections[0].squad).toBeNull()
     expect(sections[0].cards.map((c) => c.id)).toEqual(['a'])
+  })
+})
+
+describe('sectionKey / filterSquadSections', () => {
+  const sq = (id: string | null): SquadSection => ({
+    squad: id ? { id, name: id, color: '#000' } : null,
+    cards: [],
+  })
+  const sections = [sq('sq1'), sq('sq2'), sq(null)]
+
+  it('keys a squad section by id and the unassigned section by the sentinel', () => {
+    expect(sectionKey(sections[0])).toBe('sq1')
+    expect(sectionKey(sections[2])).toBe(UNASSIGNED_KEY)
+  })
+
+  it('returns all sections when the active key is null', () => {
+    expect(filterSquadSections(sections, null)).toHaveLength(3)
+  })
+
+  it('narrows to the selected squad section', () => {
+    const filtered = filterSquadSections(sections, 'sq2')
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0].squad?.id).toBe('sq2')
+  })
+
+  it('narrows to the unassigned section via the sentinel', () => {
+    const filtered = filterSquadSections(sections, UNASSIGNED_KEY)
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0].squad).toBeNull()
+  })
+
+  it('returns nothing for an unknown key', () => {
+    expect(filterSquadSections(sections, 'ghost')).toHaveLength(0)
   })
 })

@@ -14,6 +14,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { PitchCard, SquadSection } from '@/lib/mission-control-helpers'
+import {
+  sectionKey,
+  filterSquadSections,
+} from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
@@ -54,11 +58,15 @@ export function MissionControlView({
   onCreatePitch,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
+  const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const slackEnabled = useSlackEnabled()
   const isEmpty = sections.length === 0
+  // Show the filter only when there's more than one section to choose between.
+  const showFilter = sections.length > 1
+  const visibleSections = filterSquadSections(sections, activeFilter)
 
   return (
-    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link
@@ -91,6 +99,13 @@ export function MissionControlView({
             )}
           </div>
         </div>
+        {showFilter && (
+          <SquadFilterBar
+            sections={sections}
+            active={activeFilter}
+            onChange={setActiveFilter}
+          />
+        )}
       </header>
 
       {isEmpty ? (
@@ -98,15 +113,17 @@ export function MissionControlView({
           No pitches yet.
         </div>
       ) : (
-        sections.map((section) => (
-          <SquadSectionBlock
-            key={section.squad?.id ?? '__unassigned__'}
-            section={section}
-            slug={slug}
-            cycleSlug={cycleSlug}
-            today={today}
-          />
-        ))
+        <div className="flex flex-col gap-6">
+          {visibleSections.map((section) => (
+            <SquadSectionBlock
+              key={sectionKey(section)}
+              section={section}
+              slug={slug}
+              cycleSlug={cycleSlug}
+              today={today}
+            />
+          ))}
+        </div>
       )}
 
       {onCreatePitch && (
@@ -121,6 +138,58 @@ export function MissionControlView({
         mission control · click a pitch to open its scope map
       </footer>
     </main>
+  )
+}
+
+function SquadFilterBar({
+  sections,
+  active,
+  onChange,
+}: {
+  sections: SquadSection[]
+  active: string | null
+  onChange: (key: string | null) => void
+}) {
+  const chip = (
+    selected: boolean,
+    label: string,
+    color: string | undefined,
+    onClick: () => void
+  ) => (
+    <button
+      key={label}
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors',
+        selected
+          ? 'bg-foreground text-background border-foreground'
+          : 'hover:bg-muted'
+      )}
+    >
+      {color && (
+        <span
+          className="size-2 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      )}
+      {label}
+    </button>
+  )
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by squad">
+      {chip(active === null, 'All', undefined, () => onChange(null))}
+      {sections.map((section) => {
+        const key = sectionKey(section)
+        return chip(
+          active === key,
+          section.squad?.name ?? 'Unassigned',
+          section.squad?.color,
+          () => onChange(active === key ? null : key)
+        )
+      })}
+    </div>
   )
 }
 
