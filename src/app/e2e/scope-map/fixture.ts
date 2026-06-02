@@ -32,11 +32,11 @@ export const FIXTURE: Omit<
     timebox_end: '2026-07-03',
   },
   hillScopes: [
-    { id: 'scope-needle', title: 'Needle engine & gauge', tier: 'must', hill_progress: 0.85, order: 1 },
-    { id: 'scope-hill', title: 'Hill chart visualization', tier: 'must', hill_progress: 0.7, order: 2 },
-    { id: 'scope-timebox', title: 'Timebox tape', tier: 'should', hill_progress: 0.55, order: 3 },
-    { id: 'scope-cards', title: 'Scope cards & task checklists', tier: 'must', hill_progress: 0.4, order: 4 },
-    { id: 'scope-parking', title: 'Parking lot', tier: 'could', hill_progress: 0.3, order: 5 },
+    { id: 'scope-needle', title: 'Needle engine & gauge', tier: 'must', color: '#e5484d', hill_progress: 0.85, order: 1 },
+    { id: 'scope-hill', title: 'Hill chart visualization', tier: 'must', color: '#e5484d', hill_progress: 0.7, order: 2 },
+    { id: 'scope-timebox', title: 'Timebox tape', tier: 'should', color: '#30a46c', hill_progress: 0.55, order: 3 },
+    { id: 'scope-cards', title: 'Scope cards & task checklists', tier: 'must', color: '#e5484d', hill_progress: 0.4, order: 4 },
+    { id: 'scope-parking', title: 'Parking lot', tier: 'could', color: '#8e4ec6', hill_progress: 0.3, order: 5 },
   ],
   scopeGridItems: [
     {
@@ -44,6 +44,7 @@ export const FIXTURE: Omit<
       order: 1,
       title: 'Needle engine & gauge',
       tier: 'must',
+      color: '#3e63dd',
       litmus_text: 'Teams can see and update their pitch sentiment',
       tasks: [
         { id: 't1', title: 'Needle engine pure functions', done: true },
@@ -56,6 +57,7 @@ export const FIXTURE: Omit<
       order: 2,
       title: 'Hill chart visualization',
       tier: 'must',
+      color: '#3e63dd',
       litmus_text: 'Scope progress visible on a hill curve',
       tasks: [
         { id: 't4', title: 'Hill engine math', done: true },
@@ -68,6 +70,7 @@ export const FIXTURE: Omit<
       order: 3,
       title: 'Timebox tape',
       tier: 'should',
+      color: '#3e63dd',
       litmus_text: 'Visual countdown shows time remaining',
       tasks: [
         { id: 't7', title: 'Timebox engine', done: true },
@@ -79,6 +82,7 @@ export const FIXTURE: Omit<
       order: 4,
       title: 'Scope cards & task checklists',
       tier: 'must',
+      color: '#3e63dd',
       litmus_text: 'Teams can break scopes into tasks and check them off',
       tasks: [
         { id: 't9', title: 'ScopeCard component', done: true },
@@ -91,6 +95,7 @@ export const FIXTURE: Omit<
       order: 5,
       title: 'Parking lot',
       tier: 'could',
+      color: '#3e63dd',
       litmus_text: 'Open decisions have a home outside of scopes',
       tasks: [
         { id: 't12', title: 'ParkingLot component', done: true },

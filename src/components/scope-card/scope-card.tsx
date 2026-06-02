@@ -1,9 +1,10 @@
 'use client'
 
-import { forwardRef, useState } from 'react'
+import { forwardRef } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
-import { TIER_COLORS } from '@/components/hill-chart/tier-colors'
-import { Check, Plus, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { readableTextColor } from '@/lib/color-engine'
+import { Badge } from '@/components/ui/badge'
+import { MoreHorizontal, Trash2, GripVertical } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,34 +23,32 @@ export type ScopeCardProps = {
   order: number
   title: string
   tier: Tier
+  /** Identity color for the order badge and hill dot (see ADR 0008). */
+  color: string
   litmus_text: string
   tasks: ScopeCardTask[]
-  onTaskToggle?: (taskId: string, done: boolean) => void
-  onTaskEdit?: (taskId: string, title: string) => void
-  onTaskDelete?: (taskId: string) => void
-  onAddTask?: (title: string) => void
-  onReset?: () => void
-  onEdit?: () => void
+  /** Open the scope drawer — fired by clicking anywhere on the card body. */
+  onOpen?: () => void
   onDelete?: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
   isDragging?: boolean
   readOnly?: boolean
 }
 
+// A scope card is a big-picture tile: the scope's name leads, "what it ships"
+// (litmus) supports it, and a non-numeric presence indicator hints that a
+// checklist exists — never a completion count (see ADR 0007). Clicking the body
+// opens the Scope Drawer where tasks and fields are managed.
 export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
   function ScopeCard(
     {
       order,
       title,
       tier,
+      color,
       litmus_text,
       tasks,
-      onTaskToggle,
-      onTaskEdit,
-      onTaskDelete,
-      onAddTask,
-      onReset,
-      onEdit,
+      onOpen,
       onDelete,
       dragHandleProps,
       isDragging,
@@ -57,193 +56,113 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     },
     ref
   ) {
-    const doneCount = tasks.filter((t) => t.done).length
     const totalCount = tasks.length
+    const clickable = !!onOpen
 
     return (
       <div
         ref={ref}
-        className={`rounded-lg border bg-card p-4 flex flex-col gap-3 h-64 transition-shadow ${
+        {...(clickable
+          ? {
+              role: 'button',
+              tabIndex: 0,
+              onClick: onOpen,
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onOpen()
+                }
+              },
+            }
+          : {})}
+        className={`rounded-lg border bg-card p-4 flex flex-col gap-2 h-44 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 ${
           isDragging ? 'shadow-lg opacity-75' : ''
-        }`}
+        } ${clickable ? 'cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-ring' : ''}`}
       >
         <div className="flex items-start gap-3 flex-shrink-0">
           <div
             {...(readOnly ? {} : dragHandleProps)}
-            className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
-            style={{ backgroundColor: TIER_COLORS[tier] }}
+            onClick={(e) => e.stopPropagation()}
+            title={readOnly ? undefined : 'Drag to reorder'}
+            className={`group/badge relative flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
+            style={{ backgroundColor: color, color: readableTextColor(color) }}
           >
-            {order}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold leading-tight tracking-tight truncate">
-              {title}
-            </h3>
-            {litmus_text && (
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                <span className="font-mono text-[10px] opacity-50 mr-1">
-                  if only this ships:
+            {readOnly ? (
+              order
+            ) : (
+              <>
+                <span className="transition-opacity group-hover/badge:opacity-0">
+                  {order}
                 </span>
-                {litmus_text}
-              </p>
+                <GripVertical className="w-4 h-4 absolute inset-0 m-auto opacity-0 transition-opacity group-hover/badge:opacity-100" />
+              </>
             )}
           </div>
-          {!readOnly && (onEdit || onDelete) && (
-            <ScopeActions onEdit={onEdit} onDelete={onDelete} />
+          <h3 className="flex-1 min-w-0 text-base font-semibold leading-snug tracking-tight line-clamp-2">
+            {title}
+          </h3>
+          <Badge variant={tier} className="flex-shrink-0 mt-0.5">
+            {tier}
+          </Badge>
+          {!readOnly && onDelete && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ScopeActions onDelete={onDelete} />
+            </div>
           )}
         </div>
 
-        {/* Tasks scroll within the fixed-height card so it never grows; a
-            bottom fade hints at more when the list overflows. */}
-        <div className="relative flex-1 min-h-0">
-          <div className="h-full overflow-y-auto flex flex-col gap-1 pr-1">
-            {tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                readOnly={readOnly}
-                onToggle={onTaskToggle ? () => onTaskToggle(task.id, !task.done) : undefined}
-                onEdit={onTaskEdit ? (title) => onTaskEdit(task.id, title) : undefined}
-                onDelete={onTaskDelete ? () => onTaskDelete(task.id) : undefined}
-              />
-            ))}
-
-            {onAddTask && !readOnly && (
-              <AddTaskInput onAddTask={onAddTask} />
-            )}
+        {litmus_text && (
+          <div className="flex-shrink-0">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/50">
+              what it ships
+            </p>
+            <p className="text-sm text-muted-foreground line-clamp-2 leading-snug">
+              {litmus_text}
+            </p>
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-card to-transparent" />
-        </div>
+        )}
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground flex-shrink-0">
-          <span>
-            {doneCount}/{totalCount} done
-          </span>
-          {doneCount > 0 && onReset && !readOnly && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
-            >
-              reset
-            </button>
-          )}
-        </div>
+        <div className="flex-1" />
+
+        {totalCount > 0 && <TaskPresence tasks={tasks} />}
       </div>
     )
   }
 )
 
-// A single task line: checkbox + title toggle done; hover reveals inline rename
-// (pencil) and delete (trash). The row is a flex container — never a <button> —
-// so the action controls aren't nested inside a button. Rename mirrors the
-// add-task input: Enter/blur saves, Esc cancels, an empty title reverts.
-function TaskRow({
-  task,
-  readOnly,
-  onToggle,
-  onEdit,
-  onDelete,
-}: {
-  task: ScopeCardTask
-  readOnly?: boolean
-  onToggle?: () => void
-  onEdit?: (title: string) => void
-  onDelete?: () => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(task.title)
-
-  function startEdit() {
-    setValue(task.title)
-    setEditing(true)
-  }
-
-  function save() {
-    const trimmed = value.trim()
-    if (trimmed && trimmed !== task.title) onEdit?.(trimmed)
-    setEditing(false)
-  }
-
-  if (editing && onEdit) {
-    return (
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') save()
-          if (e.key === 'Escape') { setValue(task.title); setEditing(false) }
-        }}
-        onFocus={(e) => e.currentTarget.select()}
-        onBlur={save}
-        className="w-full text-xs bg-transparent border-b border-foreground/30 py-0.5 outline-none flex-shrink-0"
-        autoFocus
-      />
-    )
-  }
+// Non-numeric presence: one tick per task, filled as tasks complete. Signals
+// "there's a checklist here" without asserting a completion percentage. Caps
+// the rendered ticks so a long list stays a single tidy row.
+function TaskPresence({ tasks }: { tasks: ScopeCardTask[] }) {
+  const MAX_TICKS = 12
+  const total = tasks.length
+  const shown = tasks.slice(0, MAX_TICKS)
 
   return (
-    <div className={`flex items-center gap-2 text-xs py-0.5 flex-shrink-0 ${readOnly ? '' : 'group'}`}>
-      <button
-        type="button"
-        {...(!readOnly && onToggle ? { onClick: onToggle } : { disabled: true })}
-        className="flex items-center gap-2 text-left min-w-0 flex-1"
-      >
-        <span
-          className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-            task.done
-              ? 'bg-foreground/10 border-foreground/20'
-              : readOnly
-                ? 'border-foreground/20'
-                : 'border-foreground/20 group-hover:border-foreground/40'
-          }`}
-        >
-          {task.done && <Check className="w-3 h-3 text-foreground/60" />}
-        </span>
-        <span
-          className={`truncate ${
-            task.done ? 'line-through text-muted-foreground/60' : 'text-foreground'
-          }`}
-        >
-          {task.title}
-        </span>
-      </button>
-
-      {!readOnly && (onEdit || onDelete) && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          {onEdit && (
-            <button
-              type="button"
-              aria-label="Edit task"
-              onClick={startEdit}
-              className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
-            >
-              <Pencil className="w-3 h-3" />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              aria-label="Delete task"
-              onClick={onDelete}
-              className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      )}
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1">
+        {shown.map((task) => (
+          <span
+            key={task.id}
+            className={`w-2 h-2 rounded-[3px] ${
+              task.done ? 'bg-foreground/50' : 'bg-foreground/15'
+            }`}
+          />
+        ))}
+        {total > MAX_TICKS && (
+          <span className="text-[10px] text-muted-foreground/50 ml-0.5">
+            +{total - MAX_TICKS}
+          </span>
+        )}
+      </div>
+      <span className="text-xs text-muted-foreground/70">
+        {total} task{total === 1 ? '' : 's'}
+      </span>
     </div>
   )
 }
 
-function ScopeActions({
-  onEdit,
-  onDelete,
-}: {
-  onEdit?: () => void
-  onDelete?: () => void
-}) {
+function ScopeActions({ onDelete }: { onDelete: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -256,62 +175,14 @@ function ScopeActions({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-36">
-        {onEdit && (
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="w-3.5 h-3.5 mr-2" />
-            Edit
-          </DropdownMenuItem>
-        )}
-        {onDelete && (
-          <DropdownMenuItem
-            onClick={onDelete}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-2" />
-            Delete
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem
+          onClick={onDelete}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-2" />
+          Delete
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
-  const [value, setValue] = useState('')
-  const [active, setActive] = useState(false)
-
-  function handleSubmit() {
-    const trimmed = value.trim()
-    if (!trimmed) return
-    onAddTask(trimmed)
-    setValue('')
-  }
-
-  if (!active) {
-    return (
-      <button
-        type="button"
-        onClick={() => setActive(true)}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors py-0.5"
-      >
-        <Plus className="w-3 h-3" />
-        add task
-      </button>
-    )
-  }
-
-  return (
-    <input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') handleSubmit()
-        if (e.key === 'Escape') { setValue(''); setActive(false) }
-      }}
-      onBlur={() => { handleSubmit(); setActive(false) }}
-      placeholder="Task title…"
-      className="w-full text-xs bg-transparent border-b border-foreground/10 focus:border-foreground/30 py-1 outline-none placeholder:text-muted-foreground/40"
-      autoFocus
-    />
   )
 }

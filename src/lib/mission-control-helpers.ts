@@ -14,6 +14,7 @@ export type PitchCard = {
   needle: Needle | null
   tasksDone: number
   tasksTotal: number
+  scopesTotal: number
   lastUpdatedAt: string | null
   timebox_start: string
   timebox_end: string
@@ -46,6 +47,7 @@ export function derivePitchCards(
       needle: p.needle,
       tasksDone: pitchTasks.filter((t) => t.done).length,
       tasksTotal: pitchTasks.length,
+      scopesTotal: pitchScopeIds.size,
       lastUpdatedAt: latestUpdate?.posted_at ?? null,
       timebox_start: p.timebox_start,
       timebox_end: p.timebox_end,

@@ -8,6 +8,7 @@ import type { HillScope } from '@/components/hill-chart/hill-chart'
 import type { ScopeCardTask } from '@/components/scope-card/scope-card'
 import type { ParkingLotItem } from '@/components/parking-lot/parking-lot'
 import { diffHillTrail, type ScopeTrail } from '@/lib/hill-trail-engine'
+import { resolveScopeColors } from '@/lib/color-engine'
 
 export type ScopeGridDerived = {
   id: string
@@ -15,6 +16,8 @@ export type ScopeGridDerived = {
   title: string
   tier: CycleScope['tier']
   litmus_text: string
+  /** Resolved identity color (stored, or deterministically assigned). */
+  color: string
   tasks: ScopeCardTask[]
 }
 
@@ -23,33 +26,35 @@ export function deriveScopeGridItems(
   tasks: ScopeTask[],
   pitchId: string
 ): ScopeGridDerived[] {
-  return scopes
-    .filter((s) => s.pitchId === pitchId)
-    .map((s, i) => ({
-      id: s.id,
-      order: i + 1,
-      title: s.title,
-      tier: s.tier,
-      litmus_text: s.litmus_text,
-      tasks: tasks
-        .filter((t) => t.scopeId === s.id)
-        .map((t) => ({ id: t.id, title: t.title, done: t.done })),
-    }))
+  const pitchScopes = scopes.filter((s) => s.pitchId === pitchId)
+  const colors = resolveScopeColors(pitchScopes)
+  return pitchScopes.map((s, i) => ({
+    id: s.id,
+    order: i + 1,
+    title: s.title,
+    tier: s.tier,
+    litmus_text: s.litmus_text,
+    color: colors[s.id],
+    tasks: tasks
+      .filter((t) => t.scopeId === s.id)
+      .map((t) => ({ id: t.id, title: t.title, done: t.done })),
+  }))
 }
 
 export function deriveHillScopes(
   scopes: CycleScope[],
   pitchId: string
 ): HillScope[] {
-  return scopes
-    .filter((s) => s.pitchId === pitchId)
-    .map((s, i) => ({
-      id: s.id,
-      title: s.title,
-      tier: s.tier,
-      hill_progress: s.hill_progress,
-      order: i + 1,
-    }))
+  const pitchScopes = scopes.filter((s) => s.pitchId === pitchId)
+  const colors = resolveScopeColors(pitchScopes)
+  return pitchScopes.map((s, i) => ({
+    id: s.id,
+    title: s.title,
+    tier: s.tier,
+    hill_progress: s.hill_progress,
+    order: i + 1,
+    color: colors[s.id],
+  }))
 }
 
 export function deriveParkingLotItems(
@@ -89,6 +94,10 @@ export function buildHillHistoryFrames(
   users: Map<string, { name: string }>
 ): HillHistoryFrame[] {
   const liveOrderById = new Map(liveScopes.map((s) => [s.id, s.order]))
+  // Historical dots reuse the live scope's color by id; snapshots predate the
+  // color field, so a scope dropped since the snapshot falls back to neutral.
+  const liveColorById = new Map(liveScopes.map((s) => [s.id, s.color]))
+  const NEUTRAL = '#9ca3af'
   // Oldest → newest so each update can diff against its immediate predecessor.
   const chronological = [...updates].sort(
     (a, b) => new Date(a.posted_at).getTime() - new Date(b.posted_at).getTime()
@@ -102,6 +111,7 @@ export function buildHillHistoryFrames(
       tier: s.tier ?? DEFAULT_TIER,
       hill_progress: s.hill_progress,
       order: liveOrderById.get(s.scopeId) ?? idx + 1,
+      color: liveColorById.get(s.scopeId) ?? NEUTRAL,
     }))
     const trails = diffHillTrail(
       prev ? prev.hill_snapshot : [],

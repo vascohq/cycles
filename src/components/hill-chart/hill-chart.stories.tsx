@@ -12,10 +12,10 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 const SAMPLE_SCOPES: HillScope[] = [
-  { id: '1', title: 'Auth flow', tier: 'must', hill_progress: 0.15, order: 1 },
-  { id: '2', title: 'Dashboard', tier: 'must', hill_progress: 0.4, order: 2 },
-  { id: '3', title: 'Notifications', tier: 'should', hill_progress: 0.6, order: 3 },
-  { id: '4', title: 'Dark mode', tier: 'could', hill_progress: 0.85, order: 4 },
+  { id: '1', title: 'Auth flow', tier: 'must', color: '#e5484d', hill_progress: 0.15, order: 1 },
+  { id: '2', title: 'Dashboard', tier: 'must', color: '#e5484d', hill_progress: 0.4, order: 2 },
+  { id: '3', title: 'Notifications', tier: 'should', color: '#30a46c', hill_progress: 0.6, order: 3 },
+  { id: '4', title: 'Dark mode', tier: 'could', color: '#8e4ec6', hill_progress: 0.85, order: 4 },
 ]
 
 export const Default: Story = {
@@ -33,7 +33,7 @@ export const Empty: Story = {
 export const SingleScope: Story = {
   args: {
     scopes: [
-      { id: '1', title: 'Only scope', tier: 'must', hill_progress: 0.5, order: 1 },
+      { id: '1', title: 'Only scope', tier: 'must', color: '#e5484d', hill_progress: 0.5, order: 1 },
     ],
   },
 }
@@ -41,9 +41,9 @@ export const SingleScope: Story = {
 export const AllAtStart: Story = {
   args: {
     scopes: [
-      { id: '1', title: 'Scope A', tier: 'must', hill_progress: 0.05, order: 1 },
-      { id: '2', title: 'Scope B', tier: 'should', hill_progress: 0.1, order: 2 },
-      { id: '3', title: 'Scope C', tier: 'could', hill_progress: 0.15, order: 3 },
+      { id: '1', title: 'Scope A', tier: 'must', color: '#e5484d', hill_progress: 0.05, order: 1 },
+      { id: '2', title: 'Scope B', tier: 'should', color: '#30a46c', hill_progress: 0.1, order: 2 },
+      { id: '3', title: 'Scope C', tier: 'could', color: '#8e4ec6', hill_progress: 0.15, order: 3 },
     ],
   },
 }
@@ -51,9 +51,9 @@ export const AllAtStart: Story = {
 export const AllDone: Story = {
   args: {
     scopes: [
-      { id: '1', title: 'Scope A', tier: 'must', hill_progress: 0.9, order: 1 },
-      { id: '2', title: 'Scope B', tier: 'should', hill_progress: 0.92, order: 2 },
-      { id: '3', title: 'Scope C', tier: 'could', hill_progress: 0.95, order: 3 },
+      { id: '1', title: 'Scope A', tier: 'must', color: '#e5484d', hill_progress: 0.9, order: 1 },
+      { id: '2', title: 'Scope B', tier: 'should', color: '#30a46c', hill_progress: 0.92, order: 2 },
+      { id: '3', title: 'Scope C', tier: 'could', color: '#8e4ec6', hill_progress: 0.95, order: 3 },
     ],
   },
 }

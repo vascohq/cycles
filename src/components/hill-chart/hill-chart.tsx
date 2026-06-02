@@ -9,7 +9,7 @@ import {
   HEIGHT,
   BASELINE_Y,
 } from '@/lib/hill-engine'
-import { TIER_COLORS } from './tier-colors'
+import { readableTextColor } from '@/lib/color-engine'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import { rollupHillTrails } from '@/lib/hill-trail-engine'
 
@@ -19,6 +19,8 @@ export type HillScope = {
   tier: Tier
   hill_progress: number
   order: number
+  /** Identity color for the dot (see ADR 0008). */
+  color: string
 }
 
 type HillChartProps = {
@@ -283,7 +285,7 @@ export function HillChart({
                     cx={gx}
                     cy={gy}
                     r={dotR}
-                    fill={trail.tier ? TIER_COLORS[trail.tier] : 'currentColor'}
+                    fill="currentColor"
                     opacity={0.25}
                   />
                   {trail.title && (
@@ -319,7 +321,7 @@ export function HillChart({
                   strokeLinecap="round"
                   opacity={0.25}
                 />
-                <circle cx={gx} cy={gy} r={dotR} fill={TIER_COLORS[scope.tier]} opacity={0.25} />
+                <circle cx={gx} cy={gy} r={dotR} fill={scope.color} opacity={0.25} />
                 <text
                   x={gx}
                   y={gy + 1}
@@ -327,7 +329,7 @@ export function HillChart({
                   dominantBaseline="central"
                   fontSize={dotFont}
                   fontWeight="bold"
-                  fill="white"
+                  fill={readableTextColor(scope.color)}
                   opacity={0.6}
                 >
                   {scope.order}
@@ -448,7 +450,7 @@ export function HillChart({
                       cx={0}
                       cy={0}
                       r={r}
-                      fill={TIER_COLORS[scope.tier]}
+                      fill={scope.color}
                       stroke="white"
                       strokeWidth={sw}
                       style={{ transition: 'r 120ms ease' }}
@@ -461,7 +463,7 @@ export function HillChart({
                       dy="0.05em"
                       fontSize={dotFont}
                       fontWeight={600}
-                      fill="white"
+                      fill={readableTextColor(scope.color)}
                     >
                       {scope.order}
                     </text>
@@ -506,29 +508,6 @@ export function HillChart({
         </div>
       )}
 
-      <div className="flex gap-4 justify-center text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: TIER_COLORS.must }}
-          />
-          Must
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: TIER_COLORS.should }}
-          />
-          Should
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: TIER_COLORS.could }}
-          />
-          Could
-        </span>
-      </div>
     </div>
   )
 }

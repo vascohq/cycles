@@ -9,6 +9,7 @@ import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import type { HillHistoryFrame } from '@/lib/scope-map-helpers'
 import { TimeboxTape } from '@/components/timebox'
 import { ScopeGrid } from '@/components/scope-card'
+import { ScopeDrawer } from '@/components/scope-card/scope-drawer'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
 import { MoveNeedleModal } from '@/components/move-needle'
 import { UpdatesTimeline } from '@/components/updates-timeline'
@@ -56,8 +57,11 @@ export type ScopeMapViewProps = {
   onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
   onTaskDelete?: (scopeId: string, taskId: string) => void
   onAddTask?: (scopeId: string, title: string) => void
-  onAddScope?: (title: string, tier: string) => void
-  onEditScope?: (scopeId: string, title: string, tier: string) => void
+  onAddScope?: (title: string, tier: string, litmus_text: string) => void
+  onEditScope?: (
+    scopeId: string,
+    fields: { title?: string; tier?: Tier; litmus_text?: string; color?: string }
+  ) => void
   onDeleteScope?: (scopeId: string) => void
   onScopeReorder?: (activeId: string, overId: string) => void
   onScopeReset?: (scopeId: string) => void
@@ -118,12 +122,14 @@ export function ScopeMapView({
   )
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
   const [addScopeOpen, setAddScopeOpen] = useState(false)
-  const [editingScopeId, setEditingScopeId] = useState<string | null>(null)
+  const [openScopeId, setOpenScopeId] = useState<string | null>(null)
   const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
 
-  const editingScope = editingScopeId
-    ? scopeGridItems.find((s) => s.id === editingScopeId) ?? null
+  // The drawer reads live from scopeGridItems so edits and task toggles reflect
+  // instantly; it closes itself if the open scope is deleted.
+  const openScope = openScopeId
+    ? scopeGridItems.find((s) => s.id === openScopeId) ?? null
     : null
 
   const deletingScope = deletingScopeId
@@ -161,7 +167,7 @@ export function ScopeMapView({
               type="button"
               onClick={() => setMoveNeedleOpen(true)}
               aria-label="Move the needle"
-              className="group w-full h-full rounded-lg border bg-card p-4 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition-colors hover:border-foreground/20 hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group w-full h-full rounded-lg border bg-card p-4 flex flex-col items-center justify-center gap-3 text-center cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <NeedleGauge needle={pitch.needle} ghost={ghost} />
               <span className="text-xs font-medium border rounded-full px-4 py-1.5 transition-colors text-muted-foreground group-hover:text-foreground group-hover:border-foreground/30 group-hover:bg-muted">
@@ -226,14 +232,48 @@ export function ScopeMapView({
         <ScopeGrid
           scopes={scopeGridItems}
           onReorder={isDone ? undefined : onScopeReorder}
-          onTaskToggle={isDone ? undefined : onTaskToggle}
-          onTaskEdit={isDone ? undefined : onTaskEdit}
-          onTaskDelete={isDone ? undefined : onTaskDelete}
-          onAddTask={isDone ? undefined : onAddTask}
-          onReset={isDone ? undefined : onScopeReset}
-          onEditScope={!isDone && onEditScope ? (id) => setEditingScopeId(id) : undefined}
+          onOpenScope={(id) => setOpenScopeId(id)}
           onDeleteScope={!isDone && onDeleteScope ? (id) => setDeletingScopeId(id) : undefined}
           readOnly={isDone}
+        />
+        <ScopeDrawer
+          open={!!openScope}
+          onOpenChange={(open) => { if (!open) setOpenScopeId(null) }}
+          scope={openScope}
+          usedColors={scopeGridItems
+            .filter((s) => s.id !== openScopeId)
+            .map((s) => s.color)}
+          readOnly={isDone}
+          onEditScope={
+            !isDone && onEditScope && openScopeId
+              ? (fields) => onEditScope(openScopeId, fields)
+              : undefined
+          }
+          onTaskToggle={
+            !isDone && onTaskToggle && openScopeId
+              ? (taskId, done) => onTaskToggle(openScopeId, taskId, done)
+              : undefined
+          }
+          onTaskEdit={
+            !isDone && onTaskEdit && openScopeId
+              ? (taskId, title) => onTaskEdit(openScopeId, taskId, title)
+              : undefined
+          }
+          onTaskDelete={
+            !isDone && onTaskDelete && openScopeId
+              ? (taskId) => onTaskDelete(openScopeId, taskId)
+              : undefined
+          }
+          onAddTask={
+            !isDone && onAddTask && openScopeId
+              ? (title) => onAddTask(openScopeId, title)
+              : undefined
+          }
+          onReset={
+            !isDone && onScopeReset && openScopeId
+              ? () => onScopeReset(openScopeId)
+              : undefined
+          }
         />
         {onAddScope && (
           <ScopeDialog
@@ -241,18 +281,7 @@ export function ScopeMapView({
             onOpenChange={setAddScopeOpen}
             title="New scope"
             submitLabel="Add scope"
-            onSubmit={(t, tier) => { onAddScope(t, tier); setAddScopeOpen(false) }}
-          />
-        )}
-        {onEditScope && editingScope && (
-          <ScopeDialog
-            open={!!editingScopeId}
-            onOpenChange={(open) => { if (!open) setEditingScopeId(null) }}
-            title="Edit scope"
-            submitLabel="Save"
-            initialTitle={editingScope.title}
-            initialTier={editingScope.tier}
-            onSubmit={(t, tier) => { onEditScope(editingScopeId!, t, tier); setEditingScopeId(null) }}
+            onSubmit={(t, tier, litmus) => { onAddScope(t, tier, litmus); setAddScopeOpen(false) }}
           />
         )}
         {onDeleteScope && deletingScope && (
@@ -502,6 +531,7 @@ function ScopeDialog({
   submitLabel,
   initialTitle = '',
   initialTier = 'must',
+  initialLitmus = '',
   onSubmit,
 }: {
   open: boolean
@@ -510,27 +540,30 @@ function ScopeDialog({
   submitLabel: string
   initialTitle?: string
   initialTier?: Tier
-  onSubmit: (title: string, tier: string) => void
+  initialLitmus?: string
+  onSubmit: (title: string, tier: string, litmus_text: string) => void
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [tier, setTier] = useState<Tier>(initialTier)
+  const [litmus, setLitmus] = useState(initialLitmus)
 
   // Sync initial values when the dialog opens with new scope data
   const [prevOpen, setPrevOpen] = useState(false)
   if (open && !prevOpen) {
     setTitle(initialTitle)
     setTier(initialTier)
+    setLitmus(initialLitmus)
   }
   if (open !== prevOpen) setPrevOpen(open)
 
   function handleSubmit() {
     const trimmed = title.trim()
     if (!trimmed) return
-    onSubmit(trimmed, tier)
+    onSubmit(trimmed, tier, litmus.trim())
   }
 
   function handleOpenChange(next: boolean) {
-    if (!next) { setTitle(initialTitle); setTier(initialTier) }
+    if (!next) { setTitle(initialTitle); setTier(initialTier); setLitmus(initialLitmus) }
     onOpenChange(next)
   }
 
@@ -563,6 +596,13 @@ function ScopeDialog({
               ))}
             </select>
           </div>
+          <textarea
+            value={litmus}
+            onChange={(e) => setLitmus(e.target.value)}
+            placeholder="What it ships (optional) — if only this ships, what does it deliver?"
+            rows={2}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
+          />
         </div>
         <DialogFooter className="gap-2">
           <button

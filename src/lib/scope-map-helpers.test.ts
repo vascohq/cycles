@@ -80,8 +80,17 @@ describe('deriveHillScopes', () => {
       tier: 'must',
       hill_progress: 0.3,
       order: 1,
+      color: '#E54D2E',
     })
     expect(hillScopes[1].order).toBe(2)
+  })
+
+  it('fills a color for a scope that has none, without colliding with a stored sibling', () => {
+    // scope1 has stored '#E54D2E'; scope2 has no color and must get a unique one.
+    const hillScopes = deriveHillScopes([scope1, scope2], 'p1')
+    expect(hillScopes[0].color).toBe('#E54D2E')
+    expect(hillScopes[1].color).toBeTruthy()
+    expect(hillScopes[1].color).not.toBe('#E54D2E')
   })
 })
 

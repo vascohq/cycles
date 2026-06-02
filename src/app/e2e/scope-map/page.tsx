@@ -35,7 +35,7 @@ export default function ScopeMapE2EPage() {
           )
         )
       }
-      onAddScope={(title, tier) =>
+      onAddScope={(title, tier, litmus_text) =>
         setScopeGridItems((items) => [
           ...items,
           {
@@ -43,18 +43,15 @@ export default function ScopeMapE2EPage() {
             order: items.length + 1,
             title,
             tier: tier as 'must' | 'should' | 'could',
-            litmus_text: '',
+            color: '#3e63dd',
+            litmus_text,
             tasks: [],
           },
         ])
       }
-      onEditScope={(scopeId, title, tier) =>
+      onEditScope={(scopeId, fields) =>
         setScopeGridItems((items) =>
-          items.map((s) =>
-            s.id === scopeId
-              ? { ...s, title, tier: tier as 'must' | 'should' | 'could' }
-              : s
-          )
+          items.map((s) => (s.id === scopeId ? { ...s, ...fields } : s))
         )
       }
       onDeleteScope={(scopeId) =>

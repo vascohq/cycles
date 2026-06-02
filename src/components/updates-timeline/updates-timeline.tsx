@@ -18,12 +18,15 @@ const ZONE_LABEL: Record<Zone, string> = {
 }
 
 function toHillScopes(snapshot: HillSnapshot[]): HillScope[] {
+  // Snapshots predate the color field, so timeline mini-charts render dots in a
+  // neutral color — the history view is about movement, not identity.
   return snapshot.map((h, i) => ({
     id: h.scopeId,
     title: h.title ?? '',
     tier: h.tier ?? ('should' as const),
     hill_progress: h.hill_progress,
     order: i + 1,
+    color: '#9ca3af',
   }))
 }
 import {
