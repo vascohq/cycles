@@ -26,6 +26,8 @@ import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import type { Tier } from '@/cycle-liveblocks.config'
+import { SquadPicker } from '@/components/scope-map/squad-picker'
+import type { SquadLike } from '@/lib/squad-engine'
 
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
@@ -42,7 +44,12 @@ export type ScopeMapViewProps = {
     frame_outcome: string
     timebox_start: string
     timebox_end: string
+    squadId?: string
   }
+  squads?: SquadLike[]
+  currentSquadId?: string
+  onAssignSquad?: (name: string) => void
+  onClearSquad?: () => void
   hillScopes: HillScope[]
   hillTrails?: ScopeTrail[]
   hillHistory?: HillHistoryFrame[]
@@ -86,6 +93,10 @@ export function ScopeMapView({
   cycleSlug,
   cycleTitle,
   pitch,
+  squads = [],
+  currentSquadId,
+  onAssignSquad,
+  onClearSquad,
   hillScopes,
   hillTrails = [],
   hillHistory = [],
@@ -151,6 +162,10 @@ export function ScopeMapView({
         today={today}
         onStageChange={onStageChange}
         isDone={isDone}
+        squads={squads}
+        currentSquadId={currentSquadId}
+        onAssignSquad={onAssignSquad}
+        onClearSquad={onClearSquad}
       />
 
       <section className="grid grid-cols-1 gap-5 mc-row">
@@ -360,6 +375,10 @@ function HeroCard({
   today,
   onStageChange,
   isDone,
+  squads = [],
+  currentSquadId,
+  onAssignSquad,
+  onClearSquad,
 }: {
   pitch: {
     title: string
@@ -372,6 +391,10 @@ function HeroCard({
   today: string
   onStageChange?: (stage: Stage) => void
   isDone?: boolean
+  squads?: SquadLike[]
+  currentSquadId?: string
+  onAssignSquad?: (name: string) => void
+  onClearSquad?: () => void
 }) {
   const stageIndex = STAGES.indexOf(pitch.stage)
 
@@ -414,9 +437,19 @@ function HeroCard({
           <h1 className="text-2xl md:text-3xl font-display leading-tight">
             {pitch.title}
           </h1>
-          {onStageChange && (
-            <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {onAssignSquad && (
+              <SquadPicker
+                squads={squads}
+                currentSquadId={currentSquadId}
+                onAssign={onAssignSquad}
+                onClear={onClearSquad ?? (() => {})}
+              />
+            )}
+            {onStageChange && (
+              <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">

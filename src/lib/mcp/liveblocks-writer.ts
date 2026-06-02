@@ -7,8 +7,10 @@ import type {
   ScopeTask,
   ParkingItem,
   PitchUpdate,
+  Squad,
 } from '@/cycle-liveblocks.config'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
+import { assignSquadColor, resolveSquadByName, squadKey } from '@/lib/squad-engine'
 
 type UpsertResult = { created: boolean; id: string }
 
@@ -70,6 +72,7 @@ export async function createCycle(
       tasks: { liveblocksType: 'LiveList', data: [] },
       updates: { liveblocksType: 'LiveList', data: [] },
       parkingItems: { liveblocksType: 'LiveList', data: [] },
+      squads: { liveblocksType: 'LiveList', data: [] },
     },
   })
 
@@ -84,6 +87,22 @@ function getField(item: any, key: string): any {
 }
 
 
+// Resolve a squad name to an id within the cycle's squad list, creating the
+// squad (with an auto-assigned color) when no case-insensitive match exists.
+function resolveOrCreateSquadId(squads: any, name: string): string {
+  const arr = squads.toArray().map((s: any) => ({
+    id: getField(s, 'id'),
+    name: getField(s, 'name'),
+    color: getField(s, 'color'),
+  }))
+  const existing = resolveSquadByName(arr, name)
+  if (existing) return existing.id
+  const usedColors = arr.map((s: any) => s.color).filter(Boolean)
+  const id = nanoid()
+  squads.push(new LiveObject({ id, name, color: assignSquadColor(usedColors) }))
+  return id
+}
+
 // ── Pitch ──
 
 export async function upsertPitch(
@@ -96,6 +115,9 @@ export async function upsertPitch(
     frame_outcome: string
     timebox_start: string
     timebox_end: string
+    // Squad NAME (not id). Resolved case-insensitively, auto-created on miss.
+    // Empty/whitespace clears the assignment; undefined leaves it unchanged.
+    squad?: string
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -104,6 +126,16 @@ export async function upsertPitch(
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const pitches = root.get('pitches')
+    const squads = root.get('squads')
+
+    // null = clear, string = assign, undefined = leave unchanged.
+    let squadId: string | undefined | null
+    if (params.squad !== undefined) {
+      squadId =
+        squadKey(params.squad) === ''
+          ? null
+          : resolveOrCreateSquadId(squads, params.squad)
+    }
 
     if (created) {
       const pitch: CyclePitch = {
@@ -115,6 +147,7 @@ export async function upsertPitch(
         frame_outcome: params.frame_outcome,
         timebox_start: params.timebox_start,
         timebox_end: params.timebox_end,
+        ...(squadId ? { squadId } : {}),
       }
       pitches.push(new LiveObject(pitch))
     } else {
@@ -129,10 +162,54 @@ export async function upsertPitch(
       existing.set('frame_outcome', params.frame_outcome)
       existing.set('timebox_start', params.timebox_start)
       existing.set('timebox_end', params.timebox_end)
+      if (squadId !== undefined) existing.set('squadId', squadId ?? undefined)
     }
   })
 
   if (notFound) throw new Error(`Pitch not found: "${id}"`)
+  return { created, id }
+}
+
+// ── Squad ──
+
+export async function upsertSquad(
+  roomId: string,
+  params: {
+    id?: string
+    name: string
+    color?: string
+  }
+): Promise<UpsertResult> {
+  const id = params.id ?? nanoid()
+  const created = !params.id
+  let notFound = false
+
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    const squads = root.get('squads')
+
+    if (created) {
+      const usedColors = squads
+        .toArray()
+        .map((s: any) => getField(s, 'color'))
+        .filter(Boolean)
+      const squad: Squad = {
+        id,
+        name: params.name,
+        color: params.color ?? assignSquadColor(usedColors),
+      }
+      squads.push(new LiveObject(squad))
+    } else {
+      const existing = squads.find((s: any) => getField(s, 'id') === id)
+      if (!existing) {
+        notFound = true
+        return
+      }
+      existing.set('name', params.name)
+      if (params.color) existing.set('color', params.color)
+    }
+  })
+
+  if (notFound) throw new Error(`Squad not found: "${id}"`)
   return { created, id }
 }
 

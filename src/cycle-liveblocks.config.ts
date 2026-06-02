@@ -23,6 +23,12 @@ export type HillSnapshot = {
   tier?: Tier
 }
 
+export type Squad = {
+  id: string
+  name: string
+  color: string
+}
+
 export type CyclePitch = {
   id: string
   title: string
@@ -32,6 +38,8 @@ export type CyclePitch = {
   frame_outcome: string
   timebox_start: string
   timebox_end: string
+  // The squad that owns this pitch (per-cycle; see ADR 0009). Undefined = Unassigned.
+  squadId?: string
 }
 
 export type CycleScope = {
@@ -87,4 +95,5 @@ export type CycleStorage = {
   tasks: LiveList<LiveObject<ScopeTask>>
   updates: LiveList<LiveObject<PitchUpdate>>
   parkingItems: LiveList<LiveObject<ParkingItem>>
+  squads: LiveList<LiveObject<Squad>>
 }

@@ -21,6 +21,7 @@ import {
 } from '@/lib/scope-map-helpers'
 import { deriveGhost, needleAfterDeletingLatest } from '@/lib/needle-engine'
 import { assignScopeColor, resolveScopeColors } from '@/lib/color-engine'
+import { assignSquadColor, resolveSquadByName } from '@/lib/squad-engine'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
 import { buildUpdate } from '@/lib/update-engine'
@@ -104,6 +105,7 @@ function ScopeMapWired({
   const allTasks = useCycleStorage((root) => [...root.tasks])
   const allUpdates = useCycleStorage((root) => [...root.updates])
   const allParkingItems = useCycleStorage((root) => [...root.parkingItems])
+  const squads = useCycleStorage((root) => [...root.squads])
   const cycle = useCycleStorage((root) => ({
     start_date: root.cycle.start_date,
     end_date: root.cycle.end_date,
@@ -130,6 +132,41 @@ function ScopeMapWired({
     ({ storage }, newStage: Stage) => {
       const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
       p?.set('stage', newStage)
+    },
+    [pitchId]
+  )
+
+  // Assign a squad by name: reuse an existing squad (matched case-insensitively
+  // via the shared engine) or create a fresh one with an auto-assigned color.
+  const onAssignSquad = useCycleMutation(
+    ({ storage }, name: string) => {
+      const squadsList = storage.get('squads')
+      const arr: { id: string; name: string; color: string }[] = []
+      for (let i = 0; i < squadsList.length; i++) {
+        const s = squadsList.get(i)!
+        arr.push({ id: s.get('id'), name: s.get('name'), color: s.get('color') })
+      }
+      const existing = resolveSquadByName(arr, name)
+      let squadId: string
+      if (existing) {
+        squadId = existing.id
+      } else {
+        const usedColors = arr.map((s) => s.color).filter(Boolean)
+        squadId = nanoid()
+        squadsList.push(
+          new LiveObject({ id: squadId, name, color: assignSquadColor(usedColors) })
+        )
+      }
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('squadId', squadId)
+    },
+    [pitchId]
+  )
+
+  const onClearSquad = useCycleMutation(
+    ({ storage }) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('squadId', undefined)
     },
     [pitchId]
   )
@@ -547,6 +584,10 @@ function ScopeMapWired({
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
       pitch={pitch}
+      squads={squads}
+      currentSquadId={pitch.squadId}
+      onAssignSquad={onAssignSquad}
+      onClearSquad={onClearSquad}
       hillScopes={hillScopes}
       hillTrails={hillTrails}
       hillHistory={hillHistory}
