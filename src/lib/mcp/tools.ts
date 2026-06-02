@@ -26,6 +26,8 @@ import {
   deleteUpdate,
   pushUpdate,
   markSlackDelivered,
+  upsertSquad,
+  deleteSquad,
 } from './liveblocks-writer'
 
 const orgArg = {
@@ -135,7 +137,24 @@ export async function handleGetCycle(
       storage.tasks,
       storage.updates
     )
-    return jsonResult({ cycle: storage.cycle, pitches: pitchCards })
+    // Resolve each pitch's squad name (null when unassigned or dangling).
+    const squads = storage.squads ?? []
+    const squadNameById = new Map(squads.map((s) => [s.id, s.name]))
+    const squadIdByPitch = new Map(
+      storage.pitches.map((p) => [p.id, p.squadId])
+    )
+    const pitchesWithSquad = pitchCards.map((card) => {
+      const squadId = squadIdByPitch.get(card.id)
+      return {
+        ...card,
+        squad: (squadId && squadNameById.get(squadId)) ?? null,
+      }
+    })
+    return jsonResult({
+      cycle: storage.cycle,
+      squads,
+      pitches: pitchesWithSquad,
+    })
   } catch {
     return errorResult(`Cycle not found: "${cycleSlug}"`)
   }
@@ -381,6 +400,8 @@ const WRITE_TOOLS: Record<
   upsert_scope: upsertScope,
   upsert_task: upsertTask,
   upsert_parking_item: upsertParkingItem,
+  upsert_squad: upsertSquad,
+  delete_squad: (roomId, p) => deleteSquad(roomId, p.id).then(() => undefined),
   delete_pitch: (roomId, p) => deletePitch(roomId, p.id).then(() => undefined),
   delete_scope: (roomId, p) => deleteScope(roomId, p.id).then(() => undefined),
   delete_task: (roomId, p) => deleteTask(roomId, p.id).then(() => undefined),
@@ -685,6 +706,12 @@ export function registerCyclesTools(server: any): void {
         .describe(
           'Outbound link to the pitch’s Notion doc. Must be a valid https URL or it is ignored.'
         ),
+      squad: z
+        .string()
+        .optional()
+        .describe(
+          'Squad NAME (not id) that owns this pitch. Matched case-insensitively and auto-created if it does not exist. Pass "" to clear the assignment; omit to leave it unchanged.'
+        ),
     },
     {
       title: 'Create or update pitch',
@@ -694,7 +721,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string; emoji: string; notion_url: string },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string; emoji: string; notion_url: string; squad?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -819,6 +846,72 @@ export function registerCyclesTools(server: any): void {
       try {
         const result = await upsertParkingItem(roomId, params)
         return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  defineTool(
+    server,
+    'upsert_squad',
+    'Create or update a squad (a per-cycle, named team that owns pitches). Omit id to create with an auto-assigned color (or pass an explicit color); provide id to rename/recolor. To assign a pitch to a squad, prefer passing squad by name to upsert_pitch — squads auto-create there too.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().optional().describe('Squad id. Omit to create.'),
+      name: z.string(),
+      color: z
+        .string()
+        .optional()
+        .describe('Optional #rrggbb color. Auto-assigned from the palette when omitted on create.'),
+    },
+    {
+      title: 'Create or update squad',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; name: string; color?: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
+      try {
+        const result = await upsertSquad(roomId, params)
+        return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  defineTool(
+    server,
+    'delete_squad',
+    'Delete a squad by id. Its pitches are unassigned (moved to Unassigned), not deleted.',
+    { ...orgArg, ...cycleSlugArg, id: z.string().describe('Squad id to delete') },
+    {
+      title: 'Delete squad',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, cycle_slug, id }: { org?: string; cycle_slug: string; id: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      try {
+        await deleteSquad(`${resolved.org.id}:cycle:${cycle_slug}`, id)
+        return jsonResult({ deleted: true, id })
       } catch (err) {
         return errorResult((err as Error).message)
       }
@@ -974,7 +1067,7 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       operations: z.array(
         z.object({
-          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, delete_pitch, delete_scope, delete_task, delete_parking_item, undo_update'),
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update'),
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),

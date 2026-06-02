@@ -22,6 +22,8 @@ vi.mock('./liveblocks-writer', () => ({
   deleteUpdate: vi.fn(),
   pushUpdate: vi.fn(),
   markSlackDelivered: vi.fn(),
+  upsertSquad: vi.fn(),
+  deleteSquad: vi.fn(),
 }))
 
 vi.mock('@/lib/slack-delivery', () => ({
@@ -47,9 +49,10 @@ const ORG_ID = 'org_test'
 const FIXTURE_STORAGE: StorageJson = {
   cycle: { name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15', slack_channel: '' },
   pitches: [
-    { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
+    { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '', squadId: 'sq1' },
     { id: 'p2', title: 'MCP Server', stage: 'framing', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
   ],
+  squads: [{ id: 'sq1', name: 'Platform', color: '#3e63dd' }],
   scopes: [
     { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must', litmus_text: '', hill_progress: 0.5 },
     { id: 's2', pitchId: 'p1', title: 'API', tier: 'should', litmus_text: '', hill_progress: 0.8 },
@@ -109,6 +112,17 @@ describe('handleGetCycle', () => {
     expect(data.pitches).toHaveLength(2)
     expect(data.pitches[0].tasksDone).toBe(2)
     expect(data.pitches[0].tasksTotal).toBe(3)
+  })
+
+  it('includes the cycle squads and each pitch its squad name', async () => {
+    mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
+
+    const result = await handleGetCycle(ORG_ID, '2026-q2-build')
+
+    const data = JSON.parse(result.content[0].text as string) as any
+    expect(data.squads).toEqual([{ id: 'sq1', name: 'Platform', color: '#3e63dd' }])
+    expect(data.pitches[0].squad).toBe('Platform')
+    expect(data.pitches[1].squad).toBeNull()
   })
 
   it('returns error when room not found', async () => {
@@ -303,12 +317,16 @@ import {
   upsertPitch,
   upsertScope,
   upsertTask,
+  upsertSquad,
+  deleteSquad,
 } from './liveblocks-writer'
 
 const mockCreateCycle = vi.mocked(createCycle)
 const mockUpsertPitch = vi.mocked(upsertPitch)
 const mockUpsertScope = vi.mocked(upsertScope)
 const mockUpsertTask = vi.mocked(upsertTask)
+const mockUpsertSquad = vi.mocked(upsertSquad)
+const mockDeleteSquad = vi.mocked(deleteSquad)
 
 const CYCLE_PARAMS = {
   name: '2026 Q3 Build',
@@ -418,6 +436,22 @@ describe('handleBatch', () => {
     expect(data.results[0].id).toBe('p1')
     expect(data.results[1].ok).toBe(true)
     expect(data.results[2].ok).toBe(true)
+  })
+
+  it('dispatches upsert_squad and delete_squad', async () => {
+    mockUpsertSquad.mockResolvedValue({ created: true, id: 'sq1' })
+    mockDeleteSquad.mockResolvedValue(undefined)
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'upsert_squad', params: { name: 'Platform' } },
+      { tool: 'delete_squad', params: { id: 'sq2' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0]).toMatchObject({ ok: true, tool: 'upsert_squad', id: 'sq1' })
+    expect(data.results[1]).toMatchObject({ ok: true, tool: 'delete_squad' })
+    expect(mockUpsertSquad).toHaveBeenCalledWith('org_test:cycle:q2-build', { name: 'Platform' })
+    expect(mockDeleteSquad).toHaveBeenCalledWith('org_test:cycle:q2-build', 'sq2')
   })
 
   it('returns partial failure — successful ops persist, failed ones return errors', async () => {

@@ -25,6 +25,7 @@ import {
   pushUpdate,
   markSlackDelivered,
   upsertSquad,
+  deleteSquad,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -551,6 +552,29 @@ describe('upsertSquad', () => {
     await expect(
       upsertSquad(ROOM, { id: 'nope', name: 'X' })
     ).rejects.toThrow(/not found/i)
+  })
+})
+
+describe('deleteSquad', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('removes the squad and unassigns only its own pitches', async () => {
+    const squad = makeMockItem({ id: 'sq1', name: 'Platform', color: '#3e63dd' })
+    const p1 = makeMockItem({ id: 'p1', title: 'A', squadId: 'sq1' })
+    const p2 = makeMockItem({ id: 'p2', title: 'B', squadId: 'sq2' })
+    const storage = setupStorage({ squads: [squad], pitches: [p1, p2] })
+
+    await deleteSquad(ROOM, 'sq1')
+
+    expect(storage.squads.toArray()).toHaveLength(0)
+    expect(p1.get('squadId')).toBeUndefined()
+    expect(p2.get('squadId')).toBe('sq2')
+  })
+
+  it('throws when the squad id is unknown', async () => {
+    setupStorage({ squads: [] })
+
+    await expect(deleteSquad(ROOM, 'nope')).rejects.toThrow(/not found/i)
   })
 })
 
