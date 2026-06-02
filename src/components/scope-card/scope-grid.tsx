@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -19,38 +18,26 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { ScopeCard, type ScopeCardProps } from './scope-card'
 
-type ScopeGridItem = Omit<ScopeCardProps, 'dragHandleProps' | 'isDragging' | 'onEdit' | 'onDelete'>
+type ScopeGridItem = Omit<
+  ScopeCardProps,
+  'dragHandleProps' | 'isDragging' | 'onOpen' | 'onDelete'
+>
 
 type ScopeGridProps = {
   scopes: ScopeGridItem[]
   onReorder?: (activeId: string, overId: string) => void
-  onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
-  onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
-  onTaskDelete?: (scopeId: string, taskId: string) => void
-  onAddTask?: (scopeId: string, title: string) => void
-  onReset?: (scopeId: string) => void
-  onEditScope?: (scopeId: string) => void
+  onOpenScope?: (scopeId: string) => void
   onDeleteScope?: (scopeId: string) => void
   readOnly?: boolean
 }
 
 function SortableScopeCard({
   scope,
-  onTaskToggle,
-  onTaskEdit,
-  onTaskDelete,
-  onAddTask,
-  onReset,
-  onEdit,
+  onOpen,
   onDelete,
 }: {
   scope: ScopeGridItem
-  onTaskToggle?: (taskId: string, done: boolean) => void
-  onTaskEdit?: (taskId: string, title: string) => void
-  onTaskDelete?: (taskId: string) => void
-  onAddTask?: (title: string) => void
-  onReset?: () => void
-  onEdit?: () => void
+  onOpen?: () => void
   onDelete?: () => void
 }) {
   const {
@@ -73,12 +60,7 @@ function SortableScopeCard({
         {...scope}
         dragHandleProps={listeners}
         isDragging={isDragging}
-        onTaskToggle={onTaskToggle}
-        onTaskEdit={onTaskEdit}
-        onTaskDelete={onTaskDelete}
-        onAddTask={onAddTask}
-        onReset={onReset}
-        onEdit={onEdit}
+        onOpen={onOpen}
         onDelete={onDelete}
       />
     </div>
@@ -88,12 +70,7 @@ function SortableScopeCard({
 export function ScopeGrid({
   scopes,
   onReorder,
-  onTaskToggle,
-  onTaskEdit,
-  onTaskDelete,
-  onAddTask,
-  onReset,
-  onEditScope,
+  onOpenScope,
   onDeleteScope,
   readOnly,
 }: ScopeGridProps) {
@@ -117,7 +94,12 @@ export function ScopeGrid({
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sortedScopes.map((scope) => (
-          <ScopeCard key={scope.id} {...scope} readOnly />
+          <ScopeCard
+            key={scope.id}
+            {...scope}
+            readOnly
+            onOpen={onOpenScope ? () => onOpenScope(scope.id) : undefined}
+          />
         ))}
       </div>
     )
@@ -138,28 +120,7 @@ export function ScopeGrid({
             <SortableScopeCard
               key={scope.id}
               scope={scope}
-              onTaskToggle={
-                onTaskToggle
-                  ? (taskId, done) => onTaskToggle(scope.id, taskId, done)
-                  : undefined
-              }
-              onTaskEdit={
-                onTaskEdit
-                  ? (taskId, title) => onTaskEdit(scope.id, taskId, title)
-                  : undefined
-              }
-              onTaskDelete={
-                onTaskDelete
-                  ? (taskId) => onTaskDelete(scope.id, taskId)
-                  : undefined
-              }
-              onAddTask={
-                onAddTask
-                  ? (title) => onAddTask(scope.id, title)
-                  : undefined
-              }
-              onReset={onReset ? () => onReset(scope.id) : undefined}
-              onEdit={onEditScope ? () => onEditScope(scope.id) : undefined}
+              onOpen={onOpenScope ? () => onOpenScope(scope.id) : undefined}
               onDelete={onDeleteScope ? () => onDeleteScope(scope.id) : undefined}
             />
           ))}

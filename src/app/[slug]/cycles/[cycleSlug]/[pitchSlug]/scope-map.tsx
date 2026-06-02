@@ -20,6 +20,7 @@ import {
   buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost, needleAfterDeletingLatest } from '@/lib/needle-engine'
+import { assignScopeColor, resolveScopeColors } from '@/lib/color-engine'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
 import { buildUpdate } from '@/lib/update-engine'
@@ -159,14 +160,26 @@ function ScopeMapWired({
   )
 
   const onAddScope = useCycleMutation(
-    ({ storage }, title: string, tier: string) => {
+    ({ storage }, title: string, tier: string, litmus_text: string) => {
+      // Assign a unique identity color against the colors already in this pitch
+      // (resolving any unset siblings first so we don't collide with them).
+      const scopesList = storage.get('scopes')
+      const siblings: { id: string; color?: string }[] = []
+      for (let i = 0; i < scopesList.length; i++) {
+        const s = scopesList.get(i)!
+        if (s.get('pitchId') === pitchId) {
+          siblings.push({ id: s.get('id'), color: s.get('color') })
+        }
+      }
+      const usedColors = Object.values(resolveScopeColors(siblings))
       const scope: CycleScope = {
         id: nanoid(),
         pitchId,
         title,
         tier: tier as CycleScope['tier'],
-        litmus_text: '',
+        litmus_text,
         hill_progress: 0,
+        color: assignScopeColor(usedColors),
       }
       storage.get('scopes').push(new LiveObject(scope))
     },
@@ -208,11 +221,23 @@ function ScopeMapWired({
   )
 
   const onEditScope = useCycleMutation(
-    ({ storage }, scopeId: string, newTitle: string, newTier: string) => {
+    (
+      { storage },
+      scopeId: string,
+      fields: {
+        title?: string
+        tier?: CycleScope['tier']
+        litmus_text?: string
+        color?: string
+      }
+    ) => {
       const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
       if (!scope) return
-      scope.set('title', newTitle)
-      scope.set('tier', newTier as CycleScope['tier'])
+      if (fields.title !== undefined) scope.set('title', fields.title)
+      if (fields.tier !== undefined) scope.set('tier', fields.tier)
+      if (fields.litmus_text !== undefined)
+        scope.set('litmus_text', fields.litmus_text)
+      if (fields.color !== undefined) scope.set('color', fields.color)
     },
     []
   )
@@ -378,12 +403,14 @@ function ScopeMapWired({
   )
   // "Before" scopes for the modal's before/after comparison — the last update's
   // positions, or the 0% baseline on the first move.
+  const liveColorById = new Map(hillScopes.map((s) => [s.id, s.color]))
   const previousHillScopes = baselineSnapshot.map((h, i) => ({
     id: h.scopeId,
     title: h.title ?? '',
     tier: h.tier ?? ('should' as const),
     hill_progress: h.hill_progress,
     order: i + 1,
+    color: liveColorById.get(h.scopeId) ?? '#9ca3af',
   }))
   const hillHistory = buildHillHistoryFrames(pitchUpdates, hillScopes, usersMap)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)

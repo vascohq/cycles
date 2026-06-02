@@ -53,8 +53,12 @@ A vertical slice of work within a pitch. Has a tier, litmus text, hill progress,
 _Avoid_: Story, work item, feature
 
 **Tier**:
-A scope's intrinsic priority: `must`, `should`, or `could`. Encoded as color (red, orange, grey). Independent of build order — reordering scopes does not change their tier.
+A scope's intrinsic priority: `must`, `should`, or `could`. Shown as a small text badge (shadcn-style), not as color — the color channel now belongs to **Scope Color** (see [ADR 0008](docs/adr/0008-scope-identity-color.md)). Independent of build order — reordering scopes does not change their tier.
 _Avoid_: Priority level, P0/P1/P2, severity
+
+**Scope Color**:
+A scope's unique identity color, used to tell scopes apart at a glance — painted on the order badge and the scope's dot on the hill chart. Chosen from a curated palette; the badge number flips between dark/light for contrast against the color. Auto-assigned (including via MCP) from an unused palette color when not set.
+_Avoid_: Tier color, zone color, theme color
 
 **Litmus Text**:
 A scope's "if only this ships" statement. Tests whether the scope is a meaningful vertical slice that delivers value on its own.
@@ -116,6 +120,14 @@ _Avoid_: Dashboard, board listing, overview page
 The per-pitch detail view. Shows hero card, needle, hill chart, scope grid, updates timeline, and parking lot.
 _Avoid_: Pitch detail, pitch page
 
+**Scope Card**:
+A big-picture tile in the scope grid. Leads with the scope's name and its "what it ships" (Litmus Text); when the scope has tasks it shows a non-numeric **task presence indicator** (one tick per task, filling as tasks complete) — never a count or completion bar (see [ADR 0007](docs/adr/0007-scope-cards-show-task-presence-not-completion.md)). Clicking the card body opens the Scope Drawer.
+_Avoid_: Story card, ticket, work-item card
+
+**Scope Drawer**:
+A right-side panel opened from a Scope Card. The single editor for one scope — its name, tier, Litmus Text, and tasks — using inline auto-save. Where all task management lives.
+_Avoid_: Scope modal, scope detail dialog, side panel
+
 ## Relationships
 
 - A **Cycle** contains one or more **Pitches**
@@ -145,7 +157,7 @@ _Avoid_: Pitch detail, pitch page
 ## Flagged ambiguities
 
 - **"status"** was used to mean both **Stage** (framing/shaping/building/done) and **Zone** (on_track/some_risk/concerned). Resolved: use "stage" for the pitch lifecycle phase, "zone" for the needle sentiment. Never use "status" unqualified.
-- **"progress"** was used to mean both **Hill Progress** (scope-level, position on hill chart) and **Needle** progress (pitch-level, position on arc). Resolved: always qualify — "hill progress" for scopes, "needle progress" for the pitch-level arc position.
+- **"progress"** was used to mean both **Hill Progress** (scope-level, position on hill chart) and **Needle** progress (pitch-level, position on arc). Resolved: always qualify — "hill progress" for scopes, "needle progress" for the pitch-level arc position. Note: task completion is never "progress" — the **Scope Card** shows task *presence*, not a completion metric (see [ADR 0007](docs/adr/0007-scope-cards-show-task-presence-not-completion.md)).
 - **"snapshot"** was used for the existing `PitchSnapshot` type (legacy board feature) and for the new update snapshots. Resolved: the legacy type is retired. New terms are **Needle Snapshot** and **Hill Snapshot**, both part of an **Update**.
-- **"color"** was used for tier color (red/orange/grey on scope dots) and zone color (green/yellow/red on the needle). These overlap on red. Resolved: context distinguishes them — tier colors appear on scope dots and cards, zone colors appear on the needle and update cards. Tier red = highest priority, zone red = concerned.
+- **"color"** historically meant tier color (red/orange/grey on scope dots) vs zone color (green/yellow/red on the needle). Resolved + superseded: tier is no longer color-encoded (it is now a text **badge**). The scope dot and order badge now show the scope's unique **Scope Color**; zone color still appears on the needle and update cards (see [ADR 0008](docs/adr/0008-scope-identity-color.md)).
 - **needle position vs. zone** were coupled: position was auto-snapped from the chosen zone (on_track→0.85, some_risk→0.5, concerned→0.2). Resolved: they are independent — position is slid manually, zone is chosen separately, and the snapping derivation is removed. The needle's filled arc encodes both at once: length = position, color = zone.

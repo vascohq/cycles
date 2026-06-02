@@ -16,10 +16,10 @@ const previousSnapshot: HillSnapshot[] = [
 ]
 
 const hillScopes: HillScope[] = [
-  { id: 's1', title: 'Auth flow', tier: 'must', hill_progress: 0.57, order: 1 },
-  { id: 's2', title: 'Billing', tier: 'should', hill_progress: 0.5, order: 2 },
-  { id: 's3', title: 'Onboarding', tier: 'could', hill_progress: 0.64, order: 3 },
-  { id: 's5', title: 'New scope', tier: 'must', hill_progress: 0.14, order: 4 },
+  { id: 's1', title: 'Auth flow', tier: 'must', color: '#e5484d', hill_progress: 0.57, order: 1 },
+  { id: 's2', title: 'Billing', tier: 'should', color: '#30a46c', hill_progress: 0.5, order: 2 },
+  { id: 's3', title: 'Onboarding', tier: 'could', color: '#8e4ec6', hill_progress: 0.64, order: 3 },
+  { id: 's5', title: 'New scope', tier: 'must', color: '#e5484d', hill_progress: 0.14, order: 4 },
 ]
 
 const hillTrails = diffHillTrail(previousSnapshot, hillScopes)

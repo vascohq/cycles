@@ -18,9 +18,9 @@ type Story = StoryObj<typeof meta>
 
 // Live (latest) positions.
 const LIVE_SCOPES: HillScope[] = [
-  { id: '1', title: 'Auth flow', tier: 'must', hill_progress: 0.85, order: 1 },
-  { id: '2', title: 'Dashboard', tier: 'must', hill_progress: 0.6, order: 2 },
-  { id: '3', title: 'Notifications', tier: 'should', hill_progress: 0.4, order: 3 },
+  { id: '1', title: 'Auth flow', tier: 'must', color: '#e5484d', hill_progress: 0.85, order: 1 },
+  { id: '2', title: 'Dashboard', tier: 'must', color: '#e5484d', hill_progress: 0.6, order: 2 },
+  { id: '3', title: 'Notifications', tier: 'should', color: '#30a46c', hill_progress: 0.4, order: 3 },
 ]
 
 // Three posted updates over the cycle. Snapshots carry title/tier so historical

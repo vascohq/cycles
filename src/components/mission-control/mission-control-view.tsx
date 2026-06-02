@@ -225,7 +225,7 @@ function PitchCardItem({
       className={cn(
         'rounded-lg border border-border/70 bg-card p-5 flex flex-col gap-3',
         'shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200',
-        'hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border',
+        'hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30',
         'animate-in fade-in slide-in-from-bottom-1'
       )}
       style={{ animationDelay: `${delay}s`, animationFillMode: 'backwards' }}
@@ -264,7 +264,7 @@ function PitchCardItem({
 
       <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
         <span>
-          {card.tasksDone}/{card.tasksTotal} tasks
+          {card.scopesTotal} scope{card.scopesTotal === 1 ? '' : 's'}
         </span>
         {card.lastUpdatedAt && (
           <span>{formatRelativeTime(card.lastUpdatedAt)}</span>

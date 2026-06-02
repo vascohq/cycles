@@ -22,6 +22,7 @@ export default function MissionControlE2EPage() {
             needle: null,
             tasksDone: 0,
             tasksTotal: 0,
+            scopesTotal: 0,
             lastUpdatedAt: null,
             timebox_start: '2026-05-26',
             timebox_end: '2026-07-03',

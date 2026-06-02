@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import { ScopeGrid } from './scope-grid'
 import { reorderScopes } from '@/lib/scope-engine'
-import type { ScopeCardTask } from './scope-card'
 
 const meta = {
   title: 'ScopeCard/ScopeGrid',
@@ -19,6 +18,7 @@ const SAMPLE_SCOPES = [
     order: 1,
     title: 'Auth flow',
     tier: 'must' as const,
+    color: '#3e63dd',
     litmus_text: 'Users can sign in and access their workspace',
     tasks: [
       { id: 't1', title: 'Set up auth middleware', done: true },
@@ -31,6 +31,7 @@ const SAMPLE_SCOPES = [
     order: 2,
     title: 'Dashboard overview',
     tier: 'should' as const,
+    color: '#3e63dd',
     litmus_text: 'Team can see all pitches at a glance',
     tasks: [
       { id: 't4', title: 'Pitch cards layout', done: true },
@@ -42,6 +43,7 @@ const SAMPLE_SCOPES = [
     order: 3,
     title: 'Hill chart rendering',
     tier: 'must' as const,
+    color: '#3e63dd',
     litmus_text: 'Scopes visible on interactive hill chart',
     tasks: [
       { id: 't6', title: 'SVG path math', done: true },
@@ -54,6 +56,7 @@ const SAMPLE_SCOPES = [
     order: 4,
     title: 'Dark mode',
     tier: 'could' as const,
+    color: '#3e63dd',
     litmus_text: 'App renders in dark theme',
     tasks: [{ id: 't9', title: 'Theme toggle', done: false }],
   },
@@ -62,6 +65,7 @@ const SAMPLE_SCOPES = [
     order: 5,
     title: 'Notifications',
     tier: 'should' as const,
+    color: '#3e63dd',
     litmus_text: 'Users get notified on needle changes',
     tasks: [
       { id: 't10', title: 'Slack integration', done: false },
@@ -73,6 +77,7 @@ const SAMPLE_SCOPES = [
     order: 6,
     title: 'Timebox display',
     tier: 'must' as const,
+    color: '#3e63dd',
     litmus_text: 'Pitch shows progress through timebox',
     tasks: [
       { id: 't12', title: 'Tape component', done: true },
@@ -97,28 +102,9 @@ export const Interactive: Story = {
         onReorder={(activeId, overId) => {
           setScopes((prev) => reorderScopes(prev, activeId, overId))
         }}
-        onTaskToggle={(scopeId, taskId, done) => {
-          setScopes((prev) =>
-            prev.map((s) =>
-              s.id === scopeId
-                ? {
-                    ...s,
-                    tasks: s.tasks.map((t) =>
-                      t.id === taskId ? { ...t, done } : t
-                    ),
-                  }
-                : s
-            )
-          )
-        }}
-        onReset={(scopeId) => {
-          setScopes((prev) =>
-            prev.map((s) =>
-              s.id === scopeId
-                ? { ...s, tasks: s.tasks.map((t) => ({ ...t, done: false })) }
-                : s
-            )
-          )
+        onOpenScope={(scopeId) => console.log('open scope', scopeId)}
+        onDeleteScope={(scopeId) => {
+          setScopes((prev) => prev.filter((s) => s.id !== scopeId))
         }}
       />
     )

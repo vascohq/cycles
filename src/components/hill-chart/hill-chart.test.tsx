@@ -8,6 +8,7 @@ const SCOPE: HillScope = {
   tier: 'must',
   hill_progress: 0.2,
   order: 1,
+  color: '#e5484d',
 }
 
 beforeEach(() => {
