@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { derivePitchCards, partitionByStage } from './mission-control-helpers'
-import type { CyclePitch, CycleScope, ScopeTask, PitchUpdate } from '@/cycle-liveblocks.config'
+import {
+  derivePitchCards,
+  partitionByStage,
+  sortByStageProgression,
+} from './mission-control-helpers'
+import type {
+  CyclePitch,
+  CycleScope,
+  ScopeTask,
+  PitchUpdate,
+  Stage,
+} from '@/cycle-liveblocks.config'
+import type { PitchCard } from './mission-control-helpers'
 
 const pitches: CyclePitch[] = [
   {
@@ -86,5 +97,55 @@ describe('partitionByStage', () => {
     expect(inFlight[0].id).toBe('p1')
     expect(done).toHaveLength(1)
     expect(done[0].id).toBe('p2')
+  })
+})
+
+describe('sortByStageProgression', () => {
+  const card = (id: string, stage: Stage): PitchCard => ({
+    id,
+    title: id,
+    emoji: '',
+    stage,
+    needle: null,
+    tasksDone: 0,
+    tasksTotal: 0,
+    scopesTotal: 0,
+    lastUpdatedAt: null,
+    timebox_start: '',
+    timebox_end: '',
+  })
+
+  it('orders building → shaping → framing → done', () => {
+    const sorted = sortByStageProgression([
+      card('a', 'framing'),
+      card('b', 'done'),
+      card('c', 'building'),
+      card('d', 'shaping'),
+    ])
+    expect(sorted.map((c) => c.id)).toEqual(['c', 'd', 'a', 'b'])
+  })
+
+  it('keeps done pitches last', () => {
+    const sorted = sortByStageProgression([
+      card('done1', 'done'),
+      card('build1', 'building'),
+    ])
+    expect(sorted[sorted.length - 1].stage).toBe('done')
+  })
+
+  it('is stable within the same stage (preserves input order)', () => {
+    const sorted = sortByStageProgression([
+      card('b1', 'building'),
+      card('b2', 'building'),
+      card('b3', 'building'),
+    ])
+    expect(sorted.map((c) => c.id)).toEqual(['b1', 'b2', 'b3'])
+  })
+
+  it('does not mutate the input array', () => {
+    const input = [card('a', 'framing'), card('b', 'building')]
+    const before = input.map((c) => c.id)
+    sortByStageProgression(input)
+    expect(input.map((c) => c.id)).toEqual(before)
   })
 })
