@@ -123,3 +123,23 @@ export function groupBySquad(
 
   return sections
 }
+
+// Stable key for a section: the squad id, or this sentinel for Unassigned.
+// Used by the Mission Control squad filter to identify the active section.
+export const UNASSIGNED_KEY = '__unassigned__'
+
+export function sectionKey(section: SquadSection): string {
+  return section.squad?.id ?? UNASSIGNED_KEY
+}
+
+/**
+ * Narrow squad sections to a single one by key. A null key means "all"
+ * (no filter). An unknown key yields no sections.
+ */
+export function filterSquadSections(
+  sections: SquadSection[],
+  activeKey: string | null
+): SquadSection[] {
+  if (activeKey === null) return sections
+  return sections.filter((s) => sectionKey(s) === activeKey)
+}

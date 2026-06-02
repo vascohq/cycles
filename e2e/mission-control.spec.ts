@@ -114,6 +114,23 @@ test.describe('Mission Control view', () => {
     expect(shadow).not.toBe('none')
   })
 
+  test('squad filter narrows to one squad and clears back to all', async ({ page }) => {
+    const filterBar = page.getByRole('group', { name: 'Filter by squad' })
+    await expect(filterBar).toBeVisible()
+
+    // Filter to Growth → only Growth's pitches remain.
+    await filterBar.getByRole('button', { name: 'Growth' }).click()
+    await expect(page.getByText('Mobile push notifications')).toBeVisible()
+    await expect(page.getByText('Search overhaul')).toBeVisible()
+    await expect(page.getByText('Redesign dashboard')).toBeHidden()
+    await expect(page.getByText('Onboarding v2')).toBeHidden()
+
+    // Back to All → everything shows again.
+    await filterBar.getByRole('button', { name: 'All' }).click()
+    await expect(page.getByText('Redesign dashboard')).toBeVisible()
+    await expect(page.getByText('Onboarding v2')).toBeVisible()
+  })
+
   test('footer renders', async ({ page }) => {
     await expect(
       page.getByText('mission control · click a pitch to open its scope map')
