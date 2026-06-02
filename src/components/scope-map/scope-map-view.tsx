@@ -193,6 +193,7 @@ export function ScopeMapView({
               dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               userName={userName}
               pitchTitle={pitch.title}
+              pitchEmoji={pitch.emoji}
               daysLeft={timebox.daysLeft}
               currentProgress={pitch.needle?.progress ?? 0.02}
               currentZone={pitch.needle?.zone ?? null}

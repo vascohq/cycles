@@ -200,6 +200,7 @@ function resolveUpdateContext(
   pitch: {
     id: string
     title: string
+    emoji: string
     timebox_start: string
     timebox_end: string
     needle: Needle | null
@@ -244,6 +245,7 @@ function resolveUpdateContext(
 
   const slackParams = (postedAt: string): SlackMessageParams => ({
     pitchTitle: pitch.title,
+    pitchEmoji: pitch.emoji ?? '',
     weekNumber: timebox.currentWeek,
     totalWeeks: timebox.totalWeeks,
     zone: input.zone,

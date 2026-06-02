@@ -4,6 +4,8 @@ const zoneEnum = z.enum(['on_track', 'some_risk', 'concerned'])
 
 export const slackMessageSchema = z.object({
   pitchTitle: z.string(),
+  /** The pitch's identity emoji; leads the message in place of 📌 when set. */
+  pitchEmoji: z.string().default(''),
   weekNumber: z.number(),
   totalWeeks: z.number(),
   zone: zoneEnum,
@@ -83,6 +85,7 @@ export function formatSlackMessage(params: SlackMessageParams): {
 } {
   const {
     pitchTitle,
+    pitchEmoji,
     zone,
     previousZone,
     narrative,
@@ -97,8 +100,11 @@ export function formatSlackMessage(params: SlackMessageParams): {
     postedAt,
   } = params
 
+  // The pitch's identity emoji leads the message; fall back to the pin.
+  const lead = pitchEmoji || '📌'
+
   const blocks: SlackBlock[] = [
-    { type: 'header', text: { type: 'plain_text', text: `📌 ${pitchTitle}`, emoji: true } },
+    { type: 'header', text: { type: 'plain_text', text: `${lead} ${pitchTitle}`, emoji: true } },
     { type: 'section', text: { type: 'mrkdwn', text: zoneLine(zone, previousZone) } },
   ]
 
@@ -126,8 +132,8 @@ export function formatSlackMessage(params: SlackMessageParams): {
 
   // Notification fallback (shown in push/preview, where blocks don't render).
   const text = trimmed
-    ? `📌 ${pitchTitle} · ${ZONE_LABEL[zone]}\n${trimmed}`
-    : `📌 ${pitchTitle} · ${ZONE_LABEL[zone]}`
+    ? `${lead} ${pitchTitle} · ${ZONE_LABEL[zone]}\n${trimmed}`
+    : `${lead} ${pitchTitle} · ${ZONE_LABEL[zone]}`
 
   return { blocks, text }
 }

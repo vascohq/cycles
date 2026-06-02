@@ -118,6 +118,7 @@ function ScopeMapWired({
       allPitches.map((p) => ({
         id: p.id,
         title: p.title,
+        emoji: p.emoji ?? '',
         stage: p.stage,
         zone: p.needle?.zone ?? null,
         href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
@@ -480,6 +481,7 @@ function ScopeMapWired({
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
+          pitchEmoji: pitch.emoji ?? '',
           weekNumber: timebox.currentWeek,
           totalWeeks: timebox.totalWeeks,
           zone,
@@ -530,6 +532,7 @@ function ScopeMapWired({
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
+          pitchEmoji: pitch.emoji ?? '',
           weekNumber: tb.currentWeek,
           totalWeeks: tb.totalWeeks,
           zone: update.needle_snapshot.zone,

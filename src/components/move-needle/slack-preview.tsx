@@ -21,6 +21,7 @@ function ZoneDot({ zone }: { zone: Zone }) {
 
 export type SlackPreviewProps = {
   pitchTitle: string
+  pitchEmoji?: string
   weekLabel: string
   zone: Zone | null
   previousZone?: Zone | null
@@ -34,6 +35,7 @@ export type SlackPreviewProps = {
 
 export function SlackPreview({
   pitchTitle,
+  pitchEmoji = '',
   weekLabel,
   zone,
   previousZone = null,
@@ -59,7 +61,7 @@ export function SlackPreview({
       </div>
 
       <div className="flex flex-col gap-1.5 text-xs">
-        <div className="font-semibold">📌 {pitchTitle}</div>
+        <div className="font-semibold">{pitchEmoji || '📌'} {pitchTitle}</div>
 
         {zone && (
           <div className="flex items-center gap-1.5 text-[11px] font-medium">

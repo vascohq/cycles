@@ -8,6 +8,7 @@ import type { SlackMessageParams } from './slack-message'
 
 const PARAMS: SlackMessageParams = {
   pitchTitle: 'Mission Control',
+  pitchEmoji: '',
   weekNumber: 3,
   totalWeeks: 6,
   zone: 'on_track',

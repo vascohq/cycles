@@ -252,6 +252,7 @@ function PitchCardItem({
       )}
 
       <h3 className="text-sm font-semibold leading-snug tracking-tight">
+        {card.emoji && <span className="mr-1.5">{card.emoji}</span>}
         {card.title}
       </h3>
 
