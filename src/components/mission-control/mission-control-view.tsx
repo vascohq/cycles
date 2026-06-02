@@ -66,7 +66,7 @@ export function MissionControlView({
   const visibleSections = filterSquadSections(sections, activeFilter)
 
   return (
-    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link
@@ -99,30 +99,31 @@ export function MissionControlView({
             )}
           </div>
         </div>
+        {showFilter && (
+          <SquadFilterBar
+            sections={sections}
+            active={activeFilter}
+            onChange={setActiveFilter}
+          />
+        )}
       </header>
-
-      {showFilter && (
-        <SquadFilterBar
-          sections={sections}
-          active={activeFilter}
-          onChange={setActiveFilter}
-        />
-      )}
 
       {isEmpty ? (
         <div className="border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">
           No pitches yet.
         </div>
       ) : (
-        visibleSections.map((section) => (
-          <SquadSectionBlock
-            key={sectionKey(section)}
-            section={section}
-            slug={slug}
-            cycleSlug={cycleSlug}
-            today={today}
-          />
-        ))
+        <div className="flex flex-col gap-6">
+          {visibleSections.map((section) => (
+            <SquadSectionBlock
+              key={sectionKey(section)}
+              section={section}
+              slug={slug}
+              cycleSlug={cycleSlug}
+              today={today}
+            />
+          ))}
+        </div>
       )}
 
       {onCreatePitch && (
