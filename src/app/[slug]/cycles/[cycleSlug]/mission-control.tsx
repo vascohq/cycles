@@ -86,6 +86,8 @@ function MissionControlWired({
           frame_outcome: '',
           timebox_start: cycle.start_date,
           timebox_end: cycle.end_date,
+          emoji: '',
+          notion_url: '',
         })
       )
     },
@@ -98,6 +100,7 @@ function MissionControlWired({
       pitches.map((p) => ({
         id: p.id,
         title: p.title,
+        emoji: p.emoji ?? '',
         stage: p.stage,
         zone: p.needle?.zone ?? null,
         href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,

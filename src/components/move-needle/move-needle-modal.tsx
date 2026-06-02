@@ -31,6 +31,8 @@ export type MoveNeedleModalProps = {
   dateLabel: string
   userName: string
   pitchTitle: string
+  /** The pitch's identity emoji — leads the Slack preview in place of 📌. */
+  pitchEmoji?: string
   daysLeft: number
   currentProgress: number
   currentZone: Zone | null
@@ -58,6 +60,7 @@ export function MoveNeedleModal({
   dateLabel,
   userName,
   pitchTitle,
+  pitchEmoji = '',
   daysLeft,
   currentProgress,
   currentZone,
@@ -308,6 +311,7 @@ export function MoveNeedleModal({
             </DialogHeader>
             <SlackPreview
               pitchTitle={pitchTitle}
+              pitchEmoji={pitchEmoji}
               weekLabel={weekLabel}
               zone={zone}
               previousZone={previousZone}

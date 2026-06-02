@@ -10,6 +10,7 @@ import type {
 export type PitchCard = {
   id: string
   title: string
+  emoji: string
   stage: Stage
   needle: Needle | null
   tasksDone: number
@@ -43,6 +44,7 @@ export function derivePitchCards(
     return {
       id: p.id,
       title: p.title,
+      emoji: p.emoji ?? '',
       stage: p.stage,
       needle: p.needle,
       tasksDone: pitchTasks.filter((t) => t.done).length,

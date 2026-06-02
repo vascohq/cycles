@@ -47,8 +47,8 @@ const ORG_ID = 'org_test'
 const FIXTURE_STORAGE: StorageJson = {
   cycle: { name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15', slack_channel: '' },
   pitches: [
-    { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15' },
-    { id: 'p2', title: 'MCP Server', stage: 'framing', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15' },
+    { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
+    { id: 'p2', title: 'MCP Server', stage: 'framing', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
   ],
   scopes: [
     { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must', litmus_text: '', hill_progress: 0.5 },

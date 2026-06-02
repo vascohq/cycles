@@ -55,6 +55,7 @@ const PITCHES: PalettePitchItem[] = [
   {
     id: 'p1',
     title: 'Command Palette',
+    emoji: '',
     stage: 'building',
     zone: 'on_track',
     href: '/acme/cycles/cycle-2/command-palette',
@@ -62,6 +63,7 @@ const PITCHES: PalettePitchItem[] = [
   {
     id: 'p2',
     title: 'Hill Trails',
+    emoji: '',
     stage: 'shaping',
     zone: null,
     href: '/acme/cycles/cycle-2/hill-trails',

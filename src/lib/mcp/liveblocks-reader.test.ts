@@ -85,8 +85,8 @@ describe('resolvePitch', () => {
   const storage = {
     cycle: { name: 'Q2', type: 'build' as const, start_date: '', end_date: '', slack_channel: '' },
     pitches: [
-      { id: 'p1', title: 'Mission Control', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '' },
-      { id: 'p2', title: 'Agentic Skills', stage: 'framing' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '' },
+      { id: 'p1', title: 'Mission Control', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
+      { id: 'p2', title: 'Agentic Skills', stage: 'framing' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
     ],
     scopes: [],
     tasks: [],
@@ -111,7 +111,7 @@ describe('resolvePitch', () => {
       ...storage,
       pitches: [
         ...storage.pitches,
-        { id: 'p3', title: 'Agentic Capabilities (Skills & Tools)', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '' },
+        { id: 'p3', title: 'Agentic Capabilities (Skills & Tools)', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
       ],
     }
     expect(

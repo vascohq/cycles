@@ -56,7 +56,13 @@ export function CommandPalette() {
                 value={`pitch ${pitch.title} ${pitch.id}`}
                 onSelect={() => go(pitch.href)}
               >
-                <Target className="text-muted-foreground" />
+                {pitch.emoji ? (
+                  <span className="w-4 text-center leading-none">
+                    {pitch.emoji}
+                  </span>
+                ) : (
+                  <Target className="text-muted-foreground" />
+                )}
                 <span className="truncate">{pitch.title}</span>
                 <span className="ml-auto flex items-center gap-2">
                   <span

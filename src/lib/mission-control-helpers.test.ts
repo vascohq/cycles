@@ -12,6 +12,8 @@ const pitches: CyclePitch[] = [
     frame_outcome: '',
     timebox_start: '2025-01-06',
     timebox_end: '2025-02-14',
+    emoji: '',
+    notion_url: '',
   },
   {
     id: 'p2',
@@ -22,6 +24,8 @@ const pitches: CyclePitch[] = [
     frame_outcome: '',
     timebox_start: '2025-01-06',
     timebox_end: '2025-02-14',
+    emoji: '',
+    notion_url: '',
   },
 ]
 

@@ -16,6 +16,7 @@ const inFlightCards: PitchCard[] = [
   {
     id: 'p1',
     title: 'Redesign dashboard',
+    emoji: '📊',
     stage: 'building',
     needle: { progress: 0.7, zone: 'on_track' },
     tasksDone: 8,
@@ -28,6 +29,7 @@ const inFlightCards: PitchCard[] = [
   {
     id: 'p2',
     title: 'Mobile push notifications',
+    emoji: '📱',
     stage: 'shaping',
     needle: { progress: 0.4, zone: 'some_risk' },
     tasksDone: 3,
@@ -40,6 +42,7 @@ const inFlightCards: PitchCard[] = [
   {
     id: 'p3',
     title: 'Search overhaul',
+    emoji: '🔍',
     stage: 'building',
     needle: { progress: 0.2, zone: 'concerned' },
     tasksDone: 1,
@@ -52,6 +55,7 @@ const inFlightCards: PitchCard[] = [
   {
     id: 'p4',
     title: 'Onboarding v2',
+    emoji: '',
     stage: 'framing',
     needle: null,
     tasksDone: 0,
@@ -67,6 +71,7 @@ const doneCards: PitchCard[] = [
   {
     id: 'p5',
     title: 'API rate limiting',
+    emoji: '🚦',
     stage: 'done',
     needle: { progress: 0.9, zone: 'on_track' },
     tasksDone: 5,
@@ -129,6 +134,7 @@ export const WithCreatePitch: Story = {
             {
               id: `p-${Date.now()}`,
               title,
+              emoji: '',
               stage: 'framing',
               needle: null,
               tasksDone: 0,
