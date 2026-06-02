@@ -1,8 +1,42 @@
 'use server'
 
 import { liveblocks } from '@/lib/liveblocks'
+import type { PaletteCycleItem } from '@/components/command-palette/types'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+
+/**
+ * List the current org's cycles for the command palette. Mirrors the listing in
+ * cycles/page.tsx (room metadata, no need to open each room) and is fetched
+ * lazily on the palette's first open — no per-page cost when the palette is
+ * never used.
+ */
+export async function listCycles(): Promise<PaletteCycleItem[]> {
+  const { userId, orgId } = await auth()
+  if (!userId) return []
+
+  const roomPrefix = orgId ?? userId
+  const { data: rooms } = await liveblocks.getRooms({
+    query: `roomId^"${roomPrefix}:cycle:"`,
+  })
+
+  return rooms
+    .map((room) => ({
+      slug: room.id.split(':').slice(2).join(':'),
+      title: String(room.metadata.title ?? 'Untitled cycle'),
+      type:
+        room.metadata.type === 'cooldown'
+          ? ('cooldown' as const)
+          : ('build' as const),
+      start_date: room.metadata.start_date
+        ? String(room.metadata.start_date)
+        : '',
+      end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
+      createdOn: room.metadata.createdOn ? String(room.metadata.createdOn) : '',
+    }))
+    .sort((a, b) => (a.createdOn > b.createdOn ? -1 : 1))
+    .map(({ createdOn: _createdOn, ...cycle }) => cycle)
+}
 
 async function roomExists(roomId: string) {
   try {

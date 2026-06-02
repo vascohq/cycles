@@ -32,6 +32,7 @@ import { LiveObject } from '@liveblocks/client'
 import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useSlackEnabled } from '@/components/slack-config-context'
+import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
 import { slugify } from '@/lib/slugify'
 import { useCallback, useMemo } from 'react'
 
@@ -98,6 +99,7 @@ function ScopeMapWired({
     )
     return bySlug ?? null
   })
+  const allPitches = useCycleStorage((root) => [...root.pitches])
   const allScopes = useCycleStorage((root) => [...root.scopes])
   const allTasks = useCycleStorage((root) => [...root.tasks])
   const allUpdates = useCycleStorage((root) => [...root.updates])
@@ -109,6 +111,20 @@ function ScopeMapWired({
   const orgUsers = useOrganizationUsers()
 
   const pitchId = pitch?.id ?? ''
+
+  // Register this cycle's pitches into the command palette while we're in the room.
+  const palettePitches = useMemo(
+    () =>
+      allPitches.map((p) => ({
+        id: p.id,
+        title: p.title,
+        stage: p.stage,
+        zone: p.needle?.zone ?? null,
+        href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
+      })),
+    [allPitches, slug, cycleSlug]
+  )
+  useRegisterPalettePitches(palettePitches)
 
   const onStageChange = useCycleMutation(
     ({ storage }, newStage: Stage) => {
