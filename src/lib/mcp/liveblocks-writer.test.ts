@@ -46,7 +46,13 @@ function makeMockItem(data: Record<string, unknown>): MockItem {
     ...store,
     get: (key: string) => store[key],
     set: (key: string, value: unknown) => {
+      // Mirror Liveblocks: set(key, undefined) does NOT remove the key — use
+      // delete() to clear. Modeling this catches "clear by set(undefined)" bugs.
+      if (value === undefined) return
       store[key] = value
+    },
+    delete: (key: string) => {
+      delete store[key]
     },
   }
 }

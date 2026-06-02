@@ -168,7 +168,9 @@ export async function upsertPitch(
       existing.set('timebox_end', params.timebox_end)
       existing.set('emoji', params.emoji)
       existing.set('notion_url', params.notion_url)
-      if (squadId !== undefined) existing.set('squadId', squadId ?? undefined)
+      // squadId: null = clear (remove key), string = assign, undefined = leave.
+      if (squadId === null) existing.delete('squadId')
+      else if (squadId !== undefined) existing.set('squadId', squadId)
     }
   })
 

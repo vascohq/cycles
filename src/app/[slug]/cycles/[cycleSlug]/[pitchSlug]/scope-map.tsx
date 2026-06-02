@@ -183,7 +183,9 @@ function ScopeMapWired({
   const onClearSquad = useCycleMutation(
     ({ storage }) => {
       const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
-      p?.set('squadId', undefined)
+      // Remove the key entirely — set('squadId', undefined) leaves a lingering
+      // key in Liveblocks and the chip would keep showing the old squad.
+      p?.delete('squadId')
     },
     [pitchId]
   )
