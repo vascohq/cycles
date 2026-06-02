@@ -11,28 +11,42 @@ test.describe('Mission Control view', () => {
     await expect(page.locator('header').getByText('Updates posted Tuesdays to #product-general')).toBeVisible()
   })
 
-  test('renders in-flight section with correct count', async ({ page }) => {
-    await expect(page.getByText('In flight')).toBeVisible()
-    // Count badge shows 4
-    const section = page.locator('section').filter({ hasText: 'In flight' })
-    await expect(section.locator('.rounded-full').first()).toContainText('4')
+  test('renders a section per squad with correct counts', async ({ page }) => {
+    const platform = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Platform' }),
+    })
+    await expect(platform.locator('.rounded-full').first()).toContainText('2')
+
+    const growth = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Growth' }),
+    })
+    await expect(growth.locator('.rounded-full').first()).toContainText('2')
   })
 
-  test('renders all four in-flight pitch cards', async ({ page }) => {
+  test('renders a trailing Unassigned section', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'Unassigned' })).toBeVisible()
+    const unassigned = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Unassigned' }),
+    })
+    await expect(unassigned.getByText('Onboarding v2')).toBeVisible()
+  })
+
+  test('renders all pitch cards across sections', async ({ page }) => {
     await expect(page.getByText('Redesign dashboard')).toBeVisible()
     await expect(page.getByText('Mobile push notifications')).toBeVisible()
     await expect(page.getByText('Search overhaul')).toBeVisible()
     await expect(page.getByText('Onboarding v2')).toBeVisible()
-  })
-
-  test('renders done section with correct count', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Done' })).toBeVisible()
-    const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Done' }) })
-    await expect(section.locator('.rounded-full').first()).toContainText('1')
-  })
-
-  test('renders done pitch card', async ({ page }) => {
     await expect(page.getByText('API rate limiting')).toBeVisible()
+  })
+
+  test('done pitch sits within its squad section, sorted last', async ({ page }) => {
+    const platform = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Platform' }),
+    })
+    const cardTitles = platform.locator('a h3')
+    // Platform: Redesign dashboard (building) before API rate limiting (done).
+    await expect(cardTitles.first()).toContainText('Redesign dashboard')
+    await expect(cardTitles.last()).toContainText('API rate limiting')
   })
 
   test('pitch cards show stage badges', async ({ page }) => {
@@ -66,7 +80,10 @@ test.describe('Mission Control view', () => {
 
   test('responsive grid: 3 columns at wide viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1200, height: 800 })
-    const cards = page.locator('section').filter({ hasText: 'In flight' }).locator('a')
+    const cards = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Platform' }) })
+      .locator('a')
     const firstBox = await cards.nth(0).boundingBox()
     const secondBox = await cards.nth(1).boundingBox()
     expect(firstBox).toBeTruthy()
@@ -78,7 +95,10 @@ test.describe('Mission Control view', () => {
   test('responsive grid: stacks at narrow viewport', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 800 })
     await page.waitForTimeout(100)
-    const cards = page.locator('section').filter({ hasText: 'In flight' }).locator('a')
+    const cards = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Platform' }) })
+      .locator('a')
     const firstBox = await cards.nth(0).boundingBox()
     const secondBox = await cards.nth(1).boundingBox()
     expect(firstBox).toBeTruthy()
@@ -115,9 +135,11 @@ test.describe('Mission Control view', () => {
     await expect(page.getByRole('heading', { name: 'New pitch' })).not.toBeVisible()
     await expect(page.getByText('Billing v2')).toBeVisible()
 
-    // Count badge updates to 5
-    const section = page.locator('section').filter({ hasText: 'In flight' })
-    await expect(section.locator('.rounded-full').first()).toContainText('5')
+    // New pitch has no squad, so it lands in Unassigned (was 1, now 2).
+    const unassigned = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Unassigned' }),
+    })
+    await expect(unassigned.locator('.rounded-full').first()).toContainText('2')
   })
 
   test('create button is disabled when title is empty', async ({ page }) => {

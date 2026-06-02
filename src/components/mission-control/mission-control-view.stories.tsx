@@ -1,7 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import { MissionControlView } from './mission-control-view'
-import type { PitchCard } from '@/lib/mission-control-helpers'
+import {
+  groupBySquad,
+  type PitchCard,
+  type SquadLike,
+} from '@/lib/mission-control-helpers'
+
+const squads: SquadLike[] = [
+  { id: 'sq-platform', name: 'Platform', color: '#3e63dd' },
+  { id: 'sq-growth', name: 'Growth', color: '#e5484d' },
+]
 
 const meta: Meta<typeof MissionControlView> = {
   title: 'Pages/MissionControl',
@@ -15,6 +24,7 @@ type Story = StoryObj<typeof MissionControlView>
 const inFlightCards: PitchCard[] = [
   {
     id: 'p1',
+    squadId: 'sq-platform',
     title: 'Redesign dashboard',
     emoji: '📊',
     stage: 'building',
@@ -28,6 +38,7 @@ const inFlightCards: PitchCard[] = [
   },
   {
     id: 'p2',
+    squadId: 'sq-growth',
     title: 'Mobile push notifications',
     emoji: '📱',
     stage: 'shaping',
@@ -41,6 +52,7 @@ const inFlightCards: PitchCard[] = [
   },
   {
     id: 'p3',
+    squadId: 'sq-growth',
     title: 'Search overhaul',
     emoji: '🔍',
     stage: 'building',
@@ -70,6 +82,7 @@ const inFlightCards: PitchCard[] = [
 const doneCards: PitchCard[] = [
   {
     id: 'p5',
+    squadId: 'sq-platform',
     title: 'API rate limiting',
     emoji: '🚦',
     stage: 'done',
@@ -89,8 +102,7 @@ export const Default: Story = {
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
     today: '2025-01-27',
-    inFlight: inFlightCards,
-    done: doneCards,
+    sections: groupBySquad([...inFlightCards, ...doneCards], squads),
   },
 }
 
@@ -100,8 +112,7 @@ export const Empty: Story = {
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
     today: '2025-01-27',
-    inFlight: [],
-    done: [],
+    sections: [],
   },
 }
 
@@ -111,14 +122,22 @@ export const AllDone: Story = {
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
     today: '2025-02-14',
-    inFlight: [],
-    done: [...inFlightCards.map((c) => ({ ...c, stage: 'done' as const })), ...doneCards],
+    sections: groupBySquad(
+      [
+        ...inFlightCards.map((c) => ({ ...c, stage: 'done' as const })),
+        ...doneCards,
+      ],
+      squads
+    ),
   },
 }
 
 export const WithCreatePitch: Story = {
   render: function Render() {
-    const [pitches, setPitches] = useState<PitchCard[]>([...inFlightCards])
+    const [pitches, setPitches] = useState<PitchCard[]>([
+      ...inFlightCards,
+      ...doneCards,
+    ])
 
     return (
       <MissionControlView
@@ -126,8 +145,7 @@ export const WithCreatePitch: Story = {
         cycleSlug="cycle-5"
         cycleTitle="Cycle 5 — Build"
         today="2025-01-27"
-        inFlight={pitches}
-        done={doneCards}
+        sections={groupBySquad(pitches, squads)}
         onCreatePitch={(title) =>
           setPitches((prev) => [
             ...prev,

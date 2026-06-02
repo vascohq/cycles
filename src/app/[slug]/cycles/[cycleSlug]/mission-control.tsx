@@ -12,11 +12,7 @@ import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MissionControlView } from '@/components/mission-control'
 import { useSlackEnabled } from '@/components/slack-config-context'
-import {
-  derivePitchCards,
-  partitionByStage,
-  sortByStageProgression,
-} from '@/lib/mission-control-helpers'
+import { derivePitchCards, groupBySquad } from '@/lib/mission-control-helpers'
 import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
 import { slugify } from '@/lib/slugify'
 import { useMemo } from 'react'
@@ -72,6 +68,7 @@ function MissionControlWired({
   const scopes = useCycleStorage((root) => [...root.scopes])
   const tasks = useCycleStorage((root) => [...root.tasks])
   const updates = useCycleStorage((root) => [...root.updates])
+  const squads = useCycleStorage((root) => [...root.squads])
 
   const cycle = useCycleStorage((root) => ({
     start_date: root.cycle.start_date,
@@ -114,9 +111,9 @@ function MissionControlWired({
   useRegisterPalettePitches(palettePitches)
 
   const cards = derivePitchCards(pitches, scopes, tasks, updates)
-  const { inFlight, done } = partitionByStage(cards)
-  // Surface the most active work first within the in-flight grid.
-  const inFlightSorted = sortByStageProgression(inFlight)
+  // Group into a section per squad (Unassigned last); each section is sorted
+  // by stage progression inside groupBySquad.
+  const sections = groupBySquad(cards, squads)
   const today = new Date().toISOString().slice(0, 10)
 
   return (
@@ -125,8 +122,7 @@ function MissionControlWired({
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
       today={today}
-      inFlight={inFlightSorted}
-      done={done}
+      sections={sections}
       onCreatePitch={onCreatePitch}
     />
   )
