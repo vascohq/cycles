@@ -12,7 +12,11 @@ import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MissionControlView } from '@/components/mission-control'
 import { useSlackEnabled } from '@/components/slack-config-context'
-import { derivePitchCards, partitionByStage } from '@/lib/mission-control-helpers'
+import {
+  derivePitchCards,
+  partitionByStage,
+  sortByStageProgression,
+} from '@/lib/mission-control-helpers'
 import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
 import { slugify } from '@/lib/slugify'
 import { useMemo } from 'react'
@@ -111,6 +115,8 @@ function MissionControlWired({
 
   const cards = derivePitchCards(pitches, scopes, tasks, updates)
   const { inFlight, done } = partitionByStage(cards)
+  // Surface the most active work first within the in-flight grid.
+  const inFlightSorted = sortByStageProgression(inFlight)
   const today = new Date().toISOString().slice(0, 10)
 
   return (
@@ -119,7 +125,7 @@ function MissionControlWired({
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
       today={today}
-      inFlight={inFlight}
+      inFlight={inFlightSorted}
       done={done}
       onCreatePitch={onCreatePitch}
     />

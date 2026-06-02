@@ -66,3 +66,22 @@ export function partitionByStage(cards: PitchCard[]): {
     done: cards.filter((c) => c.stage === 'done'),
   }
 }
+
+// Most-active work first, finished work last. Used to order pitches within a
+// Mission Control section (and, later, within each squad section — see #98).
+const STAGE_ORDER: Record<Stage, number> = {
+  building: 0,
+  shaping: 1,
+  framing: 2,
+  done: 3,
+}
+
+/**
+ * Order pitches by stage progression: building → shaping → framing → done.
+ * Stable within a stage (preserves input order) and non-mutating.
+ */
+export function sortByStageProgression(cards: PitchCard[]): PitchCard[] {
+  return [...cards].sort(
+    (a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage]
+  )
+}
