@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { PitchCard } from '@/lib/mission-control-helpers'
+import type { PitchCard, SquadSection } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
@@ -41,8 +41,7 @@ export type MissionControlViewProps = {
   cycleSlug: string
   cycleTitle: string
   today: string
-  inFlight: PitchCard[]
-  done: PitchCard[]
+  sections: SquadSection[]
   onCreatePitch?: (title: string) => void
 }
 
@@ -51,12 +50,12 @@ export function MissionControlView({
   cycleSlug,
   cycleTitle,
   today,
-  inFlight,
-  done,
+  sections,
   onCreatePitch,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const slackEnabled = useSlackEnabled()
+  const isEmpty = sections.length === 0
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
@@ -75,47 +74,39 @@ export function MissionControlView({
           <h1 className="text-3xl font-display">
             Mission Control
           </h1>
-          {slackEnabled && (
-            <span className="text-xs font-mono text-muted-foreground">
-              Updates posted to Slack
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {slackEnabled && (
+              <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                Updates posted to Slack
+              </span>
+            )}
+            {onCreatePitch && (
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                Add pitch
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <Section
-        title="In flight"
-        count={inFlight.length}
-        subtitle={slackEnabled ? 'Updates posted to Slack' : undefined}
-        action={
-          onCreatePitch && (
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors"
-            >
-              <Plus className="w-3 h-3" />
-              Add pitch
-            </button>
-          )
-        }
-      >
-        <PitchGrid
-          cards={inFlight}
-          slug={slug}
-          cycleSlug={cycleSlug}
-          today={today}
-        />
-      </Section>
-
-      {done.length > 0 && (
-        <Section title="Done" count={done.length}>
-          <PitchGrid
-            cards={done}
+      {isEmpty ? (
+        <div className="border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">
+          No pitches yet.
+        </div>
+      ) : (
+        sections.map((section) => (
+          <SquadSectionBlock
+            key={section.squad?.id ?? '__unassigned__'}
+            section={section}
             slug={slug}
             cycleSlug={cycleSlug}
             today={today}
           />
-        </Section>
+        ))
       )}
 
       {onCreatePitch && (
@@ -133,34 +124,45 @@ export function MissionControlView({
   )
 }
 
-function Section({
-  title,
-  count,
-  subtitle,
-  action,
-  children,
+function SquadSectionBlock({
+  section,
+  slug,
+  cycleSlug,
+  today,
 }: {
-  title: string
-  count: number
-  subtitle?: string
-  action?: React.ReactNode
-  children: React.ReactNode
+  section: SquadSection
+  slug: string
+  cycleSlug: string
+  today: string
 }) {
+  const { squad, cards } = section
   return (
     <section>
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-        <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded-full">
-          {count}
-        </span>
-        {subtitle && (
-          <span className="text-xs font-mono text-muted-foreground/50 hidden sm:inline">
-            {subtitle}
-          </span>
+      <div className="flex items-center gap-2.5 mb-4">
+        {squad ? (
+          <>
+            <span
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: squad.color }}
+            />
+            <h2 className="text-sm font-semibold tracking-tight">{squad.name}</h2>
+          </>
+        ) : (
+          <h2 className="text-sm font-semibold tracking-tight text-muted-foreground">
+            Unassigned
+          </h2>
         )}
-        {action && <div className="ml-auto">{action}</div>}
+        <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded-full">
+          {cards.length}
+        </span>
       </div>
-      {children}
+      <PitchGrid
+        cards={cards}
+        slug={slug}
+        cycleSlug={cycleSlug}
+        today={today}
+        squadColor={squad?.color}
+      />
     </section>
   )
 }
@@ -170,11 +172,13 @@ function PitchGrid({
   slug,
   cycleSlug,
   today,
+  squadColor,
 }: {
   cards: PitchCard[]
   slug: string
   cycleSlug: string
   today: string
+  squadColor?: string
 }) {
   if (cards.length === 0) {
     return (
@@ -194,6 +198,7 @@ function PitchGrid({
           cycleSlug={cycleSlug}
           today={today}
           delay={i * 0.04}
+          squadColor={squadColor}
         />
       ))}
     </div>
@@ -206,12 +211,14 @@ function PitchCardItem({
   cycleSlug,
   today,
   delay,
+  squadColor,
 }: {
   card: PitchCard
   slug: string
   cycleSlug: string
   today: string
   delay: number
+  squadColor?: string
 }) {
   const pitchSlug = slugify(card.title)
   const zoneLabel = card.needle
@@ -228,7 +235,15 @@ function PitchCardItem({
         'hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30',
         'animate-in fade-in slide-in-from-bottom-1'
       )}
-      style={{ animationDelay: `${delay}s`, animationFillMode: 'backwards' }}
+      style={{
+        animationDelay: `${delay}s`,
+        animationFillMode: 'backwards',
+        // Squad identity accent: a colored left edge tying the card to its
+        // squad section. Omitted for Unassigned pitches.
+        ...(squadColor
+          ? { borderLeftColor: squadColor, borderLeftWidth: 3 }
+          : {}),
+      }}
     >
       <div className="flex items-center justify-between gap-2">
         <MiniNeedle needle={card.needle} delay={delay} />

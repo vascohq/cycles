@@ -3,6 +3,7 @@ import {
   derivePitchCards,
   partitionByStage,
   sortByStageProgression,
+  groupBySquad,
 } from './mission-control-helpers'
 import type {
   CyclePitch,
@@ -25,6 +26,7 @@ const pitches: CyclePitch[] = [
     timebox_end: '2025-02-14',
     emoji: '',
     notion_url: '',
+    squadId: 'sq1',
   },
   {
     id: 'p2',
@@ -76,6 +78,7 @@ describe('derivePitchCards', () => {
     const p1Card = cards.find((c) => c.id === 'p1')!
     expect(p1Card.title).toBe('Redesign dashboard')
     expect(p1Card.stage).toBe('building')
+    expect(p1Card.squadId).toBe('sq1')
     expect(p1Card.needle).toEqual({ progress: 0.6, zone: 'on_track' })
     expect(p1Card.tasksDone).toBe(2)
     expect(p1Card.tasksTotal).toBe(3)
@@ -147,5 +150,77 @@ describe('sortByStageProgression', () => {
     const before = input.map((c) => c.id)
     sortByStageProgression(input)
     expect(input.map((c) => c.id)).toEqual(before)
+  })
+})
+
+describe('groupBySquad', () => {
+  const card = (
+    id: string,
+    stage: Stage,
+    squadId?: string
+  ): PitchCard => ({
+    id,
+    title: id,
+    emoji: '',
+    stage,
+    needle: null,
+    tasksDone: 0,
+    tasksTotal: 0,
+    scopesTotal: 0,
+    lastUpdatedAt: null,
+    timebox_start: '',
+    timebox_end: '',
+    squadId,
+  })
+
+  const squads = [
+    { id: 'sq1', name: 'Platform', color: '#3e63dd' },
+    { id: 'sq2', name: 'Growth', color: '#e5484d' },
+  ]
+
+  it('groups cards into a section per squad, in squad-list order', () => {
+    const sections = groupBySquad(
+      [card('a', 'building', 'sq2'), card('b', 'building', 'sq1')],
+      squads
+    )
+    expect(sections.map((s) => s.squad?.id)).toEqual(['sq1', 'sq2'])
+    expect(sections[0].cards.map((c) => c.id)).toEqual(['b'])
+    expect(sections[1].cards.map((c) => c.id)).toEqual(['a'])
+  })
+
+  it('puts unassigned pitches in a trailing section with a null squad', () => {
+    const sections = groupBySquad(
+      [card('a', 'building', 'sq1'), card('u', 'building')],
+      squads
+    )
+    const last = sections[sections.length - 1]
+    expect(last.squad).toBeNull()
+    expect(last.cards.map((c) => c.id)).toEqual(['u'])
+  })
+
+  it('omits squads that have no pitches', () => {
+    const sections = groupBySquad([card('a', 'building', 'sq1')], squads)
+    expect(sections.map((s) => s.squad?.id)).toEqual(['sq1'])
+  })
+
+  it('sorts cards within each section by stage progression', () => {
+    const sections = groupBySquad(
+      [
+        card('framing1', 'framing', 'sq1'),
+        card('building1', 'building', 'sq1'),
+      ],
+      squads
+    )
+    expect(sections[0].cards.map((c) => c.id)).toEqual([
+      'building1',
+      'framing1',
+    ])
+  })
+
+  it('treats a card referencing a deleted squad as unassigned', () => {
+    const sections = groupBySquad([card('a', 'building', 'ghost')], squads)
+    expect(sections).toHaveLength(1)
+    expect(sections[0].squad).toBeNull()
+    expect(sections[0].cards.map((c) => c.id)).toEqual(['a'])
   })
 })

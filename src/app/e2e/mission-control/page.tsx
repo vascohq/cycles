@@ -2,18 +2,19 @@
 
 import { useState } from 'react'
 import { MissionControlView } from '@/components/mission-control'
-import { FIXTURE } from './fixture'
-import type { PitchCard } from '@/lib/mission-control-helpers'
+import { groupBySquad, type PitchCard } from '@/lib/mission-control-helpers'
+import { FIXTURE, CARDS, SQUADS } from './fixture'
 
 export default function MissionControlE2EPage() {
-  const [inFlight, setInFlight] = useState(FIXTURE.inFlight)
+  const [cards, setCards] = useState<PitchCard[]>(CARDS)
+  const sections = groupBySquad(cards, SQUADS)
 
   return (
     <MissionControlView
       {...FIXTURE}
-      inFlight={inFlight}
+      sections={sections}
       onCreatePitch={(title) =>
-        setInFlight((prev) => [
+        setCards((prev) => [
           ...prev,
           {
             id: `p-${Date.now()}`,

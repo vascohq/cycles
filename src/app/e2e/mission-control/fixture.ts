@@ -1,7 +1,14 @@
-import type { MissionControlViewProps } from '@/components/mission-control'
-import type { PitchCard } from '@/lib/mission-control-helpers'
+import type { PitchCard, SquadLike } from '@/lib/mission-control-helpers'
 
-const inFlight: PitchCard[] = [
+export const SQUADS: SquadLike[] = [
+  { id: 'sq-platform', name: 'Platform', color: '#3e63dd' },
+  { id: 'sq-growth', name: 'Growth', color: '#e5484d' },
+]
+
+// Pitch cards with squad assignments. groupBySquad orders sections by the
+// SQUADS list (Platform, then Growth), with Onboarding v2 falling into a
+// trailing "Unassigned" section.
+export const CARDS: PitchCard[] = [
   {
     id: 'p1',
     title: 'Redesign dashboard',
@@ -14,6 +21,7 @@ const inFlight: PitchCard[] = [
     lastUpdatedAt: '2026-06-08T14:30:00Z',
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
+    squadId: 'sq-platform',
   },
   {
     id: 'p2',
@@ -27,6 +35,7 @@ const inFlight: PitchCard[] = [
     lastUpdatedAt: '2026-06-05T10:00:00Z',
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
+    squadId: 'sq-growth',
   },
   {
     id: 'p3',
@@ -40,6 +49,7 @@ const inFlight: PitchCard[] = [
     lastUpdatedAt: '2026-06-01T09:00:00Z',
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
+    squadId: 'sq-growth',
   },
   {
     id: 'p4',
@@ -54,9 +64,6 @@ const inFlight: PitchCard[] = [
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
   },
-]
-
-const done: PitchCard[] = [
   {
     id: 'p5',
     title: 'API rate limiting',
@@ -69,14 +76,13 @@ const done: PitchCard[] = [
     lastUpdatedAt: '2026-05-30T16:00:00Z',
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
+    squadId: 'sq-platform',
   },
 ]
 
-export const FIXTURE: MissionControlViewProps = {
+export const FIXTURE = {
   slug: 'vasco',
   cycleSlug: 'cycle-34',
   cycleTitle: 'Cycle 34',
   today: '2026-06-10',
-  inFlight,
-  done,
 }
