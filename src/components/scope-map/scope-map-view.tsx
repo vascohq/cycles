@@ -12,6 +12,8 @@ import { ScopeGrid } from '@/components/scope-card'
 import { ScopeDrawer } from '@/components/scope-card/scope-drawer'
 import { ParkingLot, type ParkingLotItem } from '@/components/parking-lot'
 import { MoveNeedleModal } from '@/components/move-needle'
+import { PitchEmoji } from '@/components/pitch-emoji'
+import { NotionLinkPill } from '@/components/notion-link-pill'
 import { UpdatesTimeline } from '@/components/updates-timeline'
 import {
   Dialog,
@@ -44,6 +46,8 @@ export type ScopeMapViewProps = {
     frame_outcome: string
     timebox_start: string
     timebox_end: string
+    emoji: string
+    notion_url: string
     squadId?: string
   }
   squads?: SquadLike[]
@@ -59,6 +63,8 @@ export type ScopeMapViewProps = {
   ghost: NeedleSnapshot | null
   today: string
   onStageChange?: (stage: Stage) => void
+  onEmojiChange?: (emoji: string) => void
+  onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
   onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
@@ -106,6 +112,8 @@ export function ScopeMapView({
   ghost,
   today,
   onStageChange,
+  onEmojiChange,
+  onNotionUrlChange,
   onHillProgressChange,
   onTaskToggle,
   onTaskEdit,
@@ -161,6 +169,8 @@ export function ScopeMapView({
         pitch={pitch}
         today={today}
         onStageChange={onStageChange}
+        onEmojiChange={onEmojiChange}
+        onNotionUrlChange={onNotionUrlChange}
         isDone={isDone}
         squads={squads}
         currentSquadId={currentSquadId}
@@ -198,6 +208,7 @@ export function ScopeMapView({
               dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               userName={userName}
               pitchTitle={pitch.title}
+              pitchEmoji={pitch.emoji}
               daysLeft={timebox.daysLeft}
               currentProgress={pitch.needle?.progress ?? 0.02}
               currentZone={pitch.needle?.zone ?? null}
@@ -374,6 +385,8 @@ function HeroCard({
   pitch,
   today,
   onStageChange,
+  onEmojiChange,
+  onNotionUrlChange,
   isDone,
   squads = [],
   currentSquadId,
@@ -387,9 +400,13 @@ function HeroCard({
     frame_outcome: string
     timebox_start: string
     timebox_end: string
+    emoji: string
+    notion_url: string
   }
   today: string
   onStageChange?: (stage: Stage) => void
+  onEmojiChange?: (emoji: string) => void
+  onNotionUrlChange?: (url: string) => void
   isDone?: boolean
   squads?: SquadLike[]
   currentSquadId?: string
@@ -434,9 +451,16 @@ function HeroCard({
     >
       <div ref={contentRef} className={`p-6 flex flex-col gap-5 ${overflowing ? 'pb-12' : ''}`}>
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-display leading-tight">
-            {pitch.title}
-          </h1>
+          <div className="flex items-start gap-3 min-w-0">
+            <PitchEmoji
+              emoji={pitch.emoji}
+              onChange={onEmojiChange}
+              className="text-2xl md:text-3xl mt-0.5 shrink-0"
+            />
+            <h1 className="text-2xl md:text-3xl font-display leading-tight">
+              {pitch.title}
+            </h1>
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             {onAssignSquad && (
               <SquadPicker
@@ -446,6 +470,10 @@ function HeroCard({
                 onClear={onClearSquad ?? (() => {})}
               />
             )}
+            <NotionLinkPill
+              url={pitch.notion_url}
+              onChange={onNotionUrlChange}
+            />
             {onStageChange && (
               <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
             )}

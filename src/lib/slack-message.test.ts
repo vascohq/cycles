@@ -3,6 +3,7 @@ import { formatSlackMessage, slackMessageSchema, type SlackMessageParams } from 
 
 const BASE_PARAMS: SlackMessageParams = {
   pitchTitle: 'Mission Control',
+  pitchEmoji: '',
   weekNumber: 3,
   totalWeeks: 6,
   zone: 'on_track',

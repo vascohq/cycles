@@ -170,6 +170,8 @@ describe('upsertPitch', () => {
       frame_outcome: 'Dashboard',
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
+      emoji: '',
+      notion_url: '',
     })
 
     expect(result.created).toBe(true)
@@ -192,6 +194,8 @@ describe('upsertPitch', () => {
       frame_outcome: 'Updated',
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
+      emoji: '',
+      notion_url: '',
     })
 
     expect(result.created).toBe(false)
@@ -212,6 +216,8 @@ describe('upsertPitch', () => {
         frame_outcome: '',
         timebox_start: '',
         timebox_end: '',
+        emoji: '',
+        notion_url: '',
       })
     ).rejects.toThrow('not found')
   })
@@ -552,6 +558,8 @@ describe('upsertPitch squad assignment', () => {
     frame_outcome: '',
     timebox_start: '',
     timebox_end: '',
+    emoji: '',
+    notion_url: '',
   }
 
   it('auto-creates a squad by name and assigns it to a new pitch', async () => {

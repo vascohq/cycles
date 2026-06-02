@@ -115,6 +115,8 @@ export async function upsertPitch(
     frame_outcome: string
     timebox_start: string
     timebox_end: string
+    emoji: string
+    notion_url: string
     // Squad NAME (not id). Resolved case-insensitively, auto-created on miss.
     // Empty/whitespace clears the assignment; undefined leaves it unchanged.
     squad?: string
@@ -147,6 +149,8 @@ export async function upsertPitch(
         frame_outcome: params.frame_outcome,
         timebox_start: params.timebox_start,
         timebox_end: params.timebox_end,
+        emoji: params.emoji,
+        notion_url: params.notion_url,
         ...(squadId ? { squadId } : {}),
       }
       pitches.push(new LiveObject(pitch))
@@ -162,6 +166,8 @@ export async function upsertPitch(
       existing.set('frame_outcome', params.frame_outcome)
       existing.set('timebox_start', params.timebox_start)
       existing.set('timebox_end', params.timebox_end)
+      existing.set('emoji', params.emoji)
+      existing.set('notion_url', params.notion_url)
       if (squadId !== undefined) existing.set('squadId', squadId ?? undefined)
     }
   })

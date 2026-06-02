@@ -18,6 +18,7 @@ export default function MissionControlE2EPage() {
           {
             id: `p-${Date.now()}`,
             title,
+            emoji: '',
             stage: 'framing' as const,
             needle: null,
             tasksDone: 0,

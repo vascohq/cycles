@@ -120,6 +120,7 @@ function ScopeMapWired({
       allPitches.map((p) => ({
         id: p.id,
         title: p.title,
+        emoji: p.emoji ?? '',
         stage: p.stage,
         zone: p.needle?.zone ?? null,
         href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
@@ -132,6 +133,22 @@ function ScopeMapWired({
     ({ storage }, newStage: Stage) => {
       const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
       p?.set('stage', newStage)
+    },
+    [pitchId]
+  )
+
+  const onEmojiChange = useCycleMutation(
+    ({ storage }, emoji: string) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('emoji', emoji)
+    },
+    [pitchId]
+  )
+
+  const onNotionUrlChange = useCycleMutation(
+    ({ storage }, url: string) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('notion_url', url)
     },
     [pitchId]
   )
@@ -501,6 +518,7 @@ function ScopeMapWired({
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
+          pitchEmoji: pitch.emoji ?? '',
           weekNumber: timebox.currentWeek,
           totalWeeks: timebox.totalWeeks,
           zone,
@@ -551,6 +569,7 @@ function ScopeMapWired({
       await deliverToSlack(
         {
           pitchTitle: pitch.title,
+          pitchEmoji: pitch.emoji ?? '',
           weekNumber: tb.currentWeek,
           totalWeeks: tb.totalWeeks,
           zone: update.needle_snapshot.zone,
@@ -583,7 +602,11 @@ function ScopeMapWired({
       slug={slug}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
-      pitch={pitch}
+      pitch={{
+        ...pitch,
+        emoji: pitch.emoji ?? '',
+        notion_url: pitch.notion_url ?? '',
+      }}
       squads={squads}
       currentSquadId={pitch.squadId}
       onAssignSquad={onAssignSquad}
@@ -597,6 +620,8 @@ function ScopeMapWired({
       ghost={ghost}
       today={today}
       onStageChange={onStageChange}
+      onEmojiChange={onEmojiChange}
+      onNotionUrlChange={onNotionUrlChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
       onTaskEdit={onTaskEdit}

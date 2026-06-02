@@ -18,6 +18,8 @@ export type PaletteCycleItem = {
 export type PalettePitchItem = {
   id: string
   title: string
+  /** Identity emoji, or '' when unset. */
+  emoji: string
   stage: Stage
   zone: Zone | null
   href: string

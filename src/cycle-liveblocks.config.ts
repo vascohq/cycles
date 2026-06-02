@@ -38,6 +38,10 @@ export type CyclePitch = {
   frame_outcome: string
   timebox_start: string
   timebox_end: string
+  /** Identity emoji (single grapheme), or '' when unset. */
+  emoji: string
+  /** Outbound link to the pitch's Notion doc, or '' when unset. */
+  notion_url: string
   // The squad that owns this pitch (per-cycle; see ADR 0009). Undefined = Unassigned.
   squadId?: string
 }
