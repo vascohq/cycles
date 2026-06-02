@@ -134,6 +134,14 @@ function ScopeMapWired({
     [pitchId]
   )
 
+  const onEmojiChange = useCycleMutation(
+    ({ storage }, emoji: string) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('emoji', emoji)
+    },
+    [pitchId]
+  )
+
   const onHillProgressChange = useCycleMutation(
     ({ storage }, scopeId: string, progress: number) => {
       const scope = storage.get('scopes').find((s) => s.get('id') === scopeId)
@@ -546,7 +554,7 @@ function ScopeMapWired({
       slug={slug}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
-      pitch={pitch}
+      pitch={{ ...pitch, emoji: pitch.emoji ?? '' }}
       hillScopes={hillScopes}
       hillTrails={hillTrails}
       hillHistory={hillHistory}
@@ -556,6 +564,7 @@ function ScopeMapWired({
       ghost={ghost}
       today={today}
       onStageChange={onStageChange}
+      onEmojiChange={onEmojiChange}
       onHillProgressChange={onHillProgressChange}
       onTaskToggle={onTaskToggle}
       onTaskEdit={onTaskEdit}

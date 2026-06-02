@@ -96,6 +96,7 @@ export async function upsertPitch(
     frame_outcome: string
     timebox_start: string
     timebox_end: string
+    emoji: string
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -115,6 +116,7 @@ export async function upsertPitch(
         frame_outcome: params.frame_outcome,
         timebox_start: params.timebox_start,
         timebox_end: params.timebox_end,
+        emoji: params.emoji,
       }
       pitches.push(new LiveObject(pitch))
     } else {
@@ -129,6 +131,7 @@ export async function upsertPitch(
       existing.set('frame_outcome', params.frame_outcome)
       existing.set('timebox_start', params.timebox_start)
       existing.set('timebox_end', params.timebox_end)
+      existing.set('emoji', params.emoji)
     }
   })
 

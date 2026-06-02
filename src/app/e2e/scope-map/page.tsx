@@ -26,6 +26,7 @@ export default function ScopeMapE2EPage() {
       onStageChange={(stage: Stage) =>
         setPitch((p) => ({ ...p, stage }))
       }
+      onEmojiChange={(emoji) => setPitch((p) => ({ ...p, emoji }))}
       onTaskToggle={(scopeId, taskId, done) =>
         setScopeGridItems((items) =>
           items.map((s) =>

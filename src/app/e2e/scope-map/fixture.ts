@@ -30,6 +30,7 @@ export const FIXTURE: Omit<
       'A self-updating dashboard where leadership and ICs see every pitch needle, hill chart, and scope status at a glance — no meetings needed.',
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
+    emoji: '🚀',
   },
   hillScopes: [
     { id: 'scope-needle', title: 'Needle engine & gauge', tier: 'must', color: '#e5484d', hill_progress: 0.85, order: 1 },

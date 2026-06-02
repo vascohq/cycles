@@ -32,6 +32,8 @@ export type CyclePitch = {
   frame_outcome: string
   timebox_start: string
   timebox_end: string
+  /** Identity emoji (single grapheme), or '' when unset. */
+  emoji: string
 }
 
 export type CycleScope = {

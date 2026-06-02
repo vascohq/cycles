@@ -7,6 +7,7 @@ import { derivePitchCards } from '@/lib/mission-control-helpers'
 import { deriveTotalTaskProgress } from '@/lib/scope-map-helpers'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
+import { normalizeEmoji } from '@/lib/pitch-identity-engine'
 import { formatSlackMessage, type SlackMessageParams } from '@/lib/slack-message'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
@@ -672,6 +673,10 @@ export function registerCyclesTools(server: any): void {
       frame_outcome: z.string().default(''),
       timebox_start: z.string().default(''),
       timebox_end: z.string().default(''),
+      emoji: z
+        .string()
+        .default('')
+        .describe('Identity emoji (single emoji). Anything else is ignored.'),
     },
     {
       title: 'Create or update pitch',
@@ -681,7 +686,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string; emoji: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -689,7 +694,10 @@ export function registerCyclesTools(server: any): void {
       if (!resolved.ok) return errorResult(resolved.error)
       const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
       try {
-        const result = await upsertPitch(roomId, params)
+        const result = await upsertPitch(roomId, {
+          ...params,
+          emoji: normalizeEmoji(params.emoji),
+        })
         return jsonResult(result)
       } catch (err) {
         return errorResult((err as Error).message)

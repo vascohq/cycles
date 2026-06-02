@@ -86,6 +86,7 @@ function MissionControlWired({
           frame_outcome: '',
           timebox_start: cycle.start_date,
           timebox_end: cycle.end_date,
+          emoji: '',
         })
       )
     },

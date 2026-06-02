@@ -166,6 +166,7 @@ describe('upsertPitch', () => {
       frame_outcome: 'Dashboard',
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
+      emoji: '',
     })
 
     expect(result.created).toBe(true)
@@ -188,6 +189,7 @@ describe('upsertPitch', () => {
       frame_outcome: 'Updated',
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
+      emoji: '',
     })
 
     expect(result.created).toBe(false)
@@ -208,6 +210,7 @@ describe('upsertPitch', () => {
         frame_outcome: '',
         timebox_start: '',
         timebox_end: '',
+        emoji: '',
       })
     ).rejects.toThrow('not found')
   })
