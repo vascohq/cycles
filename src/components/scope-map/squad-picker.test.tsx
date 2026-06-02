@@ -54,12 +54,18 @@ describe('SquadPicker management', () => {
     expect(screen.getByText(/already exists/i)).toBeInTheDocument()
   })
 
-  it('recolors a squad from the palette', () => {
-    const { onRecolorSquad } = renderPicker()
+  it('recolors a squad from the palette without the blur committing/closing the row', () => {
+    const { onRecolorSquad, onRenameSquad } = renderPicker()
     fireEvent.click(screen.getByLabelText('Edit Growth'))
-    // Pick a palette swatch (green) different from Growth's current red.
-    fireEvent.click(screen.getByLabelText('#30a46c'))
+    const input = screen.getByDisplayValue('Growth')
+    const swatch = screen.getByLabelText('#30a46c')
+    // Real browsers fire the input's blur (focus → swatch) BEFORE the swatch
+    // click. The blur must not tear down the row, or the click is swallowed.
+    fireEvent.blur(input, { relatedTarget: swatch })
+    fireEvent.click(swatch)
     expect(onRecolorSquad).toHaveBeenCalledWith('s2', '#30a46c')
+    // The stray blur must not have committed a (no-op) rename.
+    expect(onRenameSquad).not.toHaveBeenCalled()
   })
 
   it('deletes a squad behind a blast-radius confirm', () => {

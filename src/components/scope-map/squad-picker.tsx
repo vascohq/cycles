@@ -48,6 +48,7 @@ export function SquadPicker({
   const [draftName, setDraftName] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const editRowRef = useRef<HTMLDivElement>(null)
 
   const current = squads.find((s) => s.id === currentSquadId) ?? null
   const canManage = Boolean(onRenameSquad || onRecolorSquad || onDeleteSquad)
@@ -194,7 +195,7 @@ export function SquadPicker({
                   .filter((x) => x.id !== s.id)
                   .map((x) => x.color)
                 return (
-                  <div key={s.id} className="rounded px-2 py-1.5">
+                  <div key={s.id} ref={editRowRef} className="rounded px-2 py-1.5">
                     <input
                       autoFocus
                       value={draftName}
@@ -205,7 +206,16 @@ export function SquadPicker({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') commitRename(s)
                       }}
-                      onBlur={() => commitRename(s)}
+                      onBlur={(e) => {
+                        // Don't commit (and unmount the row) when focus moves to a
+                        // control within the same edit row — e.g. a recolor swatch.
+                        // Otherwise the blur would tear down the swatch before its
+                        // click landed, swallowing the recolor.
+                        if (editRowRef.current?.contains(e.relatedTarget as Node)) {
+                          return
+                        }
+                        commitRename(s)
+                      }}
                       className="w-full bg-transparent text-sm outline-none border-b border-border pb-1"
                     />
                     {nameError && (
