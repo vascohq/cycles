@@ -24,7 +24,9 @@ import {
   deleteUpdate,
   pushUpdate,
   markSlackDelivered,
+  upsertSquad,
 } from './liveblocks-writer'
+import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
 
 const mockGetRoom = vi.mocked(liveblocks.getRoom)
@@ -44,7 +46,13 @@ function makeMockItem(data: Record<string, unknown>): MockItem {
     ...store,
     get: (key: string) => store[key],
     set: (key: string, value: unknown) => {
+      // Mirror Liveblocks: set(key, undefined) does NOT remove the key — use
+      // delete() to clear. Modeling this catches "clear by set(undefined)" bugs.
+      if (value === undefined) return
       store[key] = value
+    },
+    delete: (key: string) => {
+      delete store[key]
     },
   }
 }
@@ -89,6 +97,7 @@ type StorageData = {
   tasks?: MockItem[]
   parkingItems?: MockItem[]
   updates?: MockItem[]
+  squads?: MockItem[]
 }
 
 function setupStorage(data: StorageData = {}) {
@@ -98,6 +107,7 @@ function setupStorage(data: StorageData = {}) {
     tasks: makeMockList(data.tasks ?? []),
     parkingItems: makeMockList(data.parkingItems ?? []),
     updates: makeMockList(data.updates ?? []),
+    squads: makeMockList(data.squads ?? []),
   }
 
   mockMutateStorage.mockImplementation(async (_roomId, callback) => {
@@ -492,5 +502,114 @@ describe('markSlackDelivered', () => {
     await markSlackDelivered(ROOM, 'up_new', '2026-06-10T10:05:00Z')
 
     expect(update.get('slack_delivered_at')).toBe('2026-06-10T10:05:00Z')
+  })
+})
+
+describe('upsertSquad', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('creates a squad with an auto-assigned palette color when none given', async () => {
+    const storage = setupStorage()
+
+    const result = await upsertSquad(ROOM, { name: 'Platform' })
+
+    expect(result.created).toBe(true)
+    expect(result.id).toBeDefined()
+    const squad = storage.squads.toArray()[0]
+    expect(squad.name).toBe('Platform')
+    expect(SCOPE_PALETTE).toContain(squad.color)
+  })
+
+  it('honors an explicit color on create', async () => {
+    const storage = setupStorage()
+
+    await upsertSquad(ROOM, { name: 'Growth', color: '#123456' })
+
+    expect(storage.squads.toArray()[0].color).toBe('#123456')
+  })
+
+  it('renames and recolors an existing squad by id', async () => {
+    const existing = makeMockItem({ id: 'sq1', name: 'Platform', color: '#000000' })
+    const storage = setupStorage({ squads: [existing] })
+
+    const result = await upsertSquad(ROOM, {
+      id: 'sq1',
+      name: 'Platform Team',
+      color: '#abcdef',
+    })
+
+    expect(result.created).toBe(false)
+    expect(result.id).toBe('sq1')
+    expect(existing.get('name')).toBe('Platform Team')
+    expect(existing.get('color')).toBe('#abcdef')
+    expect(storage.squads.toArray()).toHaveLength(1)
+  })
+
+  it('throws when updating a squad with an unknown id', async () => {
+    setupStorage()
+
+    await expect(
+      upsertSquad(ROOM, { id: 'nope', name: 'X' })
+    ).rejects.toThrow(/not found/i)
+  })
+})
+
+describe('upsertPitch squad assignment', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const pitchParams = {
+    title: 'Mission Control',
+    stage: 'framing' as const,
+    frame_problem: '',
+    frame_outcome: '',
+    timebox_start: '',
+    timebox_end: '',
+    emoji: '',
+    notion_url: '',
+  }
+
+  it('auto-creates a squad by name and assigns it to a new pitch', async () => {
+    const storage = setupStorage()
+
+    await upsertPitch(ROOM, { ...pitchParams, squad: 'Platform' })
+
+    const squads = storage.squads.toArray()
+    expect(squads).toHaveLength(1)
+    expect(squads[0].name).toBe('Platform')
+    expect(SCOPE_PALETTE).toContain(squads[0].color)
+
+    const pitch = storage.pitches.toArray()[0]
+    expect(pitch.squadId).toBe(squads[0].id)
+  })
+
+  it('reuses an existing squad by case-insensitive name without duplicating', async () => {
+    const existing = makeMockItem({ id: 'sq1', name: 'Platform', color: '#3e63dd' })
+    const storage = setupStorage({ squads: [existing] })
+
+    await upsertPitch(ROOM, { ...pitchParams, squad: '  platform ' })
+
+    expect(storage.squads.toArray()).toHaveLength(1)
+    expect(storage.pitches.toArray()[0].squadId).toBe('sq1')
+  })
+
+  it('clears the assignment when squad is an empty string', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'X', stage: 'framing', squadId: 'sq1' })
+    setupStorage({
+      pitches: [pitch],
+      squads: [makeMockItem({ id: 'sq1', name: 'Platform', color: '#3e63dd' })],
+    })
+
+    await upsertPitch(ROOM, { ...pitchParams, id: 'p1', squad: '' })
+
+    expect(pitch.get('squadId')).toBeUndefined()
+  })
+
+  it('leaves the existing assignment untouched when squad is omitted', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'X', stage: 'framing', squadId: 'sq1' })
+    setupStorage({ pitches: [pitch] })
+
+    await upsertPitch(ROOM, { ...pitchParams, id: 'p1' })
+
+    expect(pitch.get('squadId')).toBe('sq1')
   })
 })

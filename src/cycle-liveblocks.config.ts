@@ -23,6 +23,12 @@ export type HillSnapshot = {
   tier?: Tier
 }
 
+export type Squad = {
+  id: string
+  name: string
+  color: string
+}
+
 export type CyclePitch = {
   id: string
   title: string
@@ -36,6 +42,8 @@ export type CyclePitch = {
   emoji: string
   /** Outbound link to the pitch's Notion doc, or '' when unset. */
   notion_url: string
+  // The squad that owns this pitch (per-cycle; see ADR 0009). Undefined = Unassigned.
+  squadId?: string
 }
 
 export type CycleScope = {
@@ -91,4 +99,5 @@ export type CycleStorage = {
   tasks: LiveList<LiveObject<ScopeTask>>
   updates: LiveList<LiveObject<PitchUpdate>>
   parkingItems: LiveList<LiveObject<ParkingItem>>
+  squads: LiveList<LiveObject<Squad>>
 }

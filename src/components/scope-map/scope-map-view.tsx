@@ -28,6 +28,8 @@ import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import type { Tier } from '@/cycle-liveblocks.config'
+import { SquadPicker } from '@/components/scope-map/squad-picker'
+import type { SquadLike } from '@/lib/squad-engine'
 
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
@@ -46,7 +48,12 @@ export type ScopeMapViewProps = {
     timebox_end: string
     emoji: string
     notion_url: string
+    squadId?: string
   }
+  squads?: SquadLike[]
+  currentSquadId?: string
+  onAssignSquad?: (name: string) => void
+  onClearSquad?: () => void
   hillScopes: HillScope[]
   hillTrails?: ScopeTrail[]
   hillHistory?: HillHistoryFrame[]
@@ -92,6 +99,10 @@ export function ScopeMapView({
   cycleSlug,
   cycleTitle,
   pitch,
+  squads = [],
+  currentSquadId,
+  onAssignSquad,
+  onClearSquad,
   hillScopes,
   hillTrails = [],
   hillHistory = [],
@@ -161,6 +172,10 @@ export function ScopeMapView({
         onEmojiChange={onEmojiChange}
         onNotionUrlChange={onNotionUrlChange}
         isDone={isDone}
+        squads={squads}
+        currentSquadId={currentSquadId}
+        onAssignSquad={onAssignSquad}
+        onClearSquad={onClearSquad}
       />
 
       <section className="grid grid-cols-1 gap-5 mc-row">
@@ -373,6 +388,10 @@ function HeroCard({
   onEmojiChange,
   onNotionUrlChange,
   isDone,
+  squads = [],
+  currentSquadId,
+  onAssignSquad,
+  onClearSquad,
 }: {
   pitch: {
     title: string
@@ -389,6 +408,10 @@ function HeroCard({
   onEmojiChange?: (emoji: string) => void
   onNotionUrlChange?: (url: string) => void
   isDone?: boolean
+  squads?: SquadLike[]
+  currentSquadId?: string
+  onAssignSquad?: (name: string) => void
+  onClearSquad?: () => void
 }) {
   const stageIndex = STAGES.indexOf(pitch.stage)
 
@@ -439,6 +462,14 @@ function HeroCard({
             </h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {onAssignSquad && (
+              <SquadPicker
+                squads={squads}
+                currentSquadId={currentSquadId}
+                onAssign={onAssignSquad}
+                onClear={onClearSquad ?? (() => {})}
+              />
+            )}
             <NotionLinkPill
               url={pitch.notion_url}
               onChange={onNotionUrlChange}

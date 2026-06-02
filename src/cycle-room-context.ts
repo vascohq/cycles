@@ -46,5 +46,6 @@ export function cycleInitialStorage(): CycleStorage {
     tasks: new LiveList([]),
     updates: new LiveList([]),
     parkingItems: new LiveList([]),
+    squads: new LiveList([]),
   }
 }
