@@ -221,6 +221,28 @@ export async function upsertSquad(
   return { created, id }
 }
 
+export async function deleteSquad(roomId: string, id: string): Promise<void> {
+  let notFound = false
+
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    const squads = root.get('squads')
+    const idx = squads.findIndex((s: any) => getField(s, 'id') === id)
+    if (idx === -1) {
+      notFound = true
+      return
+    }
+    squads.delete(idx)
+
+    // Unassign every pitch that referenced this squad → Unassigned.
+    const pitches = root.get('pitches')
+    for (const p of pitches) {
+      if (getField(p, 'squadId') === id) p.delete('squadId')
+    }
+  })
+
+  if (notFound) throw new Error(`Squad not found: "${id}"`)
+}
+
 // ── Scope ──
 
 export async function upsertScope(

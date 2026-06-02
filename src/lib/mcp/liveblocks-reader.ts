@@ -7,6 +7,7 @@ import type {
   ScopeTask,
   PitchUpdate,
   ParkingItem,
+  Squad,
 } from '@/cycle-liveblocks.config'
 
 export type CycleSummary = {
@@ -24,6 +25,8 @@ export type StorageJson = {
   tasks: ScopeTask[]
   updates: PitchUpdate[]
   parkingItems: ParkingItem[]
+  // Optional: rooms created before Squads existed have no squads list.
+  squads?: Squad[]
 }
 
 export async function listCycleRooms(orgId: string): Promise<CycleSummary[]> {
