@@ -13,6 +13,9 @@ import { OrganizationUsersProvider } from '@/components/organization-users-conte
 import { MissionControlView } from '@/components/mission-control'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { derivePitchCards, partitionByStage } from '@/lib/mission-control-helpers'
+import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
+import { slugify } from '@/lib/slugify'
+import { useMemo } from 'react'
 import { nanoid } from 'nanoid'
 import { LiveObject } from '@liveblocks/client'
 
@@ -88,6 +91,20 @@ function MissionControlWired({
     },
     [cycle.start_date, cycle.end_date]
   )
+
+  // Register this cycle's pitches into the command palette while we're in the room.
+  const palettePitches = useMemo(
+    () =>
+      pitches.map((p) => ({
+        id: p.id,
+        title: p.title,
+        stage: p.stage,
+        zone: p.needle?.zone ?? null,
+        href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
+      })),
+    [pitches, slug, cycleSlug]
+  )
+  useRegisterPalettePitches(palettePitches)
 
   const cards = derivePitchCards(pitches, scopes, tasks, updates)
   const { inFlight, done } = partitionByStage(cards)
