@@ -19,6 +19,13 @@ export const FIXTURE: Omit<
   today: '2026-06-10',
   ghost: { progress: 0.45, zone: 'some_risk' },
   totalProgress: { done: 9, total: 13 },
+  squads: [
+    { id: 'sq-platform', name: 'Platform', color: '#3e63dd' },
+    { id: 'sq-growth', name: 'Growth', color: '#e5484d' },
+    { id: 'sq-design', name: 'Design', color: '#8e4ec6' },
+  ],
+  currentSquadId: 'sq-platform',
+  squadPitchCounts: { 'sq-platform': 3, 'sq-growth': 2, 'sq-design': 1 },
   pitch: {
     id: 'mission-control',
     title: 'Mission Control',

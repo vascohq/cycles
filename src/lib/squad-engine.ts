@@ -32,3 +32,18 @@ export function resolveSquadByName<T extends SquadLike>(
   const key = squadKey(name)
   return squads.find((s) => squadKey(s.name) === key) ?? null
 }
+
+/**
+ * True when a squad *other than* `exceptId` already uses `name`'s normalized
+ * key. The single guard behind the "names are unique within a cycle" invariant
+ * — shared by the Scope Map rename UI and the MCP `upsertSquad` path so both
+ * reject collisions identically. An empty/whitespace name is never "taken".
+ */
+export function isSquadNameTaken(
+  squads: SquadLike[],
+  name: string,
+  exceptId?: string
+): boolean {
+  const match = resolveSquadByName(squads, name)
+  return match !== null && match.id !== exceptId
+}

@@ -5,11 +5,14 @@ import { FIXTURE } from './fixture'
 import { useState } from 'react'
 import type { Stage } from '@/cycle-liveblocks.config'
 import { nanoid } from 'nanoid'
+import { resolveSquadByName, assignSquadColor } from '@/lib/squad-engine'
 
 export default function ScopeMapE2EPage() {
   const [pitch, setPitch] = useState(FIXTURE.pitch)
   const [scopeGridItems, setScopeGridItems] = useState(FIXTURE.scopeGridItems)
   const [parkingLotItems, setParkingLotItems] = useState(FIXTURE.parkingLotItems)
+  const [squads, setSquads] = useState(FIXTURE.squads ?? [])
+  const [currentSquadId, setCurrentSquadId] = useState(FIXTURE.currentSquadId)
 
   const totalProgress = {
     done: scopeGridItems.flatMap((s) => s.tasks).filter((t) => t.done).length,
@@ -23,6 +26,38 @@ export default function ScopeMapE2EPage() {
       scopeGridItems={scopeGridItems}
       parkingLotItems={parkingLotItems}
       totalProgress={totalProgress}
+      squads={squads}
+      currentSquadId={currentSquadId}
+      onAssignSquad={(name) =>
+        setSquads((list) => {
+          const existing = resolveSquadByName(list, name)
+          if (existing) {
+            setCurrentSquadId(existing.id)
+            return list
+          }
+          const id = nanoid()
+          setCurrentSquadId(id)
+          return [
+            ...list,
+            { id, name, color: assignSquadColor(list.map((s) => s.color)) },
+          ]
+        })
+      }
+      onClearSquad={() => setCurrentSquadId(undefined)}
+      onRenameSquad={(squadId, name) =>
+        setSquads((list) =>
+          list.map((s) => (s.id === squadId ? { ...s, name } : s))
+        )
+      }
+      onRecolorSquad={(squadId, color) =>
+        setSquads((list) =>
+          list.map((s) => (s.id === squadId ? { ...s, color } : s))
+        )
+      }
+      onDeleteSquad={(squadId) => {
+        setSquads((list) => list.filter((s) => s.id !== squadId))
+        setCurrentSquadId((cur) => (cur === squadId ? undefined : cur))
+      }}
       onStageChange={(stage: Stage) =>
         setPitch((p) => ({ ...p, stage }))
       }

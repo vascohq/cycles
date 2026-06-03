@@ -54,6 +54,10 @@ export type ScopeMapViewProps = {
   currentSquadId?: string
   onAssignSquad?: (name: string) => void
   onClearSquad?: () => void
+  squadPitchCounts?: Record<string, number>
+  onRenameSquad?: (squadId: string, name: string) => void
+  onRecolorSquad?: (squadId: string, color: string) => void
+  onDeleteSquad?: (squadId: string) => void
   hillScopes: HillScope[]
   hillTrails?: ScopeTrail[]
   hillHistory?: HillHistoryFrame[]
@@ -103,6 +107,10 @@ export function ScopeMapView({
   currentSquadId,
   onAssignSquad,
   onClearSquad,
+  squadPitchCounts,
+  onRenameSquad,
+  onRecolorSquad,
+  onDeleteSquad,
   hillScopes,
   hillTrails = [],
   hillHistory = [],
@@ -176,6 +184,10 @@ export function ScopeMapView({
         currentSquadId={currentSquadId}
         onAssignSquad={onAssignSquad}
         onClearSquad={onClearSquad}
+        squadPitchCounts={squadPitchCounts}
+        onRenameSquad={onRenameSquad}
+        onRecolorSquad={onRecolorSquad}
+        onDeleteSquad={onDeleteSquad}
       />
 
       <section className="grid grid-cols-1 gap-5 mc-row">
@@ -392,6 +404,10 @@ function HeroCard({
   currentSquadId,
   onAssignSquad,
   onClearSquad,
+  squadPitchCounts,
+  onRenameSquad,
+  onRecolorSquad,
+  onDeleteSquad,
 }: {
   pitch: {
     title: string
@@ -412,6 +428,10 @@ function HeroCard({
   currentSquadId?: string
   onAssignSquad?: (name: string) => void
   onClearSquad?: () => void
+  squadPitchCounts?: Record<string, number>
+  onRenameSquad?: (squadId: string, name: string) => void
+  onRecolorSquad?: (squadId: string, color: string) => void
+  onDeleteSquad?: (squadId: string) => void
 }) {
   const stageIndex = STAGES.indexOf(pitch.stage)
 
@@ -468,6 +488,10 @@ function HeroCard({
                 currentSquadId={currentSquadId}
                 onAssign={onAssignSquad}
                 onClear={onClearSquad ?? (() => {})}
+                pitchCounts={squadPitchCounts}
+                onRenameSquad={onRenameSquad}
+                onRecolorSquad={onRecolorSquad}
+                onDeleteSquad={onDeleteSquad}
               />
             )}
             <NotionLinkPill
