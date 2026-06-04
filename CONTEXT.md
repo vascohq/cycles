@@ -14,6 +14,10 @@ _Avoid_: Sprint, iteration, board
 A short cycle (typically 2 weeks) between build cycles for small fixes and exploration. Pitches in a cooldown skip to the building stage.
 _Avoid_: Buffer, break, maintenance window
 
+**Cycle window**:
+A cycle's own fixed time boundary — its start and end dates, and where today sits between them. Shown on Mission Control as a tape-measure strip with a "Week X of Y" label. Shares the visual of a pitch's timebox but is a distinct concept (see ADR 0010): the cycle window spans the whole cycle, a timebox bounds one pitch.
+_Avoid_: Timebox (reserved for pitches), Sprint, deadline
+
 ### Pitch lifecycle
 
 **Pitch**:
@@ -29,7 +33,7 @@ The problem/outcome definition of a pitch. Two columns: Problem (why this matter
 _Avoid_: Brief, requirements, spec, PRD
 
 **Timebox**:
-The fixed time boundary of a pitch. Has start and end dates. Visualized as a tape-measure strip with day ticks and a "today" marker.
+The fixed time boundary of a pitch. Has start and end dates. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010).
 _Avoid_: Deadline, due date, sprint length
 
 ### The Needle
