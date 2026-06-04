@@ -102,6 +102,8 @@ export const Default: Story = {
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
     today: '2025-01-27',
+    cycleStart: '2025-01-06',
+    cycleEnd: '2025-02-14',
     sections: groupBySquad([...inFlightCards, ...doneCards], squads),
   },
 }
@@ -112,6 +114,8 @@ export const Empty: Story = {
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
     today: '2025-01-27',
+    cycleStart: '2025-01-06',
+    cycleEnd: '2025-02-14',
     sections: [],
   },
 }
@@ -122,6 +126,8 @@ export const AllDone: Story = {
     cycleSlug: 'cycle-5',
     cycleTitle: 'Cycle 5 — Build',
     today: '2025-02-14',
+    cycleStart: '2025-01-06',
+    cycleEnd: '2025-02-14',
     sections: groupBySquad(
       [
         ...inFlightCards.map((c) => ({ ...c, stage: 'done' as const })),
@@ -145,6 +151,8 @@ export const WithCreatePitch: Story = {
         cycleSlug="cycle-5"
         cycleTitle="Cycle 5 — Build"
         today="2025-01-27"
+        cycleStart="2025-01-06"
+        cycleEnd="2025-02-14"
         sections={groupBySquad(pitches, squads)}
         onCreatePitch={(title) =>
           setPitches((prev) => [
