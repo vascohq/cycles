@@ -685,26 +685,30 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_pitch',
-    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update.',
+    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcome, timebox_start, timebox_end, emoji, notion_url, squad) is left unchanged — only fields you pass are overwritten.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().optional().describe('Pitch id. Omit to create.'),
       title: z.string(),
       stage: z.enum(['framing', 'shaping', 'building', 'done']),
-      frame_problem: z.string().default(''),
-      frame_outcome: z.string().default(''),
-      timebox_start: z.string().default(''),
-      timebox_end: z.string().default(''),
+      // On update, these are PARTIAL: omit to leave a field unchanged. They must
+      // stay optional (not .default('')) — a default would coerce an omitted
+      // field to '' and silently wipe it on update (the timebox-nullification
+      // incident). On create, the writer falls back to '' for any omitted field.
+      frame_problem: z.string().optional(),
+      frame_outcome: z.string().optional(),
+      timebox_start: z.string().optional(),
+      timebox_end: z.string().optional(),
       emoji: z
         .string()
-        .default('')
-        .describe('Identity emoji (single emoji). Anything else is ignored.'),
+        .optional()
+        .describe('Identity emoji (single emoji). Anything else is ignored. Omit to leave unchanged.'),
       notion_url: z
         .string()
-        .default('')
+        .optional()
         .describe(
-          'Outbound link to the pitch’s Notion doc. Must be a valid https URL or it is ignored.'
+          'Outbound link to the pitch’s Notion doc. Must be a valid https URL or it is ignored. Omit to leave unchanged.'
         ),
       squad: z
         .string()
@@ -721,19 +725,23 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem: string; frame_outcome: string; timebox_start: string; timebox_end: string; emoji: string; notion_url: string; squad?: string },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
-      const notion = validateNotionUrl(params.notion_url)
+      // undefined = field omitted = leave unchanged on update. Only normalize when
+      // a value was actually supplied, so we never coerce an omitted field to ''.
+      const notion =
+        params.notion_url === undefined ? undefined : validateNotionUrl(params.notion_url)
       try {
         const result = await upsertPitch(roomId, {
           ...params,
-          emoji: normalizeEmoji(params.emoji),
-          notion_url: notion.isValidUrl ? notion.value : '',
+          emoji: params.emoji === undefined ? undefined : normalizeEmoji(params.emoji),
+          notion_url:
+            notion === undefined ? undefined : notion.isValidUrl ? notion.value : '',
         })
         return jsonResult(result)
       } catch (err) {
@@ -745,7 +753,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_scope',
-    'Create or update a scope under a pitch. Omit id to create.',
+    'Create or update a scope under a pitch. Omit id to create. Updates are PARTIAL: any field you omit (litmus_text, hill_progress) is left unchanged — only fields you pass are overwritten.',
     {
       ...orgArg,
       ...cycleSlugArg,
@@ -753,8 +761,10 @@ export function registerCyclesTools(server: any): void {
       pitchId: z.string().describe('Parent pitch id'),
       title: z.string(),
       tier: z.enum(['must', 'should', 'could']),
-      litmus_text: z.string().default(''),
-      hill_progress: z.number().min(0).max(1).default(0),
+      // Optional (not .default) so an omitted field is left unchanged on update
+      // rather than wiped / reset to 0. Defaults to '' / 0 on create.
+      litmus_text: z.string().optional(),
+      hill_progress: z.number().min(0).max(1).optional(),
     },
     {
       title: 'Create or update scope',
@@ -764,7 +774,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text: string; hill_progress: number },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text?: string; hill_progress?: number },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -783,14 +793,16 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_task',
-    'Create or update a task under a scope. Omit id to create.',
+    'Create or update a task under a scope. Omit id to create. Updates are PARTIAL: omit done to leave it unchanged — passing only a new title will NOT un-complete the task.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().optional(),
       scopeId: z.string().describe('Parent scope id'),
       title: z.string(),
-      done: z.boolean().default(false),
+      // Optional (not .default) so a title-only update leaves done unchanged
+      // rather than resetting it to false. Defaults to false on create.
+      done: z.boolean().optional(),
     },
     {
       title: 'Create or update task',
@@ -800,7 +812,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done: boolean },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done?: boolean },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -819,14 +831,16 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_parking_item',
-    'Create or update a parking lot item under a pitch. Omit id to create.',
+    'Create or update a parking lot item under a pitch. Omit id to create. Updates are PARTIAL: omit resolved to leave it unchanged — passing only new text will NOT un-resolve the item.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().optional(),
       pitchId: z.string().describe('Parent pitch id'),
       text: z.string(),
-      resolved: z.boolean().default(false),
+      // Optional (not .default) so a text-only update leaves resolved unchanged
+      // rather than resetting it to false. Defaults to false on create.
+      resolved: z.boolean().optional(),
     },
     {
       title: 'Create or update parking item',
@@ -836,7 +850,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; text: string; resolved: boolean },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; text: string; resolved?: boolean },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)

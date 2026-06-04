@@ -116,12 +116,15 @@ export async function upsertPitch(
     id?: string
     title: string
     stage: string
-    frame_problem: string
-    frame_outcome: string
-    timebox_start: string
-    timebox_end: string
-    emoji: string
-    notion_url: string
+    // Partial-update fields: undefined = leave unchanged (on update) / fall back
+    // to '' (on create). NEVER coerce an omitted field to '' before this point —
+    // doing so silently wipes it on update (the timebox-nullification incident).
+    frame_problem?: string
+    frame_outcome?: string
+    timebox_start?: string
+    timebox_end?: string
+    emoji?: string
+    notion_url?: string
     // Squad NAME (not id). Resolved case-insensitively, auto-created on miss.
     // Empty/whitespace clears the assignment; undefined leaves it unchanged.
     squad?: string
@@ -150,12 +153,12 @@ export async function upsertPitch(
         title: params.title,
         stage: params.stage as CyclePitch['stage'],
         needle: null,
-        frame_problem: params.frame_problem,
-        frame_outcome: params.frame_outcome,
-        timebox_start: params.timebox_start,
-        timebox_end: params.timebox_end,
-        emoji: params.emoji,
-        notion_url: params.notion_url,
+        frame_problem: params.frame_problem ?? '',
+        frame_outcome: params.frame_outcome ?? '',
+        timebox_start: params.timebox_start ?? '',
+        timebox_end: params.timebox_end ?? '',
+        emoji: params.emoji ?? '',
+        notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
       }
       pitches.push(new LiveObject(pitch))
@@ -167,12 +170,15 @@ export async function upsertPitch(
       }
       existing.set('title', params.title)
       existing.set('stage', params.stage)
-      existing.set('frame_problem', params.frame_problem)
-      existing.set('frame_outcome', params.frame_outcome)
-      existing.set('timebox_start', params.timebox_start)
-      existing.set('timebox_end', params.timebox_end)
-      existing.set('emoji', params.emoji)
-      existing.set('notion_url', params.notion_url)
+      // undefined = omitted = leave unchanged. Guarding here (not relying on
+      // Liveblocks treating set(undefined) as a no-op) makes the contract explicit
+      // and matches the squad handling below.
+      if (params.frame_problem !== undefined) existing.set('frame_problem', params.frame_problem)
+      if (params.frame_outcome !== undefined) existing.set('frame_outcome', params.frame_outcome)
+      if (params.timebox_start !== undefined) existing.set('timebox_start', params.timebox_start)
+      if (params.timebox_end !== undefined) existing.set('timebox_end', params.timebox_end)
+      if (params.emoji !== undefined) existing.set('emoji', params.emoji)
+      if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       // squadId: null = clear (remove key), string = assign, undefined = leave.
       if (squadId === null) existing.delete('squadId')
       else if (squadId !== undefined) existing.set('squadId', squadId)
@@ -268,8 +274,11 @@ export async function upsertScope(
     pitchId: string
     title: string
     tier: string
-    litmus_text: string
-    hill_progress: number
+    // Partial-update fields: undefined = leave unchanged (on update) / fall back
+    // on create. Must NOT be coerced to a default before this point — doing so
+    // wipes litmus / resets hill_progress to 0 on a partial update.
+    litmus_text?: string
+    hill_progress?: number
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -294,8 +303,8 @@ export async function upsertScope(
         pitchId: params.pitchId,
         title: params.title,
         tier: params.tier as CycleScope['tier'],
-        litmus_text: params.litmus_text,
-        hill_progress: params.hill_progress,
+        litmus_text: params.litmus_text ?? '',
+        hill_progress: params.hill_progress ?? 0,
       }
       scopes.push(new LiveObject(scope))
     } else {
@@ -306,8 +315,8 @@ export async function upsertScope(
       }
       existing.set('title', params.title)
       existing.set('tier', params.tier)
-      existing.set('litmus_text', params.litmus_text)
-      existing.set('hill_progress', params.hill_progress)
+      if (params.litmus_text !== undefined) existing.set('litmus_text', params.litmus_text)
+      if (params.hill_progress !== undefined) existing.set('hill_progress', params.hill_progress)
     }
   })
 
@@ -324,7 +333,10 @@ export async function upsertTask(
     id?: string
     scopeId: string
     title: string
-    done: boolean
+    // Partial-update field: undefined = leave unchanged (on update) / false on
+    // create. Must NOT be coerced to false before this point — that would silently
+    // un-complete a task on a title-only update.
+    done?: boolean
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -348,7 +360,7 @@ export async function upsertTask(
         id,
         scopeId: params.scopeId,
         title: params.title,
-        done: params.done,
+        done: params.done ?? false,
       }
       tasks.push(new LiveObject(task))
     } else {
@@ -358,7 +370,7 @@ export async function upsertTask(
         return
       }
       existing.set('title', params.title)
-      existing.set('done', params.done)
+      if (params.done !== undefined) existing.set('done', params.done)
     }
   })
 
@@ -375,7 +387,10 @@ export async function upsertParkingItem(
     id?: string
     pitchId: string
     text: string
-    resolved: boolean
+    // Partial-update field: undefined = leave unchanged (on update) / false on
+    // create. Must NOT be coerced to false before this point — that would silently
+    // un-resolve an item on a text-only update.
+    resolved?: boolean
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -399,7 +414,7 @@ export async function upsertParkingItem(
         id,
         pitchId: params.pitchId,
         text: params.text,
-        resolved: params.resolved,
+        resolved: params.resolved ?? false,
       }
       parkingItems.push(new LiveObject(item))
     } else {
@@ -409,7 +424,7 @@ export async function upsertParkingItem(
         return
       }
       existing.set('text', params.text)
-      existing.set('resolved', params.resolved)
+      if (params.resolved !== undefined) existing.set('resolved', params.resolved)
     }
   })
 
