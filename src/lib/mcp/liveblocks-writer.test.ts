@@ -211,6 +211,33 @@ describe('upsertPitch', () => {
     expect(existing.get('stage')).toBe('building')
   })
 
+  it('leaves timebox, frame, emoji and notion untouched when omitted on update', async () => {
+    // Regression: upsert_pitch is a partial update. Omitting a field (e.g. when
+    // assigning a squad) must NOT wipe it — previously these clobbered to ''.
+    const existing = makeMockItem({
+      id: 'p1',
+      title: 'Mission Control',
+      stage: 'building',
+      frame_problem: 'No visibility',
+      frame_outcome: 'Dashboard',
+      timebox_start: '2026-04-06',
+      timebox_end: '2026-05-15',
+      emoji: '🚀',
+      notion_url: 'https://notion.so/x',
+    })
+    setupStorage({ pitches: [existing] })
+
+    await upsertPitch(ROOM, { id: 'p1', title: 'Mission Control', stage: 'done' })
+
+    expect(existing.get('stage')).toBe('done')
+    expect(existing.get('timebox_start')).toBe('2026-04-06')
+    expect(existing.get('timebox_end')).toBe('2026-05-15')
+    expect(existing.get('frame_problem')).toBe('No visibility')
+    expect(existing.get('frame_outcome')).toBe('Dashboard')
+    expect(existing.get('emoji')).toBe('🚀')
+    expect(existing.get('notion_url')).toBe('https://notion.so/x')
+  })
+
   it('throws when updating a pitch with unknown id', async () => {
     setupStorage()
 
@@ -267,6 +294,27 @@ describe('upsertScope', () => {
       })
     ).rejects.toThrow('Pitch not found')
   })
+
+  it('leaves litmus_text and hill_progress untouched when omitted on update', async () => {
+    // Regression: a partial update (e.g. renaming a scope) must not wipe litmus
+    // or reset hill_progress to 0.
+    const existing = makeMockItem({
+      id: 's1',
+      pitchId: 'p1',
+      title: 'UI',
+      tier: 'must',
+      litmus_text: 'User sees dashboard',
+      hill_progress: 0.7,
+    })
+    setupStorage({ scopes: [existing] })
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI Layer', tier: 'should' })
+
+    expect(existing.get('title')).toBe('UI Layer')
+    expect(existing.get('tier')).toBe('should')
+    expect(existing.get('litmus_text')).toBe('User sees dashboard')
+    expect(existing.get('hill_progress')).toBe(0.7)
+  })
 })
 
 describe('upsertTask', () => {
@@ -299,6 +347,17 @@ describe('upsertTask', () => {
       })
     ).rejects.toThrow('Scope not found')
   })
+
+  it('leaves done untouched when omitted on update', async () => {
+    // Regression: renaming a task must not un-complete it.
+    const existing = makeMockItem({ id: 't1', scopeId: 's1', title: 'Build gauge', done: true })
+    setupStorage({ tasks: [existing] })
+
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build the gauge' })
+
+    expect(existing.get('title')).toBe('Build the gauge')
+    expect(existing.get('done')).toBe(true)
+  })
 })
 
 describe('upsertParkingItem', () => {
@@ -317,6 +376,17 @@ describe('upsertParkingItem', () => {
     expect(result.created).toBe(true)
     expect(storage.parkingItems.toArray()).toHaveLength(1)
     expect(storage.parkingItems.toArray()[0].text).toBe('Check accessibility')
+  })
+
+  it('leaves resolved untouched when omitted on update', async () => {
+    // Regression: editing the text must not un-resolve the item.
+    const existing = makeMockItem({ id: 'pk1', pitchId: 'p1', text: 'Old', resolved: true })
+    setupStorage({ parkingItems: [existing] })
+
+    await upsertParkingItem(ROOM, { id: 'pk1', pitchId: 'p1', text: 'New text' })
+
+    expect(existing.get('text')).toBe('New text')
+    expect(existing.get('resolved')).toBe(true)
   })
 })
 

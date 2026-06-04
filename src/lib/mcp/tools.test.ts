@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { z } from 'zod'
 import { handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
@@ -573,5 +574,73 @@ describe('tool annotations', () => {
     for (const name of Object.keys(byName).filter((n) => n !== 'post_update')) {
       expect(byName[name]?.openWorldHint ?? false, `${name} only touches Liveblocks`).toBe(false)
     }
+  })
+})
+
+describe('upsert_* partial-update schemas', () => {
+  function schemaFor(toolName: string): Record<string, z.ZodTypeAny> {
+    let captured: Record<string, z.ZodTypeAny> | undefined
+    const server = {
+      tool(name: string, _description: string, schema: Record<string, z.ZodTypeAny>) {
+        if (name === toolName) captured = schema
+      },
+    }
+    registerCyclesTools(server)
+    if (!captured) throw new Error(`tool not registered: ${toolName}`)
+    return captured
+  }
+
+  it('upsert_pitch does NOT default omitted fields to "" (regression: wiped timeboxes)', () => {
+    // Root cause of the prod incident: timebox_start/end were `.default("")`, so a
+    // partial update (e.g. assigning a squad) silently overwrote them with "".
+    // Omitting them must leave them `undefined` so the writer can preserve.
+    const parsed = z.object(schemaFor('upsert_pitch')).parse({
+      cycle_slug: 'q2-build',
+      id: 'p1',
+      title: 'Mission Control',
+      stage: 'building',
+    })
+
+    expect(parsed.timebox_start).toBeUndefined()
+    expect(parsed.timebox_end).toBeUndefined()
+    expect(parsed.frame_problem).toBeUndefined()
+    expect(parsed.frame_outcome).toBeUndefined()
+    expect(parsed.emoji).toBeUndefined()
+    expect(parsed.notion_url).toBeUndefined()
+  })
+
+  it('upsert_scope does NOT default omitted litmus_text/hill_progress', () => {
+    const parsed = z.object(schemaFor('upsert_scope')).parse({
+      cycle_slug: 'q2-build',
+      id: 's1',
+      pitchId: 'p1',
+      title: 'UI',
+      tier: 'must',
+    })
+
+    expect(parsed.litmus_text).toBeUndefined()
+    expect(parsed.hill_progress).toBeUndefined()
+  })
+
+  it('upsert_task does NOT default omitted done', () => {
+    const parsed = z.object(schemaFor('upsert_task')).parse({
+      cycle_slug: 'q2-build',
+      id: 't1',
+      scopeId: 's1',
+      title: 'Build gauge',
+    })
+
+    expect(parsed.done).toBeUndefined()
+  })
+
+  it('upsert_parking_item does NOT default omitted resolved', () => {
+    const parsed = z.object(schemaFor('upsert_parking_item')).parse({
+      cycle_slug: 'q2-build',
+      id: 'pk1',
+      pitchId: 'p1',
+      text: 'Check a11y',
+    })
+
+    expect(parsed.resolved).toBeUndefined()
   })
 })
