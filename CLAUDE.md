@@ -72,6 +72,7 @@ Real-time state lives in Liveblocks (accessed via hooks from `src/cycle-room-con
 - Room IDs: `{orgPrefix}:cycle:{slug}` where orgPrefix is orgId or userId
 - CSS theming via HSL CSS variables; dark mode via class strategy
 - **No prop drilling for cross-cutting concerns.** Use React Context providers or hooks (e.g. Clerk's `useAuth()`, `useSlackEnabled()`) instead of threading props through intermediate components. Server-only values (env vars) go in a context provider at the page boundary; auth data comes from Clerk hooks.
+- **MCP upsert tools are partial updates.** Non-identity fields must be `z.optional()` (never `z.…().default(…)`) and guarded in the writer (`if (params.x !== undefined) existing.set(...)`), so omitting a field leaves it unchanged instead of wiping it. See ADR 0011.
 
 ## Agent skills
 
