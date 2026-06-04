@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape } from '@/components/timebox'
+import { computeTimebox } from '@/lib/timebox-engine'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import {
   Dialog,
@@ -47,6 +48,9 @@ export type MissionControlViewProps = {
   today: string
   sections: SquadSection[]
   onCreatePitch?: (title: string) => void
+  /** The cycle window's boundaries (see ADR 0010). Omitted = not yet set. */
+  cycleStart?: string
+  cycleEnd?: string
 }
 
 export function MissionControlView({
@@ -56,6 +60,8 @@ export function MissionControlView({
   today,
   sections,
   onCreatePitch,
+  cycleStart,
+  cycleEnd,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
@@ -99,6 +105,9 @@ export function MissionControlView({
             )}
           </div>
         </div>
+        {cycleStart && cycleEnd && (
+          <CycleWindowStrip start={cycleStart} end={cycleEnd} today={today} />
+        )}
         {showFilter && (
           <SquadFilterBar
             sections={sections}
@@ -138,6 +147,42 @@ export function MissionControlView({
         mission control · click a pitch to open its scope map
       </footer>
     </main>
+  )
+}
+
+/**
+ * The cycle window — where we are in the cycle as a whole. Reuses the
+ * tape-measure visual of a pitch timebox, but it's a distinct concept (ADR
+ * 0010): "Timebox" stays reserved for pitches. Week granularity matches the
+ * cycle's natural cadence (build = 6 weeks, cooldown = 2).
+ */
+function CycleWindowStrip({
+  start,
+  end,
+  today,
+}: {
+  start: string
+  end: string
+  today: string
+}) {
+  const info = computeTimebox(start, end, today)
+  const weekLabel =
+    info.phase === 'before'
+      ? 'Not started'
+      : info.phase === 'after'
+        ? 'Complete'
+        : `Week ${info.currentWeek} of ${info.totalWeeks}`
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3">
+      <div className="flex items-center justify-between text-xs font-medium">
+        <span className="uppercase tracking-wide text-muted-foreground">
+          Cycle window
+        </span>
+        <span className="tabular-nums">{weekLabel}</span>
+      </div>
+      <TimeboxTape start={start} end={end} today={today} />
+    </div>
   )
 }
 

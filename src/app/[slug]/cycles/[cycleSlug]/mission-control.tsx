@@ -124,6 +124,8 @@ function MissionControlWired({
       today={today}
       sections={sections}
       onCreatePitch={onCreatePitch}
+      cycleStart={cycle.start_date}
+      cycleEnd={cycle.end_date}
     />
   )
 }
