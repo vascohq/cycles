@@ -15,6 +15,7 @@ import { resolveOrigin } from './origin'
 import type { Zone, Needle } from '@/cycle-liveblocks.config'
 import {
   createCycle,
+  updateCycle,
   upsertPitch,
   upsertScope,
   upsertTask,
@@ -103,6 +104,26 @@ export async function handleCreateCycle(
       return errorResult(`Cycle already exists: "${slug}"`)
     }
     return jsonResult({ created: true, slug, name: params.name })
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleUpdateCycle(
+  orgId: string,
+  cycleSlug: string,
+  params: {
+    name?: string
+    type?: string
+    start_date?: string
+    end_date?: string
+    slack_channel?: string
+  }
+): Promise<ToolResult> {
+  const roomId = `${orgId}:cycle:${cycleSlug}`
+  try {
+    const result = await updateCycle(roomId, params)
+    return jsonResult({ updated: true, slug: cycleSlug, cycle: result.cycle })
   } catch (err) {
     return errorResult((err as Error).message)
   }
@@ -544,6 +565,52 @@ export function registerCyclesTools(server: any): void {
       if (!resolved.ok) return errorResult(resolved.error)
       const parsed = parseSlugPath(slug_path)
       return handleGetCycle(resolved.org.id, parsed.cycleSlug)
+    }
+  )
+
+  defineTool(
+    server,
+    'update_cycle',
+    'Update an existing cycle\'s top-level fields, addressed by slug. The slug itself is immutable. Updates are PARTIAL: any field you omit (name, type, start_date, end_date, slack_channel) is left unchanged — only fields you pass are overwritten. Pass "" to clear a date. Fails if no cycle with that slug exists.',
+    {
+      ...orgArg,
+      ...slugPathArg,
+      // All optional with NO .default() — omitting a field must leave it
+      // unchanged, never coerce it to '' (the timebox-nullification incident).
+      name: z.string().optional().describe('Human-readable cycle name. Omit to leave unchanged.'),
+      type: z.enum(['build', 'cooldown']).optional().describe('Cycle type. Omit to leave unchanged.'),
+      start_date: z.string().optional().describe('ISO date (YYYY-MM-DD). Pass "" to clear; omit to leave unchanged.'),
+      end_date: z.string().optional().describe('ISO date (YYYY-MM-DD). Pass "" to clear; omit to leave unchanged.'),
+      slack_channel: z.string().optional().describe('Target Slack channel. Omit to leave unchanged.'),
+    },
+    {
+      title: 'Update cycle',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        slug_path,
+        ...params
+      }: {
+        org?: string
+        slug_path: string
+        name?: string
+        type?: string
+        start_date?: string
+        end_date?: string
+        slack_channel?: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      return handleUpdateCycle(resolved.org.id, parsed.cycleSlug, params)
     }
   )
 

@@ -6,6 +6,7 @@ vi.mock('@/lib/liveblocks', () => ({
     getRoom: vi.fn(),
     createRoom: vi.fn(),
     initializeStorageDocument: vi.fn(),
+    updateRoom: vi.fn(),
     deleteRoom: vi.fn(),
   },
 }))
@@ -13,6 +14,7 @@ vi.mock('@/lib/liveblocks', () => ({
 import { liveblocks } from '@/lib/liveblocks'
 import {
   createCycle,
+  updateCycle,
   upsertPitch,
   upsertScope,
   upsertTask,
@@ -35,6 +37,7 @@ const mockCreateRoom = vi.mocked(liveblocks.createRoom)
 const mockInitStorage = vi.mocked(liveblocks.initializeStorageDocument)
 
 const mockMutateStorage = vi.mocked(liveblocks.mutateStorage)
+const mockUpdateRoom = vi.mocked(liveblocks.updateRoom)
 
 type MockItem = Record<string, unknown> & {
   get: (key: string) => unknown
@@ -99,6 +102,7 @@ type StorageData = {
   parkingItems?: MockItem[]
   updates?: MockItem[]
   squads?: MockItem[]
+  cycle?: Record<string, unknown>
 }
 
 function setupStorage(data: StorageData = {}) {
@@ -109,6 +113,7 @@ function setupStorage(data: StorageData = {}) {
     parkingItems: makeMockList(data.parkingItems ?? []),
     updates: makeMockList(data.updates ?? []),
     squads: makeMockList(data.squads ?? []),
+    cycle: makeMockItem(data.cycle ?? {}),
   }
 
   mockMutateStorage.mockImplementation(async (_roomId, callback) => {
@@ -161,6 +166,87 @@ describe('createCycle', () => {
     expect(result.created).toBe(false)
     expect(mockCreateRoom).not.toHaveBeenCalled()
     expect(mockInitStorage).not.toHaveBeenCalled()
+  })
+})
+
+describe('updateCycle', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const EXISTING_CYCLE = {
+    name: 'Q3 Build',
+    type: 'build',
+    start_date: '2026-07-06',
+    end_date: '2026-08-14',
+    slack_channel: '#product-general',
+  }
+
+  it('updates only the passed field on storage and returns the resulting cycle', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    const storage = setupStorage({ cycle: { ...EXISTING_CYCLE } })
+
+    const result = await updateCycle(ROOM, { start_date: '2026-07-13' })
+
+    expect(storage.cycle.get('start_date')).toBe('2026-07-13')
+    // Untouched fields stay put.
+    expect(storage.cycle.get('name')).toBe('Q3 Build')
+    expect(storage.cycle.get('end_date')).toBe('2026-08-14')
+    expect(result).toEqual({
+      updated: true,
+      cycle: {
+        name: 'Q3 Build',
+        type: 'build',
+        start_date: '2026-07-13',
+        end_date: '2026-08-14',
+        slack_channel: '#product-general',
+      },
+    })
+  })
+
+  it('mirrors the changed subset into room metadata, mapping name to title', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    setupStorage({ cycle: { ...EXISTING_CYCLE } })
+
+    await updateCycle(ROOM, { name: 'Q3 Crunch', start_date: '2026-07-13' })
+
+    expect(mockUpdateRoom).toHaveBeenCalledTimes(1)
+    const [roomId, opts] = mockUpdateRoom.mock.calls[0]
+    expect(roomId).toBe(ROOM)
+    // Only the changed fields are sent; `name` becomes metadata `title`.
+    expect((opts as any).metadata).toEqual({
+      title: 'Q3 Crunch',
+      start_date: '2026-07-13',
+    })
+  })
+
+  it('clears a field in both storage and metadata when passed an empty string', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    const storage = setupStorage({ cycle: { ...EXISTING_CYCLE } })
+
+    const result = await updateCycle(ROOM, { end_date: '' })
+
+    expect(storage.cycle.get('end_date')).toBe('')
+    expect(result.cycle.end_date).toBe('')
+    expect((mockUpdateRoom.mock.calls[0][1] as any).metadata).toEqual({ end_date: '' })
+  })
+
+  it('leaves storage untouched and writes no metadata when no fields are passed', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    const storage = setupStorage({ cycle: { ...EXISTING_CYCLE } })
+
+    const result = await updateCycle(ROOM, {})
+
+    expect(mockUpdateRoom).not.toHaveBeenCalled()
+    expect(storage.cycle.get('name')).toBe('Q3 Build')
+    expect(result.cycle).toEqual(EXISTING_CYCLE)
+  })
+
+  it('throws and writes nothing when the cycle does not exist', async () => {
+    mockGetRoom.mockRejectedValue(new Error('Room not found'))
+    setupStorage({ cycle: { ...EXISTING_CYCLE } })
+
+    await expect(updateCycle(ROOM, { name: 'Nope' })).rejects.toThrow(/not found/i)
+    expect(mockMutateStorage).not.toHaveBeenCalled()
+    expect(mockUpdateRoom).not.toHaveBeenCalled()
   })
 })
 
