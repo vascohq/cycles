@@ -333,6 +333,24 @@ function ScopeMapWired({
     []
   )
 
+  // Flag/clear a scope as the pitch's Core Scope. Stored as a single pointer on
+  // the pitch (see ADR 0012), so setting it silently steals the flag from any
+  // other scope — one heart, moved. Clearing deletes the key entirely (a lingering
+  // set('core_scope_id', undefined) would keep resolving to the old scope), the
+  // same pattern as onClearSquad.
+  const onToggleCoreScope = useCycleMutation(
+    ({ storage }, scopeId: string, next: boolean) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      if (!p) return
+      if (next) {
+        p.set('core_scope_id', scopeId)
+      } else if (p.get('core_scope_id') === scopeId) {
+        p.delete('core_scope_id')
+      }
+    },
+    [pitchId]
+  )
+
   const onEditScope = useCycleMutation(
     (
       { storage },
@@ -480,7 +498,12 @@ function ScopeMapWired({
     [orgUsers]
   )
 
-  const scopeGridItems = deriveScopeGridItems(allScopes, allTasks, pitchId)
+  const scopeGridItems = deriveScopeGridItems(
+    allScopes,
+    allTasks,
+    pitchId,
+    pitch?.core_scope_id
+  )
   const hillScopes = deriveHillScopes(allScopes, pitchId)
   const parkingLotItems = deriveParkingLotItems(allParkingItems, pitchId)
   const totalProgress = deriveTotalTaskProgress(allScopes, allTasks, pitchId)
@@ -676,6 +699,7 @@ function ScopeMapWired({
       onAddTask={onAddTask}
       onAddScope={onAddScope}
       onEditScope={onEditScope}
+      onToggleCoreScope={onToggleCoreScope}
       onDeleteScope={onDeleteScope}
       onScopeReorder={onScopeReorder}
       onScopeReset={onScopeReset}

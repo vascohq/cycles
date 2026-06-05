@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
-import { Check, Plus, Pencil, X } from 'lucide-react'
+import { Check, Plus, Pencil, X, Star } from 'lucide-react'
 import { ColorPicker } from '@/components/color-picker'
 import {
   Sheet,
@@ -23,6 +23,8 @@ export type ScopeDrawerScope = {
   tier: Tier
   color: string
   litmus_text: string
+  /** True when this scope is the pitch's Core Scope (see ADR 0012). */
+  isCore?: boolean
   tasks: ScopeCardTask[]
 }
 
@@ -35,6 +37,8 @@ export type ScopeDrawerProps = {
   onEditScope?: (
     fields: { title?: string; tier?: Tier; litmus_text?: string; color?: string }
   ) => void
+  /** Flag (true) or clear (false) this scope as the pitch's Core Scope. */
+  onToggleCore?: (next: boolean) => void
   onTaskToggle?: (taskId: string, done: boolean) => void
   onTaskEdit?: (taskId: string, title: string) => void
   onTaskDelete?: (taskId: string) => void
@@ -52,6 +56,7 @@ export function ScopeDrawer({
   scope,
   usedColors,
   onEditScope,
+  onToggleCore,
   onTaskToggle,
   onTaskEdit,
   onTaskDelete,
@@ -67,6 +72,7 @@ export function ScopeDrawer({
             scope={scope}
             usedColors={usedColors}
             onEditScope={onEditScope}
+            onToggleCore={onToggleCore}
             onTaskToggle={onTaskToggle}
             onTaskEdit={onTaskEdit}
             onTaskDelete={onTaskDelete}
@@ -84,6 +90,7 @@ function ScopeDrawerBody({
   scope,
   usedColors = [],
   onEditScope,
+  onToggleCore,
   onTaskToggle,
   onTaskEdit,
   onTaskDelete,
@@ -114,6 +121,12 @@ function ScopeDrawerBody({
             readOnly={readOnly}
             onChange={(tier) => onEditScope?.({ tier })}
           />
+          {!readOnly && onToggleCore && (
+            <CoreToggle
+              isCore={!!scope.isCore}
+              onToggle={() => onToggleCore(!scope.isCore)}
+            />
+          )}
         </div>
       </SheetHeader>
 
@@ -293,6 +306,36 @@ function EditableText({
       {!readOnly && onSave && (
         <Pencil className="inline-block w-3 h-3 ml-1.5 align-baseline opacity-0 group-hover/edit:opacity-40 transition-opacity" />
       )}
+    </button>
+  )
+}
+
+// Flags this scope as the pitch's single Core Scope. Setting it steals the flag
+// from any other scope (one heart, moved — see ADR 0012); the toggle reflects
+// the current state with a filled star.
+function CoreToggle({
+  isCore,
+  onToggle,
+}: {
+  isCore: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={isCore}
+      onClick={onToggle}
+      title="The heart of the pitch — the slice you build first to prove the idea and surface risk early"
+      className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
+        isCore
+          ? 'border-amber-400/50 bg-amber-400/10 text-amber-600 font-medium'
+          : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <Star
+        className={`w-3 h-3 ${isCore ? 'fill-amber-400 text-amber-400' : ''}`}
+      />
+      Core scope
     </button>
   )
 }

@@ -4,6 +4,7 @@ import {
   deriveHillScopes,
   deriveParkingLotItems,
   deriveTotalTaskProgress,
+  resolveCoreScopeId,
 } from './scope-map-helpers'
 import type { CycleScope, ScopeTask, ParkingItem } from '@/cycle-liveblocks.config'
 
@@ -67,6 +68,40 @@ describe('deriveScopeGridItems', () => {
   it('returns empty array when no scopes for pitch', () => {
     const items = deriveScopeGridItems([scopeOtherPitch], tasks, 'p1')
     expect(items).toEqual([])
+  })
+
+  it('marks only the core scope isCore, leaving tier and order untouched', () => {
+    const items = deriveScopeGridItems([scope1, scope2], tasks, 'p1', 's2')
+    const s1 = items.find((i) => i.id === 's1')!
+    const s2 = items.find((i) => i.id === 's2')!
+    expect(s1.isCore).toBe(false)
+    expect(s2.isCore).toBe(true)
+    // Core is independent of tier and build order (see ADR 0012).
+    expect(s1.tier).toBe('must')
+    expect(s1.order).toBe(1)
+    expect(s2.tier).toBe('should')
+    expect(s2.order).toBe(2)
+  })
+
+  it('marks no scope isCore when the core pointer is dangling or unset', () => {
+    const dangling = deriveScopeGridItems([scope1, scope2], tasks, 'p1', 'gone')
+    expect(dangling.every((i) => !i.isCore)).toBe(true)
+    const unset = deriveScopeGridItems([scope1, scope2], tasks, 'p1')
+    expect(unset.every((i) => !i.isCore)).toBe(true)
+  })
+})
+
+describe('resolveCoreScopeId', () => {
+  it('returns the pointer when it matches a live scope', () => {
+    expect(resolveCoreScopeId('s2', [scope1, scope2])).toBe('s2')
+  })
+
+  it('returns null when the pointer is dangling (scope deleted)', () => {
+    expect(resolveCoreScopeId('gone', [scope1, scope2])).toBeNull()
+  })
+
+  it('returns null when no core is set', () => {
+    expect(resolveCoreScopeId(undefined, [scope1, scope2])).toBeNull()
   })
 })
 

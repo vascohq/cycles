@@ -44,6 +44,9 @@ export type CyclePitch = {
   notion_url: string
   // The squad that owns this pitch (per-cycle; see ADR 0009). Undefined = Unassigned.
   squadId?: string
+  // Pointer to this pitch's Core Scope (see ADR 0012). Undefined = no core set;
+  // a pointer to a since-deleted scope resolves to "no core" (dangling = unset).
+  core_scope_id?: string
 }
 
 export type CycleScope = {
