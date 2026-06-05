@@ -574,12 +574,14 @@ export async function deleteScope(roomId: string, scopeId: string): Promise<void
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const scopes = root.get('scopes')
     const tasks = root.get('tasks')
+    const pitches = root.get('pitches')
 
     const idx = scopes.findIndex((s: any) => getField(s, 'id') === scopeId)
     if (idx === -1) {
       notFound = true
       return
     }
+    const pitchId = getField(scopes.find((s: any) => getField(s, 'id') === scopeId), 'pitchId')
     scopes.delete(idx)
 
     // Cascade delete tasks belonging to this scope
@@ -587,6 +589,16 @@ export async function deleteScope(roomId: string, scopeId: string): Promise<void
     for (let i = taskArray.length - 1; i >= 0; i--) {
       if (getField(taskArray[i], 'scopeId') === scopeId) {
         tasks.delete(i)
+      }
+    }
+
+    // Keep the Core Scope pointer clean: if this scope was the pitch's core,
+    // clear it in the same operation (ADR 0012, no auto-promotion — the team
+    // deliberately picks a new heart, so the empty-state banner reappears).
+    if (pitchId !== undefined) {
+      const pitch = pitches.find((p: any) => getField(p, 'id') === pitchId)
+      if (pitch && getField(pitch, 'core_scope_id') === scopeId) {
+        pitch.delete('core_scope_id')
       }
     }
   })
