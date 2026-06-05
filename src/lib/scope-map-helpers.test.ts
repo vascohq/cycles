@@ -5,6 +5,7 @@ import {
   deriveParkingLotItems,
   deriveTotalTaskProgress,
   resolveCoreScopeId,
+  shouldShowCoreScopePrompt,
 } from './scope-map-helpers'
 import type { CycleScope, ScopeTask, ParkingItem } from '@/cycle-liveblocks.config'
 
@@ -102,6 +103,24 @@ describe('resolveCoreScopeId', () => {
 
   it('returns null when no core is set', () => {
     expect(resolveCoreScopeId(undefined, [scope1, scope2])).toBeNull()
+  })
+})
+
+describe('shouldShowCoreScopePrompt', () => {
+  it('prompts when the pitch has scopes but none is core', () => {
+    expect(
+      shouldShowCoreScopePrompt([{ isCore: false }, { isCore: false }])
+    ).toBe(true)
+  })
+
+  it('does not prompt when a scope is already core', () => {
+    expect(
+      shouldShowCoreScopePrompt([{ isCore: false }, { isCore: true }])
+    ).toBe(false)
+  })
+
+  it('does not prompt when the pitch has no scopes', () => {
+    expect(shouldShowCoreScopePrompt([])).toBe(false)
   })
 })
 

@@ -35,6 +35,17 @@ export function resolveCoreScopeId(
   return scopes.some((s) => s.id === coreScopeId) ? coreScopeId : null
 }
 
+// Whether to show the empty-state prompt nudging the team to pick a Core Scope.
+// Driven by the already-resolved `isCore` flags (not the raw pitch pointer), so a
+// dangling pointer — resolved to no core upstream — correctly still prompts, and
+// the rule reads identically in the live app and the e2e harness. Prompt only
+// when there is something to choose from (at least one scope) and nothing chosen.
+export function shouldShowCoreScopePrompt(
+  items: { isCore: boolean }[]
+): boolean {
+  return items.length > 0 && !items.some((i) => i.isCore)
+}
+
 export function deriveScopeGridItems(
   scopes: CycleScope[],
   tasks: ScopeTask[],
