@@ -2,6 +2,7 @@ import { ScopeMap } from './scope-map'
 import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
 import { getCycleStorage, resolvePitch } from '@/lib/mcp/liveblocks-reader'
+import { formatPitchTitle } from '@/components/scope-map/use-pitch-document-title'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
@@ -24,10 +25,11 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
       getCycleStorage(roomPrefix, cycleSlug),
     ])
     const pitch = resolvePitch(storage, pitchSlug)
-    const pitchLabel = pitch
-      ? [pitch.emoji, pitch.title].filter(Boolean).join(' ')
-      : pitchSlug
-    return { title: `${pitchLabel} | ${room.metadata.title} | Cycles` }
+    const cycleTitle = String(room.metadata.title)
+    const title = pitch
+      ? formatPitchTitle(pitch, cycleTitle)
+      : `${pitchSlug} | ${cycleTitle} | Cycles`
+    return { title }
   } catch {
     return { title: 'Scope Map not found | Cycles' }
   }
