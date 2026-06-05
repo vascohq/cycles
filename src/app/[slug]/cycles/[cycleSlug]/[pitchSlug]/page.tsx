@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
       getRoom(roomId),
       getCycleStorage(roomPrefix, cycleSlug),
     ])
-    const pitch = resolvePitch(storage, pitchSlug)
+    const pitch = resolvePitch(storage, pitchSlug) ?? null
     const cycleTitle = String(room.metadata.title)
     return { title: formatPitchTitle(pitch, cycleTitle, pitchSlug) }
   } catch {
