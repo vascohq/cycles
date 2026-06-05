@@ -26,6 +26,7 @@ import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-tr
 import { deriveTimelineCards } from '@/lib/timeline-helpers'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
+import { getTeamToday } from '@/lib/team-time'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
 import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask } from '@/cycle-liveblocks.config'
@@ -560,7 +561,7 @@ function ScopeMapWired({
   }))
   const hillHistory = buildHillHistoryFrames(pitchUpdates, hillScopes, usersMap)
   const timelineCards = deriveTimelineCards(pitchUpdates, usersMap)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = getTeamToday(new Date())
 
   const pitchScopes = allScopes.filter((s) => s.pitchId === pitchId)
   const pitchTasks = allTasks.filter((t) => pitchScopes.some((s) => s.id === t.scopeId))
