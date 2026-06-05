@@ -403,6 +403,60 @@ describe('upsertScope', () => {
   })
 })
 
+describe('upsertScope core flag', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('core:true sets the scope as the pitch core, stealing from any current core', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'MC', core_scope_id: 's0' })
+    const s1 = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI', tier: 'must' })
+    setupStorage({ pitches: [pitch], scopes: [s1] })
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must', core: true })
+
+    expect(pitch.get('core_scope_id')).toBe('s1')
+  })
+
+  it('core:false clears the pitch core only when this scope is currently core', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'MC', core_scope_id: 's1' })
+    const s1 = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI', tier: 'must' })
+    setupStorage({ pitches: [pitch], scopes: [s1] })
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must', core: false })
+
+    expect(pitch.get('core_scope_id')).toBeUndefined()
+  })
+
+  it('core:false is a no-op when another scope is the core', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'MC', core_scope_id: 's2' })
+    const s1 = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI', tier: 'must' })
+    setupStorage({ pitches: [pitch], scopes: [s1] })
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must', core: false })
+
+    expect(pitch.get('core_scope_id')).toBe('s2')
+  })
+
+  it('leaves the pitch core untouched when core is omitted', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'MC', core_scope_id: 's2' })
+    const s1 = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI', tier: 'must' })
+    setupStorage({ pitches: [pitch], scopes: [s1] })
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI Layer', tier: 'must' })
+
+    expect(pitch.get('core_scope_id')).toBe('s2')
+  })
+
+  it('core:true on create flags the freshly created scope', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'MC' })
+    const storage = setupStorage({ pitches: [pitch] })
+
+    const result = await upsertScope(ROOM, { pitchId: 'p1', title: 'New', tier: 'must', core: true })
+
+    expect(storage.scopes.toArray()).toHaveLength(1)
+    expect(pitch.get('core_scope_id')).toBe(result.id)
+  })
+})
+
 describe('upsertTask', () => {
   beforeEach(() => vi.clearAllMocks())
 

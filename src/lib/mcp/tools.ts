@@ -820,7 +820,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_scope',
-    'Create or update a scope under a pitch. Omit id to create. Updates are PARTIAL: any field you omit (litmus_text, hill_progress) is left unchanged — only fields you pass are overwritten.',
+    'Create or update a scope under a pitch. Omit id to create. Updates are PARTIAL: any field you omit (litmus_text, hill_progress, core) is left unchanged — only fields you pass are overwritten.',
     {
       ...orgArg,
       ...cycleSlugArg,
@@ -832,6 +832,11 @@ export function registerCyclesTools(server: any): void {
       // rather than wiped / reset to 0. Defaults to '' / 0 on create.
       litmus_text: z.string().optional(),
       hill_progress: z.number().min(0).max(1).optional(),
+      // Flag this scope as the pitch's Core Scope (the heart of the pitch; see
+      // ADR 0012). true steals the core from any other scope; false clears it
+      // only if this scope is currently core (a no-op otherwise); omit = leave
+      // the pitch's core unchanged.
+      core: z.boolean().optional(),
     },
     {
       title: 'Create or update scope',
@@ -841,7 +846,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text?: string; hill_progress?: number },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text?: string; hill_progress?: number; core?: boolean },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)

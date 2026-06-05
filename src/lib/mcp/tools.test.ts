@@ -621,6 +621,22 @@ describe('upsert_* partial-update schemas', () => {
 
     expect(parsed.litmus_text).toBeUndefined()
     expect(parsed.hill_progress).toBeUndefined()
+    // core is a partial-update flag too: omit = leave the pitch's core unchanged.
+    expect(parsed.core).toBeUndefined()
+  })
+
+  it('upsert_scope accepts an explicit core flag', () => {
+    const schema = z.object(schemaFor('upsert_scope'))
+    expect(
+      schema.parse({
+        cycle_slug: 'q2-build',
+        id: 's1',
+        pitchId: 'p1',
+        title: 'UI',
+        tier: 'must',
+        core: true,
+      }).core
+    ).toBe(true)
   })
 
   it('upsert_task does NOT default omitted done', () => {
