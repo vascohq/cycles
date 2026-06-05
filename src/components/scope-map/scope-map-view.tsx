@@ -25,6 +25,8 @@ import {
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
+import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
+import { CoreScopePrompt } from '@/components/scope-map/core-scope-prompt'
 import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import type { Tier } from '@/cycle-liveblocks.config'
@@ -254,6 +256,18 @@ export function ScopeMapView({
       </section>
 
       <section>
+        {onToggleCoreScope &&
+          shouldShowCoreScopePrompt(scopeGridItems) && (
+            <div className="mb-4">
+              <CoreScopePrompt
+                scopes={scopeGridItems.map((s) => ({
+                  id: s.id,
+                  title: s.title,
+                }))}
+                onChoose={(scopeId) => onToggleCoreScope(scopeId, true)}
+              />
+            </div>
+          )}
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-sm font-semibold tracking-tight">Scopes</h2>
           {!isDone && (
