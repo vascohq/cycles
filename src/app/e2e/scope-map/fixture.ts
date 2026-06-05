@@ -55,6 +55,7 @@ export const FIXTURE: Omit<
       tier: 'must',
       color: '#3e63dd',
       litmus_text: 'Teams can see and update their pitch sentiment',
+      isCore: true,
       tasks: [
         { id: 't1', title: 'Needle engine pure functions', done: true },
         { id: 't2', title: 'NeedleGauge component', done: true },
@@ -68,6 +69,7 @@ export const FIXTURE: Omit<
       tier: 'must',
       color: '#3e63dd',
       litmus_text: 'Scope progress visible on a hill curve',
+      isCore: false,
       tasks: [
         { id: 't4', title: 'Hill engine math', done: true },
         { id: 't5', title: 'HillChart SVG component', done: true },
@@ -81,6 +83,7 @@ export const FIXTURE: Omit<
       tier: 'should',
       color: '#3e63dd',
       litmus_text: 'Visual countdown shows time remaining',
+      isCore: false,
       tasks: [
         { id: 't7', title: 'Timebox engine', done: true },
         { id: 't8', title: 'TimeboxTape SVG', done: true },
@@ -93,6 +96,7 @@ export const FIXTURE: Omit<
       tier: 'must',
       color: '#3e63dd',
       litmus_text: 'Teams can break scopes into tasks and check them off',
+      isCore: false,
       tasks: [
         { id: 't9', title: 'ScopeCard component', done: true },
         { id: 't10', title: 'ScopeGrid with DnD', done: false },
@@ -106,6 +110,7 @@ export const FIXTURE: Omit<
       tier: 'could',
       color: '#3e63dd',
       litmus_text: 'Open decisions have a home outside of scopes',
+      isCore: false,
       tasks: [
         { id: 't12', title: 'ParkingLot component', done: true },
         { id: 't13', title: 'Resolve toggle', done: false },

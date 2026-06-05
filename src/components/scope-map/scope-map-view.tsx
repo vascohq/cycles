@@ -80,6 +80,8 @@ export type ScopeMapViewProps = {
     scopeId: string,
     fields: { title?: string; tier?: Tier; litmus_text?: string; color?: string }
   ) => void
+  /** Flag (true) or clear (false) a scope as the pitch's Core Scope. */
+  onToggleCoreScope?: (scopeId: string, next: boolean) => void
   onDeleteScope?: (scopeId: string) => void
   onScopeReorder?: (activeId: string, overId: string) => void
   onScopeReset?: (scopeId: string) => void
@@ -130,6 +132,7 @@ export function ScopeMapView({
   onAddTask,
   onAddScope,
   onEditScope,
+  onToggleCoreScope,
   onDeleteScope,
   onScopeReorder,
   onScopeReset,
@@ -287,6 +290,11 @@ export function ScopeMapView({
           onEditScope={
             !isDone && onEditScope && openScopeId
               ? (fields) => onEditScope(openScopeId, fields)
+              : undefined
+          }
+          onToggleCore={
+            !isDone && onToggleCoreScope && openScopeId
+              ? (next) => onToggleCoreScope(openScopeId, next)
               : undefined
           }
           onTaskToggle={

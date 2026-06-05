@@ -4,7 +4,7 @@ import { forwardRef } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
 import { Badge } from '@/components/ui/badge'
-import { MoreHorizontal, Trash2, GripVertical } from 'lucide-react'
+import { MoreHorizontal, Trash2, GripVertical, Star } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,8 @@ export type ScopeCardProps = {
   /** Identity color for the order badge and hill dot (see ADR 0008). */
   color: string
   litmus_text: string
+  /** True when this scope is the pitch's Core Scope (see ADR 0012). */
+  isCore?: boolean
   tasks: ScopeCardTask[]
   /** Open the scope drawer — fired by clicking anywhere on the card body. */
   onOpen?: () => void
@@ -47,6 +49,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       tier,
       color,
       litmus_text,
+      isCore,
       tasks,
       onOpen,
       onDelete,
@@ -99,6 +102,12 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
             )}
           </div>
           <h3 className="flex-1 min-w-0 text-base font-semibold leading-snug tracking-tight line-clamp-2">
+            {isCore && (
+              <Star
+                aria-label="Core scope"
+                className="inline-block w-3.5 h-3.5 mr-1 -mt-0.5 align-middle fill-amber-400 text-amber-400"
+              />
+            )}
             {title}
           </h3>
           <Badge variant={tier} className="flex-shrink-0 mt-0.5">

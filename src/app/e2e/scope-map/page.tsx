@@ -84,6 +84,7 @@ export default function ScopeMapE2EPage() {
             tier: tier as 'must' | 'should' | 'could',
             color: '#3e63dd',
             litmus_text,
+            isCore: false,
             tasks: [],
           },
         ])

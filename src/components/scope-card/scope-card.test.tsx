@@ -54,6 +54,18 @@ describe('ScopeCard face', () => {
   })
 })
 
+describe('core scope marker', () => {
+  it('shows the core star when the scope is the core scope', () => {
+    render(<ScopeCard {...BASE_PROPS} isCore />)
+    expect(screen.getByLabelText('Core scope')).toBeTruthy()
+  })
+
+  it('omits the core star when the scope is not core', () => {
+    render(<ScopeCard {...BASE_PROPS} />)
+    expect(screen.queryByLabelText('Core scope')).toBeNull()
+  })
+})
+
 describe('opening the drawer', () => {
   it('calls onOpen when the card body is clicked', () => {
     const onOpen = vi.fn()

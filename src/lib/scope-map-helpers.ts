@@ -18,16 +18,32 @@ export type ScopeGridDerived = {
   litmus_text: string
   /** Resolved identity color (stored, or deterministically assigned). */
   color: string
+  /** True for the one scope flagged as the pitch's Core Scope (see ADR 0012). */
+  isCore: boolean
   tasks: ScopeCardTask[]
+}
+
+// Resolve a pitch's core-scope pointer to a live scope id, or null. A pointer
+// to a scope that no longer exists (deleted since it was flagged) resolves to
+// null — the "dangling pointer is no core set" rule (see ADR 0012), so callers
+// self-heal to the empty state rather than rendering a star for a ghost.
+export function resolveCoreScopeId(
+  coreScopeId: string | undefined,
+  scopes: { id: string }[]
+): string | null {
+  if (!coreScopeId) return null
+  return scopes.some((s) => s.id === coreScopeId) ? coreScopeId : null
 }
 
 export function deriveScopeGridItems(
   scopes: CycleScope[],
   tasks: ScopeTask[],
-  pitchId: string
+  pitchId: string,
+  coreScopeId?: string
 ): ScopeGridDerived[] {
   const pitchScopes = scopes.filter((s) => s.pitchId === pitchId)
   const colors = resolveScopeColors(pitchScopes)
+  const coreId = resolveCoreScopeId(coreScopeId, pitchScopes)
   return pitchScopes.map((s, i) => ({
     id: s.id,
     order: i + 1,
@@ -35,6 +51,7 @@ export function deriveScopeGridItems(
     tier: s.tier,
     litmus_text: s.litmus_text,
     color: colors[s.id],
+    isCore: s.id === coreId,
     tasks: tasks
       .filter((t) => t.scopeId === s.id)
       .map((t) => ({ id: t.id, title: t.title, done: t.done })),

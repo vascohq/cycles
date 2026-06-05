@@ -62,6 +62,22 @@ describe('scope field editing', () => {
   })
 })
 
+describe('core scope toggle', () => {
+  it('flags the scope as core when toggled on', () => {
+    const onToggleCore = vi.fn()
+    renderDrawer({ onToggleCore })
+    fireEvent.click(screen.getByRole('button', { name: /core scope/i }))
+    expect(onToggleCore).toHaveBeenCalledWith(true)
+  })
+
+  it('clears the core flag when toggled off', () => {
+    const onToggleCore = vi.fn()
+    renderDrawer({ onToggleCore, scope: { ...SCOPE, isCore: true } })
+    fireEvent.click(screen.getByRole('button', { name: /core scope/i }))
+    expect(onToggleCore).toHaveBeenCalledWith(false)
+  })
+})
+
 describe('task management in the drawer', () => {
   it('renames a task via the inline editor on Enter', () => {
     const onTaskEdit = vi.fn()
