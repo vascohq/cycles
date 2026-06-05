@@ -163,6 +163,43 @@ describe('handleGetPitch', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('nonexistent')
   })
+
+  it('returns core_scope_id and marks the core scope inline', async () => {
+    const storage = {
+      ...FIXTURE_STORAGE,
+      pitches: [
+        { ...FIXTURE_STORAGE.pitches[0], core_scope_id: 's2' },
+        FIXTURE_STORAGE.pitches[1],
+      ],
+    }
+    mockGetStorage.mockResolvedValue(storage)
+    mockResolvePitch.mockReturnValue(storage.pitches[0])
+
+    const result = await handleGetPitch(ORG_ID, '2026-q2-build', 'mission-control')
+    const data = JSON.parse(result.content[0].text as string) as any
+
+    expect(data.pitch.core_scope_id).toBe('s2')
+    expect(data.scopes.find((s: any) => s.id === 's2').core).toBe(true)
+    expect(data.scopes.find((s: any) => s.id === 's1').core).toBe(false)
+  })
+
+  it('resolves a dangling core_scope_id to no core set', async () => {
+    const storage = {
+      ...FIXTURE_STORAGE,
+      pitches: [
+        { ...FIXTURE_STORAGE.pitches[0], core_scope_id: 'deleted-scope' },
+        FIXTURE_STORAGE.pitches[1],
+      ],
+    }
+    mockGetStorage.mockResolvedValue(storage)
+    mockResolvePitch.mockReturnValue(storage.pitches[0])
+
+    const result = await handleGetPitch(ORG_ID, '2026-q2-build', 'mission-control')
+    const data = JSON.parse(result.content[0].text as string) as any
+
+    expect(data.pitch.core_scope_id ?? null).toBeNull()
+    expect(data.scopes.every((s: any) => !s.core)).toBe(true)
+  })
 })
 
 describe('handleListUpdates', () => {

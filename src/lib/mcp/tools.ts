@@ -4,7 +4,7 @@ import { parseSlugPath, isValidSlugSegment } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
 import { slugify } from '@/lib/slugify'
 import { derivePitchCards } from '@/lib/mission-control-helpers'
-import { deriveTotalTaskProgress } from '@/lib/scope-map-helpers'
+import { deriveTotalTaskProgress, resolveCoreScopeId } from '@/lib/scope-map-helpers'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { normalizeEmoji, validateNotionUrl } from '@/lib/pitch-identity-engine'
@@ -191,18 +191,26 @@ export async function handleGetPitch(
     const pitch = resolvePitch(storage, pitchSlug)
     if (!pitch) return errorResult(`Pitch not found: "${pitchSlug}" in cycle "${cycleSlug}"`)
 
-    const scopes = storage.scopes
-      .filter((s) => s.pitchId === pitch.id)
-      .map((scope) => ({
-        ...scope,
-        tasks: storage.tasks.filter((t) => t.scopeId === scope.id),
-      }))
+    const pitchScopes = storage.scopes.filter((s) => s.pitchId === pitch.id)
+    // Resolve the pitch's Core Scope pointer against its live scopes (ADR 0012):
+    // a pointer to a since-deleted scope resolves to "no core set", so the read
+    // surface never advertises a ghost core.
+    const coreId = resolveCoreScopeId(pitch.core_scope_id, pitchScopes)
+    const scopes = pitchScopes.map((scope) => ({
+      ...scope,
+      core: scope.id === coreId,
+      tasks: storage.tasks.filter((t) => t.scopeId === scope.id),
+    }))
 
     const parkingItems = storage.parkingItems.filter(
       (p) => p.pitchId === pitch.id
     )
 
-    return jsonResult({ pitch, scopes, parkingItems })
+    return jsonResult({
+      pitch: { ...pitch, core_scope_id: coreId },
+      scopes,
+      parkingItems,
+    })
   } catch {
     return errorResult(`Cycle not found: "${cycleSlug}"`)
   }
