@@ -334,6 +334,10 @@ export async function upsertScope(
     // wipes litmus / resets hill_progress to 0 on a partial update.
     litmus_text?: string
     hill_progress?: number
+    // Partial-update flag for the pitch's Core Scope pointer (see ADR 0012):
+    // true steals, false clears only if this scope is currently core, undefined
+    // = leave unchanged. Translated into the parent pitch's core_scope_id below.
+    core?: boolean
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -344,6 +348,7 @@ export async function upsertScope(
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const pitches = root.get('pitches')
     const scopes = root.get('scopes')
+    let parentPitchId: string | undefined
 
     if (created) {
       const pitchExists = pitches.find(
@@ -362,6 +367,7 @@ export async function upsertScope(
         hill_progress: params.hill_progress ?? 0,
       }
       scopes.push(new LiveObject(scope))
+      parentPitchId = params.pitchId
     } else {
       const existing = scopes.find((s: any) => getField(s, 'id') === id)
       if (!existing) {
@@ -372,6 +378,23 @@ export async function upsertScope(
       existing.set('tier', params.tier)
       if (params.litmus_text !== undefined) existing.set('litmus_text', params.litmus_text)
       if (params.hill_progress !== undefined) existing.set('hill_progress', params.hill_progress)
+      parentPitchId = getField(existing, 'pitchId')
+    }
+
+    // Core Scope is stored as a pointer on the pitch (ADR 0012), but set at the
+    // scope level. true steals; false clears only if this scope is the current
+    // core; omitted leaves it untouched (partial-update, ADR 0011).
+    if (params.core !== undefined && parentPitchId !== undefined) {
+      const pitch = pitches.find(
+        (p: any) => getField(p, 'id') === parentPitchId
+      )
+      if (pitch) {
+        if (params.core) {
+          pitch.set('core_scope_id', id)
+        } else if (getField(pitch, 'core_scope_id') === id) {
+          pitch.delete('core_scope_id')
+        }
+      }
     }
   })
 
