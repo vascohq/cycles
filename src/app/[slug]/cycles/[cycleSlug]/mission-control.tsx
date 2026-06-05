@@ -15,6 +15,7 @@ import { useSlackEnabled } from '@/components/slack-config-context'
 import { derivePitchCards, groupBySquad } from '@/lib/mission-control-helpers'
 import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
 import { slugify } from '@/lib/slugify'
+import { getTeamToday } from '@/lib/team-time'
 import { useMemo } from 'react'
 import { nanoid } from 'nanoid'
 import { LiveObject } from '@liveblocks/client'
@@ -114,7 +115,7 @@ function MissionControlWired({
   // Group into a section per squad (Unassigned last); each section is sorted
   // by stage progression inside groupBySquad.
   const sections = groupBySquad(cards, squads)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = getTeamToday(new Date())
 
   return (
     <MissionControlView

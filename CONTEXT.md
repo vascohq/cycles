@@ -33,8 +33,19 @@ The problem/outcome definition of a pitch. Two columns: Problem (why this matter
 _Avoid_: Brief, requirements, spec, PRD
 
 **Timebox**:
-The fixed time boundary of a pitch. Has start and end dates. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010).
+The fixed time boundary of a pitch. Has start and end dates. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010). All of its math — days left, elapsed fill, "Week X of Y" — counts **business days**, not calendar days (see ADR 0013).
 _Avoid_: Deadline, due date, sprint length
+
+**Business day**:
+A Monday–Friday working day. Weekends count as zero; public holidays are **not** modelled. Every timebox / cycle-window quantity (days left, day number, elapsed fraction, week count, tape ticks) is measured in business days. A countdown therefore holds flat across the weekend, and one tape tick = one working day, with a major tick every 5th to mark a week boundary. See ADR 0013.
+_Avoid_: Working day (use "business day" consistently), calendar day
+
+**Business week**:
+Five business days. "Week X of Y" derives from `ceil(businessDays / 5)`, so a 6-week build cycle is 30 business days and a 2-week cooldown is 10. A ragged span rounds its final partial week up.
+
+**Team timezone**:
+The single canonical clock — `America/Montreal` — used to decide what "today" is everywhere in the app. "Days left" is a property of the **cycle**, not the viewer, so it is the same number for everyone (including remote teammates) and freezes unambiguously into update snapshots. Not per-user. See ADR 0013.
+_Avoid_: Local time, user timezone, UTC (UTC midnight rolls over at 8pm Montreal)
 
 ### The Needle
 
