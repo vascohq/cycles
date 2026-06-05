@@ -12,6 +12,7 @@ vi.mock('./liveblocks-reader', () => ({
 
 vi.mock('./liveblocks-writer', () => ({
   createCycle: vi.fn(),
+  updateCycle: vi.fn(),
   upsertPitch: vi.fn(),
   upsertScope: vi.fn(),
   upsertTask: vi.fn(),
@@ -642,5 +643,23 @@ describe('upsert_* partial-update schemas', () => {
     })
 
     expect(parsed.resolved).toBeUndefined()
+  })
+
+  it('update_cycle does NOT default any omitted field (so a patch never wipes others)', () => {
+    const parsed = z.object(schemaFor('update_cycle')).parse({
+      slug_path: 'q2-build',
+    })
+
+    expect(parsed.name).toBeUndefined()
+    expect(parsed.type).toBeUndefined()
+    expect(parsed.start_date).toBeUndefined()
+    expect(parsed.end_date).toBeUndefined()
+    expect(parsed.slack_channel).toBeUndefined()
+  })
+
+  it('update_cycle type only accepts build or cooldown', () => {
+    const schema = z.object(schemaFor('update_cycle'))
+    expect(schema.parse({ slug_path: 'q2-build', type: 'cooldown' }).type).toBe('cooldown')
+    expect(() => schema.parse({ slug_path: 'q2-build', type: 'sprint' })).toThrow()
   })
 })

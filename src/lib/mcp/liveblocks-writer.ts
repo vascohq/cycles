@@ -84,6 +84,61 @@ export async function createCycle(
   return { created: true }
 }
 
+type CycleFields = {
+  name: string
+  type: string
+  start_date: string
+  end_date: string
+  slack_channel: string
+}
+
+// Partial-update the cycle's top-level fields. Any field left undefined is
+// unchanged; an empty string clears it (per ADR 0011). Cycle fields live in two
+// places — the storage `cycle` LiveObject (read by get_cycle) and the room
+// metadata (read by list_cycles) — so we write both to keep them in sync.
+export async function updateCycle(
+  roomId: string,
+  params: Partial<CycleFields>
+): Promise<{ updated: boolean; cycle: CycleFields }> {
+  if (!(await roomExists(roomId))) {
+    throw new Error(`Cycle not found: "${roomId}"`)
+  }
+
+  let cycle: CycleFields | undefined
+
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    const c = root.get('cycle')
+    // undefined = omitted = leave unchanged. '' = clear. Guard explicitly so an
+    // omitted field is never coerced away (the timebox-nullification incident).
+    if (params.name !== undefined) c.set('name', params.name)
+    if (params.type !== undefined) c.set('type', params.type)
+    if (params.start_date !== undefined) c.set('start_date', params.start_date)
+    if (params.end_date !== undefined) c.set('end_date', params.end_date)
+    if (params.slack_channel !== undefined) c.set('slack_channel', params.slack_channel)
+    cycle = {
+      name: c.get('name'),
+      type: c.get('type'),
+      start_date: c.get('start_date'),
+      end_date: c.get('end_date'),
+      slack_channel: c.get('slack_channel'),
+    }
+  })
+
+  // Mirror the same changed subset into room metadata. `name` is stored as
+  // `title` in metadata (list_cycles reads it from there).
+  const metadata: Record<string, string> = {}
+  if (params.name !== undefined) metadata.title = params.name
+  if (params.type !== undefined) metadata.type = params.type
+  if (params.start_date !== undefined) metadata.start_date = params.start_date
+  if (params.end_date !== undefined) metadata.end_date = params.end_date
+  if (params.slack_channel !== undefined) metadata.slack_channel = params.slack_channel
+  if (Object.keys(metadata).length > 0) {
+    await liveblocks.updateRoom(roomId, { metadata })
+  }
+
+  return { updated: true, cycle: cycle! }
+}
+
 // Items pushed correctly are LiveObjects (use .get/.set).
 // If a list also contains plain objects pushed by buggy older code, treat them
 // as read-only and access fields directly so iteration doesn't crash.
