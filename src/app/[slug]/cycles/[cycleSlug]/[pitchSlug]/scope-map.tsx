@@ -504,7 +504,7 @@ function ScopeMapWired({
     pitchId,
     pitch?.core_scope_id
   )
-  const hillScopes = deriveHillScopes(allScopes, pitchId)
+  const hillScopes = deriveHillScopes(allScopes, pitchId, pitch?.core_scope_id)
   const parkingLotItems = deriveParkingLotItems(allParkingItems, pitchId)
   const totalProgress = deriveTotalTaskProgress(allScopes, allTasks, pitchId)
   const pitchUpdates = allUpdates.filter((u) => u.pitchId === pitchId)

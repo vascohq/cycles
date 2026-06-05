@@ -33,6 +33,20 @@ function dotGroup(container: HTMLElement) {
   return dot
 }
 
+describe('HillChart core scope accent', () => {
+  it('marks the core scope dot with a star accent', () => {
+    const { container } = render(
+      <HillChart scopes={[{ ...SCOPE, isCore: true }]} />
+    )
+    expect(container.querySelector('[data-core-accent="s1"]')).toBeTruthy()
+  })
+
+  it('shows no accent when no scope is core', () => {
+    const { container } = render(<HillChart scopes={[SCOPE]} />)
+    expect(container.querySelector('[data-core-accent]')).toBeNull()
+  })
+})
+
 describe('HillChart drag-to-set hill_progress', () => {
   it('persists once on drag end, not on every mousemove', () => {
     const onHillProgressChange = vi.fn()

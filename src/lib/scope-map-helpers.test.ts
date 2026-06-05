@@ -135,8 +135,21 @@ describe('deriveHillScopes', () => {
       hill_progress: 0.3,
       order: 1,
       color: '#E54D2E',
+      isCore: false,
     })
     expect(hillScopes[1].order).toBe(2)
+  })
+
+  it('marks only the core scope isCore, and none when the pointer is dangling or unset', () => {
+    const core = deriveHillScopes([scope1, scope2], 'p1', 's2')
+    expect(core.find((s) => s.id === 's1')!.isCore).toBe(false)
+    expect(core.find((s) => s.id === 's2')!.isCore).toBe(true)
+    expect(
+      deriveHillScopes([scope1, scope2], 'p1', 'gone').some((s) => s.isCore)
+    ).toBe(false)
+    expect(
+      deriveHillScopes([scope1, scope2], 'p1').some((s) => s.isCore)
+    ).toBe(false)
   })
 
   it('fills a color for a scope that has none, without colliding with a stored sibling', () => {

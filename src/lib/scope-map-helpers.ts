@@ -71,10 +71,12 @@ export function deriveScopeGridItems(
 
 export function deriveHillScopes(
   scopes: CycleScope[],
-  pitchId: string
+  pitchId: string,
+  coreScopeId?: string
 ): HillScope[] {
   const pitchScopes = scopes.filter((s) => s.pitchId === pitchId)
   const colors = resolveScopeColors(pitchScopes)
+  const coreId = resolveCoreScopeId(coreScopeId, pitchScopes)
   return pitchScopes.map((s, i) => ({
     id: s.id,
     title: s.title,
@@ -82,6 +84,7 @@ export function deriveHillScopes(
     hill_progress: s.hill_progress,
     order: i + 1,
     color: colors[s.id],
+    isCore: s.id === coreId,
   }))
 }
 
