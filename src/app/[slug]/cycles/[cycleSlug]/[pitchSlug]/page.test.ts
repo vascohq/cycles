@@ -10,6 +10,11 @@ vi.mock('@/lib/liveblocks', () => ({
   },
 }))
 
+vi.mock('@/lib/mcp/liveblocks-reader', () => ({
+  getCycleStorage: vi.fn(),
+  resolvePitch: vi.fn(),
+}))
+
 vi.mock('@/lib/users', () => ({
   getOrganizationUsers: vi.fn().mockResolvedValue([]),
 }))
@@ -21,9 +26,12 @@ vi.mock('next/navigation', () => ({
 import { generateMetadata } from './page'
 import { auth } from '@clerk/nextjs/server'
 import { liveblocks } from '@/lib/liveblocks'
+import { getCycleStorage, resolvePitch } from '@/lib/mcp/liveblocks-reader'
 
 const mockAuth = vi.mocked(auth)
 const mockGetRoom = vi.mocked(liveblocks.getRoom)
+const mockGetCycleStorage = vi.mocked(getCycleStorage)
+const mockResolvePitch = vi.mocked(resolvePitch)
 
 function params(slug: string, cycleSlug: string, pitchSlug: string) {
   return { params: Promise.resolve({ slug, cycleSlug, pitchSlug }) }
@@ -36,13 +44,27 @@ beforeEach(() => {
     orgId: 'org_456',
     orgSlug: 'my-org',
   } as any)
+  mockGetRoom.mockResolvedValue({ metadata: { title: 'Q3 Build Cycle' } } as any)
+  mockGetCycleStorage.mockResolvedValue({} as any)
 })
 
 describe('generateMetadata', () => {
-  it('returns pitch title in page title', async () => {
-    mockGetRoom.mockResolvedValue({
-      metadata: { title: 'Q3 Build Cycle' },
-    } as any)
+  it('returns pitch emoji and title in page title', async () => {
+    mockResolvePitch.mockReturnValue({ emoji: '🔐', title: 'Auth Redesign' } as any)
+
+    const metadata = await generateMetadata(params('my-org', 'q3-build', 'auth-redesign'))
+    expect(metadata.title).toBe('🔐 Auth Redesign | Q3 Build Cycle | Cycles')
+  })
+
+  it('returns pitch title without emoji when emoji is unset', async () => {
+    mockResolvePitch.mockReturnValue({ emoji: '', title: 'Auth Redesign' } as any)
+
+    const metadata = await generateMetadata(params('my-org', 'q3-build', 'auth-redesign'))
+    expect(metadata.title).toBe('Auth Redesign | Q3 Build Cycle | Cycles')
+  })
+
+  it('falls back to slug when pitch cannot be resolved', async () => {
+    mockResolvePitch.mockReturnValue(undefined)
 
     const metadata = await generateMetadata(params('my-org', 'q3-build', 'auth-redesign'))
     expect(metadata.title).toBe('auth-redesign | Q3 Build Cycle | Cycles')

@@ -1,6 +1,9 @@
+import { cache } from 'react'
 import { ScopeMap } from './scope-map'
 import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
+import { getCycleStorage, resolvePitch } from '@/lib/mcp/liveblocks-reader'
+import { formatPitchTitle } from '@/lib/pitch-title'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
@@ -9,6 +12,8 @@ import { notFound } from 'next/navigation'
 type PageParams = {
   params: Promise<{ slug: string; cycleSlug: string; pitchSlug: string }>
 }
+
+const getRoom = cache((roomId: string) => liveblocks.getRoom(roomId))
 
 export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
   const { cycleSlug, pitchSlug } = await params
@@ -19,8 +24,13 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const roomId = `${roomPrefix}:cycle:${cycleSlug}`
 
   try {
-    const room = await liveblocks.getRoom(roomId)
-    return { title: `${pitchSlug} | ${room.metadata.title} | Cycles` }
+    const [room, storage] = await Promise.all([
+      getRoom(roomId),
+      getCycleStorage(roomPrefix, cycleSlug),
+    ])
+    const pitch = resolvePitch(storage, pitchSlug) ?? null
+    const cycleTitle = String(room.metadata.title)
+    return { title: formatPitchTitle(pitch, cycleTitle, pitchSlug) }
   } catch {
     return { title: 'Scope Map not found | Cycles' }
   }
@@ -37,7 +47,7 @@ export default async function ScopeMapPage({ params }: PageParams) {
 
   let cycleTitle: string
   try {
-    const room = await liveblocks.getRoom(roomId)
+    const room = await getRoom(roomId)
     cycleTitle = String(room.metadata.title)
   } catch {
     notFound()
