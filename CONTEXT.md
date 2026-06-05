@@ -60,6 +60,10 @@ _Avoid_: Story, work item, feature
 A scope's intrinsic priority: `must`, `should`, or `could`. Shown as a small text badge (shadcn-style), not as color — the color channel now belongs to **Scope Color** (see [ADR 0008](docs/adr/0008-scope-identity-color.md)). Independent of build order — reordering scopes does not change their tier.
 _Avoid_: Priority level, P0/P1/P2, severity
 
+**Core Scope**:
+The one scope flagged as the heart of a pitch — the vertical slice the team builds to reach GA on the central idea, chosen so risk surfaces early ("start in the middle"). At most one per pitch. A **third independent signal**, distinct from **Tier** and build order: the Core Scope is usually a Must and usually built first, but neither is required — a prerequisite scope or two can sit ahead of it on the path to GA, so build-order #1 is not necessarily the Core Scope. Flagging a scope as core does not change its tier or its position.
+_Avoid_: Main scope, primary scope, MVP, key result, #1 scope
+
 **Scope Color**:
 A scope's unique identity color, used to tell scopes apart at a glance — painted on the order badge and the scope's dot on the hill chart. Chosen from a curated palette; the badge number flips between dark/light for contrast against the color. Auto-assigned (including via MCP) from an unused palette color when not set.
 _Avoid_: Tier color, zone color, theme color
@@ -152,6 +156,7 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - A **Pitch** has one **Needle** (nullable until first set), one **Timebox**, and one **Stage**
 - A **Pitch** contains zero or more **Scopes** and zero or more **Parking Lot** items
 - A **Scope** has one **Tier** and one **Hill Progress** value
+- A **Pitch** has zero or one **Core Scope** (a pointer to one of its own scopes; see [ADR 0012](docs/adr/0012-core-scope-pitch-pointer.md))
 - A **Scope** contains zero or more **Tasks**
 - An **Update** belongs to one **Pitch** and captures a **Needle Snapshot** and a **Hill Snapshot**
 - **Mission Control** renders all **Pitches** in a **Cycle**
