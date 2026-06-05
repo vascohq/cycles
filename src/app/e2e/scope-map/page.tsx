@@ -94,6 +94,15 @@ export default function ScopeMapE2EPage() {
           items.map((s) => (s.id === scopeId ? { ...s, ...fields } : s))
         )
       }
+      onToggleCoreScope={(scopeId, next) =>
+        // Single-select: setting one core clears the rest (one heart, moved).
+        setScopeGridItems((items) =>
+          items.map((s) => ({
+            ...s,
+            isCore: next ? s.id === scopeId : s.id === scopeId ? false : s.isCore,
+          }))
+        )
+      }
       onDeleteScope={(scopeId) =>
         setScopeGridItems((items) => items.filter((s) => s.id !== scopeId))
       }

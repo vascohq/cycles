@@ -20,7 +20,7 @@ import { ScopeCard, type ScopeCardProps } from './scope-card'
 
 type ScopeGridItem = Omit<
   ScopeCardProps,
-  'dragHandleProps' | 'isDragging' | 'onOpen' | 'onDelete'
+  'dragHandleProps' | 'isDragging' | 'onOpen' | 'onDelete' | 'onToggleCore'
 >
 
 type ScopeGridProps = {
@@ -28,6 +28,7 @@ type ScopeGridProps = {
   onReorder?: (activeId: string, overId: string) => void
   onOpenScope?: (scopeId: string) => void
   onDeleteScope?: (scopeId: string) => void
+  onToggleCoreScope?: (scopeId: string, next: boolean) => void
   readOnly?: boolean
 }
 
@@ -35,10 +36,12 @@ function SortableScopeCard({
   scope,
   onOpen,
   onDelete,
+  onToggleCore,
 }: {
   scope: ScopeGridItem
   onOpen?: () => void
   onDelete?: () => void
+  onToggleCore?: (next: boolean) => void
 }) {
   const {
     attributes,
@@ -62,6 +65,7 @@ function SortableScopeCard({
         isDragging={isDragging}
         onOpen={onOpen}
         onDelete={onDelete}
+        onToggleCore={onToggleCore}
       />
     </div>
   )
@@ -72,6 +76,7 @@ export function ScopeGrid({
   onReorder,
   onOpenScope,
   onDeleteScope,
+  onToggleCoreScope,
   readOnly,
 }: ScopeGridProps) {
   const sensors = useSensors(
@@ -122,6 +127,11 @@ export function ScopeGrid({
               scope={scope}
               onOpen={onOpenScope ? () => onOpenScope(scope.id) : undefined}
               onDelete={onDeleteScope ? () => onDeleteScope(scope.id) : undefined}
+              onToggleCore={
+                onToggleCoreScope
+                  ? (next) => onToggleCoreScope(scope.id, next)
+                  : undefined
+              }
             />
           ))}
         </div>

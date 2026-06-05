@@ -31,6 +31,13 @@ export type ScopeCardProps = {
   tasks: ScopeCardTask[]
   /** Open the scope drawer — fired by clicking anywhere on the card body. */
   onOpen?: () => void
+  /**
+   * Flag or unflag this scope as the pitch's Core Scope from the card. When
+   * provided (and not readOnly) the leading star becomes a one-click affordance:
+   * outline + hover-revealed when not core, filled + always-visible when core.
+   * Setting core silently steals it from any other scope (the setter handles it).
+   */
+  onToggleCore?: (next: boolean) => void
   onDelete?: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
   isDragging?: boolean
@@ -52,6 +59,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       isCore,
       tasks,
       onOpen,
+      onToggleCore,
       onDelete,
       dragHandleProps,
       isDragging,
@@ -103,6 +111,9 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
           </div>
           <h3 className="flex-1 min-w-0 text-base font-semibold leading-snug tracking-tight line-clamp-2">
             {isCore && (
+              // Marks the heart of the pitch. The star only renders on the core
+              // scope, so non-core cards keep a clean, full-width title. Flagging
+              // a core lives in the "…" actions menu (see ADR 0012).
               <Star
                 aria-label="Core scope"
                 className="inline-block w-3.5 h-3.5 mr-1 -mt-0.5 align-middle fill-amber-400 text-amber-400"
@@ -113,9 +124,13 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
           <Badge variant={tier} className="flex-shrink-0 mt-0.5">
             {tier}
           </Badge>
-          {!readOnly && onDelete && (
+          {!readOnly && (onDelete || onToggleCore) && (
             <div onClick={(e) => e.stopPropagation()}>
-              <ScopeActions onDelete={onDelete} />
+              <ScopeActions
+                isCore={isCore}
+                onToggleCore={onToggleCore}
+                onDelete={onDelete}
+              />
             </div>
           )}
         </div>
@@ -171,7 +186,15 @@ function TaskPresence({ tasks }: { tasks: ScopeCardTask[] }) {
   )
 }
 
-function ScopeActions({ onDelete }: { onDelete: () => void }) {
+function ScopeActions({
+  isCore,
+  onToggleCore,
+  onDelete,
+}: {
+  isCore?: boolean
+  onToggleCore?: (next: boolean) => void
+  onDelete?: () => void
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -183,14 +206,24 @@ function ScopeActions({ onDelete }: { onDelete: () => void }) {
           <MoreHorizontal className="w-4 h-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-36">
-        <DropdownMenuItem
-          onClick={onDelete}
-          className="text-destructive focus:text-destructive"
-        >
-          <Trash2 className="w-3.5 h-3.5 mr-2" />
-          Delete
-        </DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-44">
+        {onToggleCore && (
+          <DropdownMenuItem onClick={() => onToggleCore(!isCore)}>
+            <Star
+              className={`w-3.5 h-3.5 mr-2 ${isCore ? 'fill-amber-400 text-amber-400' : ''}`}
+            />
+            {isCore ? 'Unflag core scope' : 'Set as core scope'}
+          </DropdownMenuItem>
+        )}
+        {onDelete && (
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

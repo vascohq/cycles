@@ -277,6 +277,7 @@ export function ScopeMapView({
           onReorder={isDone ? undefined : onScopeReorder}
           onOpenScope={(id) => setOpenScopeId(id)}
           onDeleteScope={!isDone && onDeleteScope ? (id) => setDeletingScopeId(id) : undefined}
+          onToggleCoreScope={!isDone ? onToggleCoreScope : undefined}
           readOnly={isDone}
         />
         <ScopeDrawer

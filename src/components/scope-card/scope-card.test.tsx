@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ScopeCard } from './scope-card'
 
 afterEach(cleanup)
@@ -63,6 +64,41 @@ describe('core scope marker', () => {
   it('omits the core star when the scope is not core', () => {
     render(<ScopeCard {...BASE_PROPS} />)
     expect(screen.queryByLabelText('Core scope')).toBeNull()
+  })
+})
+
+describe('core scope action in the menu', () => {
+  it('flags a non-core scope as core from the actions menu', async () => {
+    const user = userEvent.setup()
+    const onToggleCore = vi.fn()
+    render(<ScopeCard {...BASE_PROPS} onToggleCore={onToggleCore} />)
+    await user.click(screen.getByLabelText('Scope actions'))
+    await user.click(
+      await screen.findByRole('menuitem', { name: /set as core scope/i })
+    )
+    expect(onToggleCore).toHaveBeenCalledWith(true)
+  })
+
+  it('unflags the core scope from the actions menu', async () => {
+    const user = userEvent.setup()
+    const onToggleCore = vi.fn()
+    render(<ScopeCard {...BASE_PROPS} isCore onToggleCore={onToggleCore} />)
+    await user.click(screen.getByLabelText('Scope actions'))
+    await user.click(
+      await screen.findByRole('menuitem', { name: /unflag core scope/i })
+    )
+    expect(onToggleCore).toHaveBeenCalledWith(false)
+  })
+
+  it('opens the actions menu when only onToggleCore is provided', () => {
+    render(<ScopeCard {...BASE_PROPS} onToggleCore={vi.fn()} />)
+    expect(screen.getByLabelText('Scope actions')).toBeTruthy()
+  })
+
+  it('offers no actions menu in readOnly, but still shows the core marker', () => {
+    render(<ScopeCard {...BASE_PROPS} isCore readOnly onToggleCore={vi.fn()} />)
+    expect(screen.queryByLabelText('Scope actions')).toBeNull()
+    expect(screen.getByLabelText('Core scope')).toBeTruthy()
   })
 })
 
