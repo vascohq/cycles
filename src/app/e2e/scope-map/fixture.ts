@@ -41,7 +41,7 @@ export const FIXTURE: Omit<
     notion_url: 'https://www.notion.so/Mission-Control-abc123',
   },
   hillScopes: [
-    { id: 'scope-needle', title: 'Needle engine & gauge', tier: 'must', color: '#e5484d', hill_progress: 0.85, order: 1 },
+    { id: 'scope-needle', title: 'Needle engine & gauge', tier: 'must', color: '#e5484d', hill_progress: 0.85, order: 1, isCore: true },
     { id: 'scope-hill', title: 'Hill chart visualization', tier: 'must', color: '#e5484d', hill_progress: 0.7, order: 2 },
     { id: 'scope-timebox', title: 'Timebox tape', tier: 'should', color: '#30a46c', hill_progress: 0.55, order: 3 },
     { id: 'scope-cards', title: 'Scope cards & task checklists', tier: 'must', color: '#e5484d', hill_progress: 0.4, order: 4 },

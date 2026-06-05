@@ -21,6 +21,8 @@ export type HillScope = {
   order: number
   /** Identity color for the dot (see ADR 0008). */
   color: string
+  /** True for the pitch's Core Scope — dot carries a star accent (see ADR 0012). */
+  isCore?: boolean
 }
 
 type HillChartProps = {
@@ -467,6 +469,26 @@ export function HillChart({
                     >
                       {scope.order}
                     </text>
+                    {scope.isCore && (
+                      // Subtle star accent on the heart of the pitch. The white
+                      // halo (paint-order: stroke) detaches the amber from both
+                      // the dot color and the page, so it reads on light and dark.
+                      <text
+                        data-core-accent={scope.id}
+                        x={r * 0.92}
+                        y={-r * 0.92}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={Math.max(dotFont, 9)}
+                        fill="#f59e0b"
+                        stroke="white"
+                        strokeWidth={1}
+                        style={{ paintOrder: 'stroke', pointerEvents: 'none' }}
+                        aria-label="Core scope"
+                      >
+                        ★
+                      </text>
+                    )}
                   </g>
                 )
               })}
