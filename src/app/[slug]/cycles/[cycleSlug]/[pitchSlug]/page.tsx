@@ -1,6 +1,7 @@
 import { ScopeMap } from './scope-map'
 import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
+import { getCycleStorage, resolvePitch } from '@/lib/mcp/liveblocks-reader'
 import { getOrganizationUsers } from '@/lib/users'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
@@ -16,11 +17,17 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   if (!userId) return { title: 'Cycles' }
 
   const roomPrefix = orgId ?? userId
-  const roomId = `${roomPrefix}:cycle:${cycleSlug}`
 
   try {
-    const room = await liveblocks.getRoom(roomId)
-    return { title: `${pitchSlug} | ${room.metadata.title} | Cycles` }
+    const [room, storage] = await Promise.all([
+      liveblocks.getRoom(`${roomPrefix}:cycle:${cycleSlug}`),
+      getCycleStorage(roomPrefix, cycleSlug),
+    ])
+    const pitch = resolvePitch(storage, pitchSlug)
+    const pitchLabel = pitch
+      ? [pitch.emoji, pitch.title].filter(Boolean).join(' ')
+      : pitchSlug
+    return { title: `${pitchLabel} | ${room.metadata.title} | Cycles` }
   } catch {
     return { title: 'Scope Map not found | Cycles' }
   }
