@@ -30,6 +30,7 @@ import { computeTimebox } from '@/lib/timebox-engine'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { SquadPicker } from '@/components/scope-map/squad-picker'
 import type { SquadLike } from '@/lib/squad-engine'
+import { usePitchDocumentTitle } from './use-pitch-document-title'
 
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
@@ -143,6 +144,7 @@ export function ScopeMapView({
   onRetrySlack,
   onDeleteUpdate,
 }: ScopeMapViewProps) {
+  usePitchDocumentTitle(pitch, cycleTitle)
   const isDone = pitch.stage === 'done'
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
