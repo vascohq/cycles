@@ -567,6 +567,26 @@ describe('deleteScope', () => {
     expect(storage.tasks.toArray()).toHaveLength(1)
     expect(storage.tasks.toArray()[0].get('id')).toBe('t3')
   })
+
+  it('clears the pitch core_scope_id when the deleted scope was the core', async () => {
+    const pitch = makeMockItem({ id: 'p1', core_scope_id: 's1' })
+    const scope = makeMockItem({ id: 's1', pitchId: 'p1' })
+    setupStorage({ pitches: [pitch], scopes: [scope] })
+
+    await deleteScope(ROOM, 's1')
+
+    expect(pitch.get('core_scope_id')).toBeUndefined()
+  })
+
+  it('leaves the pitch core_scope_id when deleting a non-core scope', async () => {
+    const pitch = makeMockItem({ id: 'p1', core_scope_id: 's2' })
+    const scope = makeMockItem({ id: 's1', pitchId: 'p1' })
+    setupStorage({ pitches: [pitch], scopes: [scope] })
+
+    await deleteScope(ROOM, 's1')
+
+    expect(pitch.get('core_scope_id')).toBe('s2')
+  })
 })
 
 describe('deleteTask', () => {

@@ -388,6 +388,16 @@ function ScopeMapWired({
           break
         }
       }
+      // Keep the Core Scope pointer clean: if the deleted scope was the pitch's
+      // core, clear it in the same operation (ADR 0012, no auto-promotion — the
+      // empty-state banner reappears so the team picks a new heart).
+      const pitchesList = storage.get('pitches')
+      for (const p of pitchesList) {
+        if (p.get('core_scope_id') === scopeId) {
+          p.delete('core_scope_id')
+          break
+        }
+      }
     },
     []
   )
