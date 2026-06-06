@@ -2,7 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight, ChevronDown, Check, Plus } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { NeedleGauge } from '@/components/needle'
 import { HillHistory, type HillScope } from '@/components/hill-chart'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
@@ -31,15 +37,28 @@ import { SHIPPED_NEEDLE } from '@/lib/needle-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { SquadPicker } from '@/components/scope-map/squad-picker'
+import { usePageCelebration } from '@/components/scope-map/use-page-celebration'
+import { areAllScopesDone, pageCelebration } from '@/lib/scope-map-helpers'
 import type { SquadLike } from '@/lib/squad-engine'
 import { usePitchDocumentTitle } from './use-pitch-document-title'
+import { STAGES } from '@/lib/stage-engine'
+import { StageBadge } from '@/components/scope-map/stage-badge'
 
-export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
+export { STAGES }
+
+export type PitchNavItem = {
+  title: string
+  emoji?: string
+  href: string
+  current: boolean
+}
 
 export type ScopeMapViewProps = {
   slug: string
   cycleSlug: string
   cycleTitle: string
+  /** Sibling pitches in this cycle, for the breadcrumb switcher. */
+  cyclePitches?: PitchNavItem[]
   pitch: {
     id: string
     title: string
@@ -66,7 +85,6 @@ export type ScopeMapViewProps = {
   hillHistory?: HillHistoryFrame[]
   scopeGridItems: ScopeGridDerived[]
   parkingLotItems: ParkingLotItem[]
-  totalProgress: { done: number; total: number }
   ghost: NeedleSnapshot | null
   today: string
   onStageChange?: (stage: Stage) => void
@@ -107,6 +125,7 @@ export function ScopeMapView({
   slug,
   cycleSlug,
   cycleTitle,
+  cyclePitches,
   pitch,
   squads = [],
   currentSquadId,
@@ -121,7 +140,6 @@ export function ScopeMapView({
   hillHistory = [],
   scopeGridItems,
   parkingLotItems,
-  totalProgress,
   ghost,
   today,
   onStageChange,
@@ -151,6 +169,14 @@ export function ScopeMapView({
 }: ScopeMapViewProps) {
   usePitchDocumentTitle(pitch, cycleTitle)
   const isDone = pitch.stage === 'done'
+  // Page-wide celebration: `color` rain when every scope is done, `gold` rain
+  // once the needle hits 100%. Drives both the confetti and the needle-box
+  // shimmer that invites the final update during the `color` phase.
+  const celebration = pageCelebration(
+    pitch.needle?.progress ?? null,
+    areAllScopesDone(scopeGridItems)
+  )
+  usePageCelebration(celebration)
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
   )
@@ -177,7 +203,7 @@ export function ScopeMapView({
         cycleSlug={cycleSlug}
         cycleTitle={cycleTitle}
         pitchTitle={pitch.title}
-        totalProgress={totalProgress}
+        cyclePitches={cyclePitches}
       />
 
       <HeroCard
@@ -200,8 +226,14 @@ export function ScopeMapView({
       <section className="grid grid-cols-1 gap-5 mc-row">
         <div>
           {isDone ? (
-            <div className="rounded-lg border bg-card p-4 h-full flex flex-col items-center justify-center gap-3">
-              <NeedleGauge needle={SHIPPED_NEEDLE} ghost={null} label="Shipped" />
+            <div
+              className={`relative rounded-lg border p-4 h-full flex flex-col items-center justify-center gap-3 ${
+                celebration === 'gold' ? 'glossy-gold' : 'bg-card'
+              }`}
+            >
+              <div className="relative z-10 flex flex-col items-center gap-3">
+                <NeedleGauge needle={SHIPPED_NEEDLE} ghost={null} label="Done" />
+              </div>
             </div>
           ) : (
             // The on-page needle is display-only, so the whole card is the click
@@ -211,12 +243,21 @@ export function ScopeMapView({
               type="button"
               onClick={() => setMoveNeedleOpen(true)}
               aria-label="Move the needle"
-              className="group w-full h-full rounded-lg border bg-card p-4 flex flex-col items-center justify-center gap-3 text-center cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-shimmer={celebration === 'color' ? 'true' : undefined}
+              className={`group relative w-full h-full rounded-lg border p-4 flex flex-col items-center justify-center gap-3 text-center cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                celebration === 'gold'
+                  ? 'glossy-gold'
+                  : celebration === 'color'
+                    ? 'bg-card hover:bg-muted/30 shimmer-border'
+                    : 'bg-card hover:bg-muted/30'
+              }`}
             >
-              <NeedleGauge needle={pitch.needle} ghost={ghost} />
-              <span className="text-xs font-medium border rounded-full px-4 py-1.5 transition-colors text-muted-foreground group-hover:text-foreground group-hover:border-foreground/30 group-hover:bg-muted">
-                Move the needle
-              </span>
+              <div className="relative z-10 flex flex-col items-center gap-3">
+                <NeedleGauge needle={pitch.needle} ghost={ghost} />
+                <span className="text-xs font-medium border rounded-full px-4 py-1.5 transition-colors text-muted-foreground group-hover:text-foreground group-hover:border-foreground/30 group-hover:bg-muted">
+                  Move the needle
+                </span>
+              </div>
             </button>
           )}
           {!isDone && onPostUpdate && (
@@ -384,16 +425,20 @@ function AppBar({
   cycleSlug,
   cycleTitle,
   pitchTitle,
-  totalProgress,
+  cyclePitches,
 }: {
   slug: string
   cycleSlug: string
   cycleTitle: string
   pitchTitle: string
-  totalProgress: { done: number; total: number }
+  cyclePitches?: PitchNavItem[]
 }) {
+  // Other pitches in the cycle, for the switcher dropdown (current one excluded
+  // — it's already the label).
+  const others = (cyclePitches ?? []).filter((p) => !p.current)
+
   return (
-    <nav className="flex items-center justify-between">
+    <nav className="flex items-center">
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link
           href={`/${slug}/cycles`}
@@ -409,10 +454,30 @@ function AppBar({
           {cycleTitle}
         </Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-medium">{pitchTitle}</span>
-      </div>
-      <div className="text-xs font-mono text-muted-foreground">
-        {totalProgress.done} / {totalProgress.total} tasks
+        {others.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center gap-1 text-foreground font-medium outline-none hover:text-foreground/70 focus-visible:ring-2 focus-visible:ring-ring rounded">
+              {pitchTitle}
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+              {(cyclePitches ?? []).map((p) => (
+                <DropdownMenuItem key={p.href} asChild>
+                  <Link
+                    href={p.href}
+                    className={`flex items-center gap-2 ${p.current ? 'font-medium' : ''}`}
+                  >
+                    {p.emoji && <span className="text-sm">{p.emoji}</span>}
+                    <span className="flex-1 truncate">{p.title}</span>
+                    {p.current && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <span className="text-foreground font-medium">{pitchTitle}</span>
+        )}
       </div>
     </nav>
   )
@@ -458,8 +523,6 @@ function HeroCard({
   onRecolorSquad?: (squadId: string, color: string) => void
   onDeleteSquad?: (squadId: string) => void
 }) {
-  const stageIndex = STAGES.indexOf(pitch.stage)
-
   // Keep the header to a fixed height; if the framing overflows, fade it out
   // and let "View more" slide the rest into view.
   const COLLAPSED_PX = 250
@@ -489,7 +552,7 @@ function HeroCard({
 
   return (
     <section
-      className={`group relative rounded-lg border bg-card overflow-hidden ${
+      className={`group/hero relative rounded-lg border bg-card overflow-hidden ${
         animate ? 'transition-[max-height] duration-500 ease-in-out' : ''
       }`}
       style={{ maxHeight: collapsed ? COLLAPSED_PX : 2000 }}
@@ -502,39 +565,32 @@ function HeroCard({
               onChange={onEmojiChange}
               className="text-2xl md:text-3xl mt-0.5 shrink-0"
             />
-            <h1 className="text-2xl md:text-3xl font-display leading-tight">
-              {pitch.title}
-            </h1>
+            <div className="flex flex-col gap-2 min-w-0">
+              <h1 className="text-2xl md:text-3xl font-display leading-tight">
+                {pitch.title}
+              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                {onStageChange && (
+                  <StageBadge stage={pitch.stage} onChange={onStageChange} />
+                )}
+                {onAssignSquad && (
+                  <SquadPicker
+                    squads={squads}
+                    currentSquadId={currentSquadId}
+                    onAssign={onAssignSquad}
+                    onClear={onClearSquad ?? (() => {})}
+                    pitchCounts={squadPitchCounts}
+                    onRenameSquad={onRenameSquad}
+                    onRecolorSquad={onRecolorSquad}
+                    onDeleteSquad={onDeleteSquad}
+                  />
+                )}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {onAssignSquad && (
-              <SquadPicker
-                squads={squads}
-                currentSquadId={currentSquadId}
-                onAssign={onAssignSquad}
-                onClear={onClearSquad ?? (() => {})}
-                pitchCounts={squadPitchCounts}
-                onRenameSquad={onRenameSquad}
-                onRecolorSquad={onRecolorSquad}
-                onDeleteSquad={onDeleteSquad}
-              />
-            )}
-            <NotionLinkPill
-              url={pitch.notion_url}
-              onChange={onNotionUrlChange}
-            />
-            {onStageChange && (
-              <StageButtons stage={pitch.stage} onStageChange={onStageChange} />
-            )}
+            <NotionLinkPill url={pitch.notion_url} onChange={onNotionUrlChange} />
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-          {STAGES.map((s, i) => (
-            <span key={s} className={i <= stageIndex ? 'text-foreground' : ''}>
-              {s} {i < stageIndex ? '✓' : i === stageIndex ? '←' : ''}
-            </span>
-          ))}
         </div>
 
         <TimeboxTape
@@ -568,7 +624,7 @@ function HeroCard({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border bg-background rounded-full px-3 py-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border bg-background rounded-full px-3 py-1 opacity-0 group-hover/hero:opacity-100 focus-visible:opacity-100 transition-opacity"
         >
           {expanded ? 'View less' : 'View more'}
         </button>
@@ -601,36 +657,6 @@ function FramingList({ text }: { text: string }) {
   )
 }
 
-function StageButtons({
-  stage,
-  onStageChange,
-}: {
-  stage: Stage
-  onStageChange: (stage: Stage) => void
-}) {
-  const currentIndex = STAGES.indexOf(stage)
-
-  return (
-    <div className="flex gap-1">
-      {currentIndex > 0 && (
-        <button
-          onClick={() => onStageChange(STAGES[currentIndex - 1])}
-          className="text-xs px-2 py-1 rounded border hover:bg-muted transition-colors"
-        >
-          ← {STAGES[currentIndex - 1]}
-        </button>
-      )}
-      {currentIndex < STAGES.length - 1 && (
-        <button
-          onClick={() => onStageChange(STAGES[currentIndex + 1])}
-          className="text-xs px-2 py-1 rounded border hover:bg-muted transition-colors"
-        >
-          {STAGES[currentIndex + 1]} →
-        </button>
-      )}
-    </div>
-  )
-}
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 

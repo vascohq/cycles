@@ -3,29 +3,42 @@
 import { ScopeMapView } from '@/components/scope-map'
 import { FIXTURE } from './fixture'
 import { useState } from 'react'
-import type { Stage } from '@/cycle-liveblocks.config'
+import type { Stage, Zone } from '@/cycle-liveblocks.config'
 import { nanoid } from 'nanoid'
 import { resolveSquadByName, assignSquadColor } from '@/lib/squad-engine'
+import { isHillProgressDone } from '@/lib/hill-engine'
+import { stageAfterNeedle } from '@/lib/stage-engine'
 
 export default function ScopeMapE2EPage() {
   const [pitch, setPitch] = useState(FIXTURE.pitch)
+  const [hillScopes, setHillScopes] = useState(FIXTURE.hillScopes)
   const [scopeGridItems, setScopeGridItems] = useState(FIXTURE.scopeGridItems)
   const [parkingLotItems, setParkingLotItems] = useState(FIXTURE.parkingLotItems)
   const [squads, setSquads] = useState(FIXTURE.squads ?? [])
   const [currentSquadId, setCurrentSquadId] = useState(FIXTURE.currentSquadId)
 
-  const totalProgress = {
-    done: scopeGridItems.flatMap((s) => s.tasks).filter((t) => t.done).length,
-    total: scopeGridItems.flatMap((s) => s.tasks).length,
-  }
-
   return (
     <ScopeMapView
       {...FIXTURE}
       pitch={pitch}
+      hillScopes={hillScopes}
       scopeGridItems={scopeGridItems}
+      onHillProgressChange={(scopeId, progress) => {
+        setHillScopes((items) =>
+          items.map((s) =>
+            s.id === scopeId ? { ...s, hill_progress: progress } : s
+          )
+        )
+        // Keep the card's done flag in sync with the hill, mirroring
+        // deriveScopeGridItems in the real app — so moving a scope back off
+        // the foot un-does it and stops the celebration.
+        setScopeGridItems((items) =>
+          items.map((s) =>
+            s.id === scopeId ? { ...s, done: isHillProgressDone(progress) } : s
+          )
+        )
+      }}
       parkingLotItems={parkingLotItems}
-      totalProgress={totalProgress}
       squads={squads}
       currentSquadId={currentSquadId}
       onAssignSquad={(name) =>
@@ -61,6 +74,13 @@ export default function ScopeMapE2EPage() {
       onStageChange={(stage: Stage) =>
         setPitch((p) => ({ ...p, stage }))
       }
+      onPostUpdate={(progress: number, zone: Zone) =>
+        setPitch((p) => ({
+          ...p,
+          needle: { progress, zone },
+          stage: stageAfterNeedle(progress, p.stage),
+        }))
+      }
       onEmojiChange={(emoji) => setPitch((p) => ({ ...p, emoji }))}
       onNotionUrlChange={(notion_url) =>
         setPitch((p) => ({ ...p, notion_url }))
@@ -85,6 +105,7 @@ export default function ScopeMapE2EPage() {
             color: '#3e63dd',
             litmus_text,
             isCore: false,
+            done: false,
             tasks: [],
           },
         ])

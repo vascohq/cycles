@@ -102,6 +102,28 @@ describe('core scope action in the menu', () => {
   })
 })
 
+describe('done scope', () => {
+  it('shows a done marker when the scope has reached the foot of the hill', () => {
+    render(<ScopeCard {...BASE_PROPS} done />)
+    expect(screen.getByLabelText('Done')).toBeTruthy()
+  })
+
+  it('shows no done marker for a scope still in progress', () => {
+    render(<ScopeCard {...BASE_PROPS} />)
+    expect(screen.queryByLabelText('Done')).toBeNull()
+  })
+
+  it('flags the card as done so it can be visually muted', () => {
+    const { container } = render(<ScopeCard {...BASE_PROPS} done />)
+    expect(container.firstChild).toHaveAttribute('data-done', 'true')
+  })
+
+  it('does not flag an in-progress card as done', () => {
+    const { container } = render(<ScopeCard {...BASE_PROPS} />)
+    expect(container.firstChild).not.toHaveAttribute('data-done', 'true')
+  })
+})
+
 describe('opening the drawer', () => {
   it('calls onOpen when the card body is clicked', () => {
     const onOpen = vi.fn()

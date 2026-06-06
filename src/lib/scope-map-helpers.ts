@@ -9,6 +9,7 @@ import type { ScopeCardTask } from '@/components/scope-card/scope-card'
 import type { ParkingLotItem } from '@/components/parking-lot/parking-lot'
 import { diffHillTrail, type ScopeTrail } from '@/lib/hill-trail-engine'
 import { resolveScopeColors } from '@/lib/color-engine'
+import { isHillProgressDone } from '@/lib/hill-engine'
 
 export type ScopeGridDerived = {
   id: string
@@ -21,6 +22,8 @@ export type ScopeGridDerived = {
   /** True for the one scope flagged as the pitch's Core Scope (see ADR 0012). */
   isCore: boolean
   tasks: ScopeCardTask[]
+  /** True when hill progress has reached the foot (1) — see CONTEXT.md "Done Scope". */
+  done: boolean
 }
 
 // Resolve a pitch's core-scope pointer to a live scope id, or null. A pointer
@@ -66,7 +69,32 @@ export function deriveScopeGridItems(
     tasks: tasks
       .filter((t) => t.scopeId === s.id)
       .map((t) => ({ id: t.id, title: t.title, done: t.done })),
+    done: isHillProgressDone(s.hill_progress),
   }))
+}
+
+// True when a pitch has at least one scope and every scope is a Done Scope
+// (hill progress at the foot). This — independent of the pitch Stage — is what
+// earns the page-wide victory celebration. An empty or partially-finished pitch
+// does not celebrate.
+export function areAllScopesDone(scopes: { done: boolean }[]): boolean {
+  return scopes.length > 0 && scopes.every((s) => s.done)
+}
+
+// Which page-wide celebration (if any) a pitch has earned:
+// - `gold`  — the needle has reached 100% (the real finish line)
+// - `color` — every scope is done but the needle isn't at 100% yet; pairs with
+//             the needle box shimmering to invite the final update
+// - `none`  — neither condition met
+export type Celebration = 'gold' | 'color' | 'none'
+
+export function pageCelebration(
+  needleProgress: number | null | undefined,
+  allScopesDone: boolean
+): Celebration {
+  if (needleProgress != null && needleProgress >= 1) return 'gold'
+  if (allScopesDone) return 'color'
+  return 'none'
 }
 
 export function deriveHillScopes(
