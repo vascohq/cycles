@@ -167,7 +167,6 @@ describe('createCycleRoom', () => {
         type: 'build',
         start_date: '2026-06-01',
         end_date: '2026-07-12',
-        slack_channel: '#engineering',
       })
     )
 
@@ -183,7 +182,6 @@ describe('createCycleRoom', () => {
               type: 'build',
               start_date: '2026-06-01',
               end_date: '2026-07-12',
-              slack_channel: '#engineering',
             },
           },
           pitches: { liveblocksType: 'LiveList', data: [] },
@@ -194,21 +192,6 @@ describe('createCycleRoom', () => {
         },
       }
     )
-  })
-
-  it('defaults slack_channel to #product-general', async () => {
-    await createCycleRoom(
-      formData({
-        slug: 'build-cycle-1',
-        name: 'Build Cycle 1',
-        type: 'build',
-        start_date: '2026-06-01',
-        end_date: '2026-07-12',
-      })
-    )
-
-    const storageArg = mockInitStorage.mock.calls[0][1] as any
-    expect(storageArg.data.cycle.data.slack_channel).toBe('#product-general')
   })
 
   it('redirects to /[orgSlug]/cycles/[slug] after creation', async () => {

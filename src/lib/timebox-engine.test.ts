@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeTimebox, dayTicks } from './timebox-engine'
+import { computeTimebox, dayTicks, businessDaysUntil } from './timebox-engine'
 
 describe('computeTimebox', () => {
   // Jun 1 2026 is a Monday; the span [Jun 1, Jun 15) holds two working weeks
@@ -103,5 +103,22 @@ describe('dayTicks', () => {
     const ticks = dayTicks(10)
     expect(ticks[0].position).toBeCloseTo(1 / 10, 2)
     expect(ticks[9].position).toBeCloseTo(1, 2)
+  })
+})
+
+describe('businessDaysUntil', () => {
+  it('counts the working days from today up to a future date', () => {
+    // Mon Jun 8 → Thu Jun 11: counts Mon, Tue, Wed (end-exclusive).
+    expect(businessDaysUntil('2026-06-08', '2026-06-11')).toBe(3)
+  })
+
+  it('skips the weekend (Fri to the next Mon is one business day)', () => {
+    // Fri Jun 12 → Mon Jun 15: counts only Fri; Sat/Sun are zero.
+    expect(businessDaysUntil('2026-06-12', '2026-06-15')).toBe(1)
+  })
+
+  it('is zero when the target is today or already past', () => {
+    expect(businessDaysUntil('2026-06-15', '2026-06-15')).toBe(0)
+    expect(businessDaysUntil('2026-06-15', '2026-06-08')).toBe(0)
   })
 })

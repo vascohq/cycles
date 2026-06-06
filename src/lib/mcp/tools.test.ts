@@ -49,7 +49,7 @@ const mockIsSlackConfigured = vi.mocked(isSlackConfigured)
 const ORG_ID = 'org_test'
 
 const FIXTURE_STORAGE: StorageJson = {
-  cycle: { name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15', slack_channel: '' },
+  cycle: { name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15' },
   pitches: [
     { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '', squadId: 'sq1' },
     { id: 'p2', title: 'MCP Server', stage: 'framing', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
@@ -372,7 +372,6 @@ const CYCLE_PARAMS = {
   type: 'build',
   start_date: '2026-07-06',
   end_date: '2026-08-14',
-  slack_channel: '#product-general',
 }
 
 describe('handleCreateCycle', () => {
@@ -707,7 +706,6 @@ describe('upsert_* partial-update schemas', () => {
     expect(parsed.type).toBeUndefined()
     expect(parsed.start_date).toBeUndefined()
     expect(parsed.end_date).toBeUndefined()
-    expect(parsed.slack_channel).toBeUndefined()
   })
 
   it('update_cycle type only accepts build or cooldown', () => {

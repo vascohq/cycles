@@ -87,7 +87,6 @@ export async function handleCreateCycle(
     type: string
     start_date: string
     end_date: string
-    slack_channel: string
   }
 ): Promise<ToolResult> {
   // Use an explicit slug if given, otherwise derive one from the name.
@@ -118,7 +117,6 @@ export async function handleUpdateCycle(
     type?: string
     start_date?: string
     end_date?: string
-    slack_channel?: string
   }
 ): Promise<ToolResult> {
   const roomId = `${orgId}:cycle:${cycleSlug}`
@@ -529,7 +527,6 @@ export function registerCyclesTools(server: any): void {
       type: z.enum(['build', 'cooldown']).default('build'),
       start_date: z.string().default('').describe('ISO date (YYYY-MM-DD), or empty.'),
       end_date: z.string().default('').describe('ISO date (YYYY-MM-DD), or empty.'),
-      slack_channel: z.string().default('#product-general'),
     },
     {
       title: 'Create cycle',
@@ -550,7 +547,6 @@ export function registerCyclesTools(server: any): void {
         type: string
         start_date: string
         end_date: string
-        slack_channel: string
       },
       extra: ToolExtra
     ) => {
@@ -582,7 +578,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'update_cycle',
-    'Update an existing cycle\'s top-level fields, addressed by slug. The slug itself is immutable. Updates are PARTIAL: any field you omit (name, type, start_date, end_date, slack_channel) is left unchanged — only fields you pass are overwritten. Pass "" to clear a date. Fails if no cycle with that slug exists.',
+    'Update an existing cycle\'s top-level fields, addressed by slug. The slug itself is immutable. Updates are PARTIAL: any field you omit (name, type, start_date, end_date) is left unchanged — only fields you pass are overwritten. Pass "" to clear a date. Fails if no cycle with that slug exists.',
     {
       ...orgArg,
       ...slugPathArg,
@@ -592,7 +588,6 @@ export function registerCyclesTools(server: any): void {
       type: z.enum(['build', 'cooldown']).optional().describe('Cycle type. Omit to leave unchanged.'),
       start_date: z.string().optional().describe('ISO date (YYYY-MM-DD). Pass "" to clear; omit to leave unchanged.'),
       end_date: z.string().optional().describe('ISO date (YYYY-MM-DD). Pass "" to clear; omit to leave unchanged.'),
-      slack_channel: z.string().optional().describe('Target Slack channel. Omit to leave unchanged.'),
     },
     {
       title: 'Update cycle',
@@ -613,7 +608,6 @@ export function registerCyclesTools(server: any): void {
         type?: string
         start_date?: string
         end_date?: string
-        slack_channel?: string
       },
       extra: ToolExtra
     ) => {

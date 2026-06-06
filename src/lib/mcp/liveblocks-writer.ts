@@ -41,7 +41,6 @@ export async function createCycle(
     type: string
     start_date: string
     end_date: string
-    slack_channel: string
   }
 ): Promise<{ created: boolean }> {
   if (await roomExists(roomId)) return { created: false }
@@ -54,7 +53,6 @@ export async function createCycle(
       type: params.type,
       start_date: params.start_date,
       end_date: params.end_date,
-      slack_channel: params.slack_channel,
     },
     defaultAccesses: ['room:write'],
   })
@@ -69,7 +67,6 @@ export async function createCycle(
           type: params.type,
           start_date: params.start_date,
           end_date: params.end_date,
-          slack_channel: params.slack_channel,
         },
       },
       pitches: { liveblocksType: 'LiveList', data: [] },
@@ -89,7 +86,6 @@ type CycleFields = {
   type: string
   start_date: string
   end_date: string
-  slack_channel: string
 }
 
 // Partial-update the cycle's top-level fields. Any field left undefined is
@@ -114,13 +110,11 @@ export async function updateCycle(
     if (params.type !== undefined) c.set('type', params.type)
     if (params.start_date !== undefined) c.set('start_date', params.start_date)
     if (params.end_date !== undefined) c.set('end_date', params.end_date)
-    if (params.slack_channel !== undefined) c.set('slack_channel', params.slack_channel)
     cycle = {
       name: c.get('name'),
       type: c.get('type'),
       start_date: c.get('start_date'),
       end_date: c.get('end_date'),
-      slack_channel: c.get('slack_channel'),
     }
   })
 
@@ -131,7 +125,6 @@ export async function updateCycle(
   if (params.type !== undefined) metadata.type = params.type
   if (params.start_date !== undefined) metadata.start_date = params.start_date
   if (params.end_date !== undefined) metadata.end_date = params.end_date
-  if (params.slack_channel !== undefined) metadata.slack_channel = params.slack_channel
   if (Object.keys(metadata).length > 0) {
     await liveblocks.updateRoom(roomId, { metadata })
   }

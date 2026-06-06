@@ -92,7 +92,6 @@ export type Cycle = {
   type: 'build' | 'cooldown'
   start_date: string
   end_date: string
-  slack_channel: string
 }
 
 export type CycleStorage = {

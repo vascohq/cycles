@@ -98,17 +98,6 @@ export function CreateCycleForm() {
             <Input type="date" id="end_date" name="end_date" required />
           </section>
         </div>
-
-        <section className="flex flex-col gap-2">
-          <Label htmlFor="slack_channel">Slack channel</Label>
-          <Input
-            type="text"
-            placeholder="#product-general"
-            id="slack_channel"
-            name="slack_channel"
-            defaultValue="#product-general"
-          />
-        </section>
       </div>
 
       <DialogFooter>

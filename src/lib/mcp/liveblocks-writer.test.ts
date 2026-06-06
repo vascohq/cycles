@@ -133,7 +133,6 @@ const CYCLE_PARAMS = {
   type: 'build',
   start_date: '2026-07-06',
   end_date: '2026-08-14',
-  slack_channel: '#product-general',
 }
 
 describe('createCycle', () => {
@@ -177,7 +176,6 @@ describe('updateCycle', () => {
     type: 'build',
     start_date: '2026-07-06',
     end_date: '2026-08-14',
-    slack_channel: '#product-general',
   }
 
   it('updates only the passed field on storage and returns the resulting cycle', async () => {
@@ -197,7 +195,6 @@ describe('updateCycle', () => {
         type: 'build',
         start_date: '2026-07-13',
         end_date: '2026-08-14',
-        slack_channel: '#product-general',
       },
     })
   })
