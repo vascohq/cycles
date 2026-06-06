@@ -66,7 +66,7 @@ export default async function OrgLayout({
               </div>
             </SignedIn>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
             <SignedOut>
               <SignInButton>
                 <Button variant="ghost" size="sm">
