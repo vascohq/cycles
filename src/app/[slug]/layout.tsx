@@ -7,8 +7,8 @@ import {
 } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { Hexagon, Settings } from 'lucide-react'
 import { ThemeSelector } from '@/components/theme-selector'
-import { MarkGithubIcon } from '@primer/octicons-react'
 import { CommandPaletteProvider } from '@/components/command-palette/command-palette-context'
 import { CommandSearchButton } from '@/components/command-palette/command-search-button'
 
@@ -26,8 +26,9 @@ export default async function OrgLayout({
         <div className="mx-auto flex h-full max-w-screen-xl items-center justify-between px-6">
           <Link
             href="/"
-            className="font-display text-lg transition-colors hover:text-foreground/70"
+            className="flex items-center gap-2 font-display text-lg transition-colors hover:text-foreground/70"
           >
+            <Hexagon className="size-5" />
             Cycles
           </Link>
           <div className="flex items-center gap-1.5">
@@ -55,13 +56,13 @@ export default async function OrgLayout({
               <div className="flex size-7 items-center justify-center">
                 <UserButton />
               </div>
+              <Button variant="ghost" size="icon" asChild>
+                <Link href={`/${slug}/settings/integrations`} aria-label="Settings">
+                  <Settings className="size-4" />
+                </Link>
+              </Button>
             </SignedIn>
             <ThemeSelector />
-            <Button variant="ghost" size="icon" asChild>
-              <a href="https://github.com/vascohq/cycles" target="_blank">
-                <MarkGithubIcon className="size-4" />
-              </a>
-            </Button>
           </div>
         </div>
       </header>
