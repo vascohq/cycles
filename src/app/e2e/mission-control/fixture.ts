@@ -98,4 +98,10 @@ export const CYCLE_BANDS: OverlayBand[] = [
   { kind: 'holiday', label: 'Canada', summary: 'St-Jean-Baptiste Day', startDate: '2026-06-24', endDate: '2026-06-24' },
   { kind: 'holiday', label: 'Canada', summary: 'Canada Day', startDate: '2026-07-01', endDate: '2026-07-01' },
   { kind: 'holiday', label: 'Canada', summary: 'Victoria Day (before cycle)', startDate: '2026-05-18', endDate: '2026-05-18' },
+  // A lone absence early in the cycle, then three overlapping ones late that
+  // should aggregate into a single "3 away" cluster.
+  { kind: 'timeoff', label: 'Humi', summary: 'Justin — Vacation', startDate: '2026-06-08', endDate: '2026-06-08' },
+  { kind: 'timeoff', label: 'Humi', summary: 'Laura — Vacation', startDate: '2026-06-24', endDate: '2026-06-26' },
+  { kind: 'timeoff', label: 'Humi', summary: 'Xavier — Vacation', startDate: '2026-06-25', endDate: '2026-06-30' },
+  { kind: 'timeoff', label: 'Humi', summary: 'Alec — Vacation', startDate: '2026-06-28', endDate: '2026-07-01' },
 ]

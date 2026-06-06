@@ -69,8 +69,21 @@ export function TimeboxTape({
                 </div>
               </TooltipTrigger>
               <TooltipContent className="text-xs">
-                <span className="font-medium">{band.summary}</span>
-                <span className="text-muted-foreground"> · {band.label}</span>
+                {band.members && band.members.length > 1 ? (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium">{band.members.length} away · {band.label}</span>
+                    {band.members.map((m, j) => (
+                      <span key={j} className="text-muted-foreground">
+                        {m.summary}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <span className="font-medium">{band.summary}</span>
+                    <span className="text-muted-foreground"> · {band.label}</span>
+                  </>
+                )}
               </TooltipContent>
             </Tooltip>
           ))}

@@ -6,7 +6,7 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
-import { positionBands } from '@/lib/calendar/overlay-positioning'
+import { buildOverlay } from '@/lib/calendar/overlay-positioning'
 import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import {
@@ -185,7 +185,7 @@ function CycleWindowStrip({
         ? 'Complete'
         : `Week ${info.currentWeek} of ${info.totalWeeks}`
 
-  const overlayBands = positionBands(bands, { start, end })
+  const overlayBands = buildOverlay(bands, { start, end })
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3">
