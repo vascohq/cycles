@@ -9,8 +9,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-// Hit-area height per lane; the visible mark inside is a 2px hairline.
-const LANE_HEIGHT = 7
+// Hit-area height per lane; the visible mark inside is a 3px hairline, leaving
+// ~9px of breathing room between stacked lanes.
+const LANE_HEIGHT = 12
 
 const pct = (n: number) => `${Math.min(Math.max(n, 0), 1) * 100}%`
 
@@ -54,7 +55,7 @@ export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
                 }}
               >
                 <div
-                  className={`h-0.5 w-full rounded-full ${
+                  className={`h-[3px] w-full rounded-full ${
                     band.kind === 'holiday' ? 'bg-amber-500' : 'bg-sky-500'
                   }`}
                 />
