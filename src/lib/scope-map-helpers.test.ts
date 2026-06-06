@@ -6,6 +6,8 @@ import {
   deriveTotalTaskProgress,
   resolveCoreScopeId,
   shouldShowCoreScopePrompt,
+  areAllScopesDone,
+  pageCelebration,
 } from './scope-map-helpers'
 import type { CycleScope, ScopeTask, ParkingItem } from '@/cycle-liveblocks.config'
 
@@ -90,6 +92,13 @@ describe('deriveScopeGridItems', () => {
     const unset = deriveScopeGridItems([scope1, scope2], tasks, 'p1')
     expect(unset.every((i) => !i.isCore)).toBe(true)
   })
+
+  it('marks a scope done when its hill progress reaches the foot (1)', () => {
+    const doneScope: CycleScope = { ...scope1, hill_progress: 1 }
+    const items = deriveScopeGridItems([doneScope, scope2], tasks, 'p1')
+    expect(items[0].done).toBe(true)
+    expect(items[1].done).toBe(false)
+  })
 })
 
 describe('resolveCoreScopeId', () => {
@@ -121,6 +130,43 @@ describe('shouldShowCoreScopePrompt', () => {
 
   it('does not prompt when the pitch has no scopes', () => {
     expect(shouldShowCoreScopePrompt([])).toBe(false)
+  })
+})
+
+describe('areAllScopesDone', () => {
+  it('is true when every scope is done, regardless of pitch stage', () => {
+    expect(areAllScopesDone([{ done: true }, { done: true }])).toBe(true)
+  })
+
+  it('is false when any scope is still in progress', () => {
+    expect(areAllScopesDone([{ done: true }, { done: false }])).toBe(false)
+  })
+
+  it('is false for a pitch with no scopes', () => {
+    expect(areAllScopesDone([])).toBe(false)
+  })
+})
+
+describe('pageCelebration', () => {
+  it('is gold when the needle is at 100%', () => {
+    expect(pageCelebration(1, true)).toBe('gold')
+  })
+
+  it('is gold on the needle reaching 100% even before that, regardless of scopes', () => {
+    expect(pageCelebration(1, false)).toBe('gold')
+  })
+
+  it('is color when all scopes are done but the needle is not yet at 100%', () => {
+    expect(pageCelebration(0.5, true)).toBe('color')
+  })
+
+  it('is color when all scopes are done and the needle is unset', () => {
+    expect(pageCelebration(null, true)).toBe('color')
+  })
+
+  it('is none when scopes are unfinished and the needle is below 100%', () => {
+    expect(pageCelebration(0.5, false)).toBe('none')
+    expect(pageCelebration(null, false)).toBe('none')
   })
 })
 

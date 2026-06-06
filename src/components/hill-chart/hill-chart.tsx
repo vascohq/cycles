@@ -5,10 +5,12 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import {
   progressToPoint,
   pointToProgress,
+  shouldCelebrateCompletion,
   WIDTH,
   HEIGHT,
   BASELINE_Y,
 } from '@/lib/hill-engine'
+import { fireScopeDoneConfetti } from '@/lib/confetti'
 import { readableTextColor } from '@/lib/color-engine'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import { rollupHillTrails } from '@/lib/hill-trail-engine'
@@ -150,7 +152,24 @@ export function HillChart({
 
     const handleUp = () => {
       if (latestProgress !== null) {
+        const prev = scopes.find((s) => s.id === scopeId)?.hill_progress ?? 0
         onHillProgressChange(scopeId, latestProgress)
+        // Actor-only celebration: only the user who dragged the dot to the foot
+        // sees confetti, bursting from the dot's screen position. Remote
+        // collaborators see the dot land but get no confetti.
+        if (shouldCelebrateCompletion(prev, latestProgress)) {
+          const svg = svgRef.current
+          if (svg) {
+            const rect = svg.getBoundingClientRect()
+            const { x, y } = progressToPoint(latestProgress)
+            const px = rect.left + ((x + SVG_PAD) / VIEW_W) * rect.width
+            const py = rect.top + ((y + SVG_PAD) / VIEW_H) * rect.height
+            fireScopeDoneConfetti({
+              x: px / window.innerWidth,
+              y: py / window.innerHeight,
+            })
+          }
+        }
       }
       setDraggingId(null)
       setDragProgress(null)

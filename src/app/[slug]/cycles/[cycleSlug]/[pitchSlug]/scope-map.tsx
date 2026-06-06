@@ -16,10 +16,10 @@ import {
   deriveScopeGridItems,
   deriveHillScopes,
   deriveParkingLotItems,
-  deriveTotalTaskProgress,
   buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost, needleAfterDeletingLatest } from '@/lib/needle-engine'
+import { stageAfterNeedle } from '@/lib/stage-engine'
 import { assignScopeColor, resolveScopeColors } from '@/lib/color-engine'
 import { assignSquadColor, resolveSquadByName } from '@/lib/squad-engine'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
@@ -129,6 +129,18 @@ function ScopeMapWired({
     [allPitches, slug, cycleSlug]
   )
   useRegisterPalettePitches(palettePitches)
+
+  // Sibling pitches for the breadcrumb switcher.
+  const cyclePitches = useMemo(
+    () =>
+      allPitches.map((p) => ({
+        title: p.title,
+        emoji: p.emoji ?? '',
+        href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
+        current: p.id === pitchId,
+      })),
+    [allPitches, slug, cycleSlug, pitchId]
+  )
 
   const onStageChange = useCycleMutation(
     ({ storage }, newStage: Stage) => {
@@ -417,7 +429,11 @@ function ScopeMapWired({
     ({ storage }, built: PitchUpdate) => {
       storage.get('updates').push(new LiveObject(built))
       const p = storage.get('pitches').find((x) => x.get('id') === built.pitchId)
-      if (p) p.set('needle', { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone })
+      if (p) {
+        p.set('needle', { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone })
+        // Posting a 100% update is the act of shipping — auto-advance to done.
+        p.set('stage', stageAfterNeedle(built.needle_snapshot.progress, p.get('stage')))
+      }
     },
     []
   )
@@ -517,7 +533,6 @@ function ScopeMapWired({
   )
   const hillScopes = deriveHillScopes(allScopes, pitchId, pitch?.core_scope_id)
   const parkingLotItems = deriveParkingLotItems(allParkingItems, pitchId)
-  const totalProgress = deriveTotalTaskProgress(allScopes, allTasks, pitchId)
   const pitchUpdates = allUpdates.filter((u) => u.pitchId === pitchId)
   const ghost = deriveGhost(pitchUpdates)
   const latestUpdate = pitchUpdates.length
@@ -679,6 +694,7 @@ function ScopeMapWired({
       slug={slug}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
+      cyclePitches={cyclePitches}
       pitch={{
         ...pitch,
         emoji: pitch.emoji ?? '',
@@ -697,7 +713,6 @@ function ScopeMapWired({
       hillHistory={hillHistory}
       scopeGridItems={scopeGridItems}
       parkingLotItems={parkingLotItems}
-      totalProgress={totalProgress}
       ghost={ghost}
       today={today}
       onStageChange={onStageChange}

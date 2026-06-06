@@ -12,9 +12,6 @@ test.describe('Scope Map view assembly', () => {
     await expect(page.locator('main nav')).toContainText('Cycle 34')
     await expect(page.locator('main nav')).toContainText('Mission Control')
 
-    // Task progress counter
-    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
-
     // Hero card — pitch title
     await expect(page.locator('h1')).toContainText('Mission Control')
 
@@ -73,37 +70,27 @@ test.describe('Scope Map view assembly', () => {
   })
 
   test('stage can be changed forward', async ({ page }) => {
-    // "building" stage should show "done →" button
-    const doneButton = page.getByRole('button', { name: /done →/ })
-    await expect(doneButton).toBeVisible()
+    // The stage badge shows a "→" arrow that advances building → done.
+    const advance = page.getByRole('button', { name: 'Advance to done' })
+    await expect(advance).toBeVisible()
 
-    await doneButton.click()
+    await advance.click()
 
-    // After clicking, stage line should show "done ←"
-    await expect(page.locator('section').first()).toContainText('done ←')
+    // The badge now reads "done" and offers a back arrow.
+    await expect(page.locator('section').first()).toContainText('done')
+    await expect(
+      page.getByRole('button', { name: 'Move back to building' })
+    ).toBeVisible()
   })
 
   test('stage can be changed backward', async ({ page }) => {
-    // "building" stage should show "← shaping" button
-    const shapingButton = page.getByRole('button', { name: /← shaping/ })
-    await expect(shapingButton).toBeVisible()
+    // The stage badge shows a "←" arrow that steps building → shaping.
+    const back = page.getByRole('button', { name: 'Move back to shaping' })
+    await expect(back).toBeVisible()
 
-    await shapingButton.click()
+    await back.click()
 
-    // After clicking, should show "shaping ←"
-    await expect(page.locator('section').first()).toContainText('shaping ←')
-  })
-
-  test('task toggle updates progress counter', async ({ page }) => {
-    // Initially 9/13
-    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
-
-    // Find an unchecked task and click it
-    const uncheckedTask = page.getByText('Drag-to-update dots')
-    await uncheckedTask.click()
-
-    // Should now be 10/13
-    await expect(page.locator('main nav')).toContainText('10 / 13 tasks')
+    await expect(page.locator('section').first()).toContainText('shaping')
   })
 
   test('parking lot item can be toggled', async ({ page }) => {
@@ -257,7 +244,7 @@ test.describe('Scope management', () => {
 
   test('scope actions menu is hidden in done state', async ({ page }) => {
     // Transition to done
-    await page.getByRole('button', { name: /done →/ }).click()
+    await page.getByRole('button', { name: 'Advance to done' }).click()
 
     // No actions triggers should be visible
     await expect(page.getByLabel('Scope actions')).toHaveCount(0)
@@ -272,11 +259,11 @@ test.describe('Done state lockdown', () => {
     await page.goto('/e2e/scope-map')
     await page.waitForLoadState('networkidle')
     // Transition to done state
-    await page.getByRole('button', { name: /done →/ }).click()
+    await page.getByRole('button', { name: 'Advance to done' }).click()
   })
 
-  test('needle shows "Shipped" label', async ({ page }) => {
-    await expect(page.getByText('Shipped')).toBeVisible()
+  test('needle shows "Done" label', async ({ page }) => {
+    await expect(page.getByText('Done', { exact: true })).toBeVisible()
     await expect(page.getByText('on track')).not.toBeVisible()
   })
 
@@ -293,16 +280,6 @@ test.describe('Done state lockdown', () => {
     await expect(page.getByText('drag to reorder')).not.toBeVisible()
   })
 
-  test('task checkboxes are not clickable', async ({ page }) => {
-    // Progress before click
-    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
-    // Try clicking a task — it should be a div, not a button
-    const task = page.getByText('Drag-to-update dots')
-    await task.click()
-    // Progress should be unchanged
-    await expect(page.locator('main nav')).toContainText('9 / 13 tasks')
-  })
-
   test('parking lot items are not clickable', async ({ page }) => {
     const item = page.getByText('Should updates auto-post to Slack or require confirmation?')
     await item.click()
@@ -315,12 +292,12 @@ test.describe('Done state lockdown', () => {
   })
 
   test('moving stage back from done re-enables interactions', async ({ page }) => {
-    // Currently at done — click "← building" to go back
-    await page.getByRole('button', { name: /← building/ }).click()
+    // Currently at done — step back to building via the badge's back arrow.
+    await page.getByRole('button', { name: 'Move back to building' }).click()
 
-    // Needle should show "on track" again (not "Shipped")
+    // Needle should show "on track" again (not the "Done" shipped label)
     await expect(page.getByText('on track')).toBeVisible()
-    await expect(page.getByText('Shipped')).not.toBeVisible()
+    await expect(page.getByText('Done', { exact: true })).not.toBeVisible()
 
     // "Move the needle" button should reappear
     await expect(page.getByRole('button', { name: 'Move the needle' })).toBeVisible()

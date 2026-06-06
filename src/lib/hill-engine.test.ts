@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { progressToPoint, pointToProgress, clampHillProgress } from './hill-engine'
+import {
+  progressToPoint,
+  pointToProgress,
+  isHillProgressDone,
+  shouldCelebrateCompletion,
+} from './hill-engine'
 
 describe('progressToPoint', () => {
   it('maps 0 to the left end of the hill', () => {
@@ -34,16 +39,35 @@ describe('pointToProgress round-trip', () => {
   )
 })
 
-describe('clampHillProgress', () => {
-  it('clamps 0 to 0.02', () => {
-    expect(clampHillProgress(0)).toBe(0.02)
+describe('isHillProgressDone', () => {
+  it('is done at exactly 1 (foot of the downhill)', () => {
+    expect(isHillProgressDone(1)).toBe(true)
   })
 
-  it('clamps 1 to 0.98', () => {
-    expect(clampHillProgress(1)).toBe(0.98)
+  it('is not done at the last-but-one step (11/12)', () => {
+    expect(isHillProgressDone(11 / 12)).toBe(false)
   })
 
-  it('passes through 0.5 unchanged', () => {
-    expect(clampHillProgress(0.5)).toBe(0.5)
+  it('is not done partway down the hill', () => {
+    expect(isHillProgressDone(0.5)).toBe(false)
+    expect(isHillProgressDone(0)).toBe(false)
+  })
+})
+
+describe('shouldCelebrateCompletion', () => {
+  it('celebrates when a scope crosses into done (was below 1, now 1)', () => {
+    expect(shouldCelebrateCompletion(11 / 12, 1)).toBe(true)
+  })
+
+  it('does not celebrate when the scope was already done', () => {
+    expect(shouldCelebrateCompletion(1, 1)).toBe(false)
+  })
+
+  it('does not celebrate when the new position is not done', () => {
+    expect(shouldCelebrateCompletion(0.5, 11 / 12)).toBe(false)
+  })
+
+  it('does not celebrate when a scope moves back off done', () => {
+    expect(shouldCelebrateCompletion(1, 0.5)).toBe(false)
   })
 })

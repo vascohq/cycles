@@ -18,7 +18,11 @@ export const FIXTURE: Omit<
   cycleTitle: 'Cycle 34',
   today: '2026-06-10',
   ghost: { progress: 0.45, zone: 'some_risk' },
-  totalProgress: { done: 9, total: 13 },
+  cyclePitches: [
+    { title: 'Mission Control', emoji: '🛰️', href: '/e2e/scope-map', current: true },
+    { title: 'Onboarding revamp', emoji: '🚀', href: '/e2e/scope-map', current: false },
+    { title: 'Billing self-serve', emoji: '💳', href: '/e2e/scope-map', current: false },
+  ],
   squads: [
     { id: 'sq-platform', name: 'Platform', color: '#3e63dd' },
     { id: 'sq-growth', name: 'Growth', color: '#e5484d' },
@@ -56,6 +60,7 @@ export const FIXTURE: Omit<
       color: '#3e63dd',
       litmus_text: 'Teams can see and update their pitch sentiment',
       isCore: true,
+      done: false,
       tasks: [
         { id: 't1', title: 'Needle engine pure functions', done: true },
         { id: 't2', title: 'NeedleGauge component', done: true },
@@ -70,6 +75,7 @@ export const FIXTURE: Omit<
       color: '#3e63dd',
       litmus_text: 'Scope progress visible on a hill curve',
       isCore: false,
+      done: false,
       tasks: [
         { id: 't4', title: 'Hill engine math', done: true },
         { id: 't5', title: 'HillChart SVG component', done: true },
@@ -84,6 +90,7 @@ export const FIXTURE: Omit<
       color: '#3e63dd',
       litmus_text: 'Visual countdown shows time remaining',
       isCore: false,
+      done: false,
       tasks: [
         { id: 't7', title: 'Timebox engine', done: true },
         { id: 't8', title: 'TimeboxTape SVG', done: true },
@@ -97,6 +104,7 @@ export const FIXTURE: Omit<
       color: '#3e63dd',
       litmus_text: 'Teams can break scopes into tasks and check them off',
       isCore: false,
+      done: false,
       tasks: [
         { id: 't9', title: 'ScopeCard component', done: true },
         { id: 't10', title: 'ScopeGrid with DnD', done: false },
@@ -111,6 +119,7 @@ export const FIXTURE: Omit<
       color: '#3e63dd',
       litmus_text: 'Open decisions have a home outside of scopes',
       isCore: false,
+      done: false,
       tasks: [
         { id: 't12', title: 'ParkingLot component', done: true },
         { id: 't13', title: 'Resolve toggle', done: false },

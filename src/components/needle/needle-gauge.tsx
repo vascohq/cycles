@@ -72,7 +72,7 @@ export function NeedleGauge({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width={WIDTH}
         height={HEIGHT}
-        className="w-full max-w-[320px]"
+        className="w-full max-w-[320px] overflow-visible"
       >
         {/* Tape track */}
         <path

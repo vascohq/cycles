@@ -159,12 +159,12 @@ export function NotionLinkPill({ url, onChange, className }: NotionLinkPillProps
   }
 
   return (
-    <span className={cn('group inline-flex items-center gap-1', className)}>
+    <span className={cn(pillBase, 'bg-muted hover:bg-muted/70', className)}>
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className={cn(pillBase, 'bg-muted hover:bg-muted/70')}
+        className="inline-flex items-center gap-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <NotionGlyph />
         Notion
@@ -176,9 +176,12 @@ export function NotionLinkPill({ url, onChange, className }: NotionLinkPillProps
           setEditing(true)
         }}
         aria-label="Edit Notion link"
-        className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        // Slides in from collapsed (zero width) when the hero header is hovered;
+        // the negative margin cancels the pill's gap while hidden so there's no
+        // dead space.
+        className="grid place-items-center overflow-hidden rounded text-muted-foreground transition-all duration-200 -ml-1.5 w-0 opacity-0 hover:text-foreground group-hover/hero:ml-0 group-hover/hero:w-4 group-hover/hero:opacity-100 focus-visible:ml-0 focus-visible:w-4 focus-visible:opacity-100"
       >
-        <Pencil className="size-3" />
+        <Pencil className="size-3 shrink-0" />
       </button>
     </span>
   )

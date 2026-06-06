@@ -89,3 +89,101 @@
       grid-template-columns: 1fr 2fr;
     }
   }
+
+  /* A light that travels around a box's border — invites the user to post the
+     final update once every scope is done. The angle is an animatable custom
+     property so the conic-gradient sweep rotates smoothly; the gradient is
+     masked to only the border ring. Honors reduced motion. */
+  @property --shimmer-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes shimmer-border-rotate {
+    to {
+      --shimmer-angle: 360deg;
+    }
+  }
+
+  .shimmer-border::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--shimmer-angle),
+      transparent 0deg,
+      transparent 250deg,
+      hsl(var(--primary) / 0.9) 320deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: shimmer-border-rotate 4s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer-border::after {
+      animation: none;
+    }
+  }
+
+  /* Glossy metallic gold box for the needle-at-100% finish. The box itself goes
+     gold and a diagonal highlight sweeps across for a "shining" sheen; whatever
+     sits inside (e.g. the zone-colored needle gauge) keeps its own colors. */
+  .glossy-gold {
+    /* A faint gold wash over the normal card surface — just a hint of gold,
+       not a metallic slab — so the zone-colored needle still reads on top. */
+    background-color: hsl(var(--card));
+    background-image: linear-gradient(
+      135deg,
+      hsl(45 90% 55% / 0.16) 0%,
+      hsl(46 85% 70% / 0.09) 50%,
+      hsl(40 85% 48% / 0.16) 100%
+    );
+    border-color: hsl(42 65% 45% / 0.5);
+  }
+
+  .glossy-gold::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    /* The highlight is a band inside a 250%-wide background, swept by animating
+       background-position. Because it's a background (clipped to this element's
+       own box), nothing overflows — so the box needs no overflow:hidden, and
+       the needle handle is free to reach the edges. */
+    background-image: linear-gradient(
+      115deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.22) 49%,
+      rgba(255, 255, 255, 0.32) 50%,
+      transparent 58%
+    );
+    background-size: 250% 100%;
+    background-position: 150% 0;
+    animation: gold-shine 3.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes gold-shine {
+    0% {
+      background-position: 150% 0;
+    }
+    55%,
+    100% {
+      background-position: -150% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glossy-gold::before {
+      animation: none;
+    }
+  }

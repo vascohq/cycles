@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Pencil, Trash2 } from 'lucide-react'
 import {
   resolveSquadByName,
@@ -48,7 +49,21 @@ export function SquadPicker({
   const [draftName, setDraftName] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const editRowRef = useRef<HTMLDivElement>(null)
+  // The panel is portaled to <body> so it escapes the hero card's overflow
+  // clip; we position it under the trigger with fixed coordinates, measured
+  // when it opens.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+
+  function toggleOpen() {
+    if (!open) {
+      const r = triggerRef.current?.getBoundingClientRect()
+      if (r) setPos({ top: r.bottom + 4, left: r.left })
+    }
+    setOpen((o) => !o)
+  }
 
   const current = squads.find((s) => s.id === currentSquadId) ?? null
   const canManage = Boolean(onRenameSquad || onRecolorSquad || onDeleteSquad)
@@ -64,7 +79,9 @@ export function SquadPicker({
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+      const t = e.target as Node
+      // Panel is portaled out of rootRef, so check it explicitly.
+      if (!rootRef.current?.contains(t) && !panelRef.current?.contains(t)) {
         setOpen(false)
         resetManage()
       }
@@ -121,9 +138,10 @@ export function SquadPicker({
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border hover:bg-muted transition-colors"
+        onClick={toggleOpen}
+        className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border bg-background hover:bg-muted transition-colors"
         aria-label="Assign squad"
       >
         {current ? (
@@ -139,8 +157,12 @@ export function SquadPicker({
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 z-20 mt-1 w-64 rounded-md border bg-popover p-1 shadow-md">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left }}
+          className="z-50 w-64 rounded-md border bg-popover p-1 shadow-md"
+        >
           <input
             autoFocus
             value={query}
@@ -312,7 +334,8 @@ export function SquadPicker({
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

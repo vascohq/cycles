@@ -4,7 +4,7 @@ import { forwardRef } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
 import { Badge } from '@/components/ui/badge'
-import { MoreHorizontal, Trash2, GripVertical, Star } from 'lucide-react'
+import { MoreHorizontal, Trash2, GripVertical, Star, Check } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +29,8 @@ export type ScopeCardProps = {
   /** True when this scope is the pitch's Core Scope (see ADR 0012). */
   isCore?: boolean
   tasks: ScopeCardTask[]
+  /** Hill progress has reached the foot (1) — card is muted and marked done. */
+  done?: boolean
   /** Open the scope drawer — fired by clicking anywhere on the card body. */
   onOpen?: () => void
   /**
@@ -58,6 +60,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       litmus_text,
       isCore,
       tasks,
+      done,
       onOpen,
       onToggleCore,
       onDelete,
@@ -70,9 +73,34 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
     const totalCount = tasks.length
     const clickable = !!onOpen
 
+    // A done scope recedes via a grayed background (clearer than dimming the
+    // whole card) while staying readable; in-progress cards keep the bright
+    // card surface so the contrast between "done" and "still going" is obvious.
+    const cardClassName = [
+      'rounded-lg border p-4 flex flex-col gap-2 h-44 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200',
+      done ? 'bg-muted/40' : 'bg-card',
+      isDragging ? 'shadow-lg opacity-75' : '',
+      clickable
+        ? `cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border ${
+            done ? 'hover:bg-muted/60' : 'hover:bg-muted/30'
+          } focus:outline-none focus:ring-2 focus:ring-ring`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    // Done scopes show a checkmark in the identity badge instead of the order
+    // number — the badge keeps the scope's color so it's still recognizable.
+    const badgeFace = done ? (
+      <Check role="img" aria-label="Done" className="w-4 h-4" />
+    ) : (
+      order
+    )
+
     return (
       <div
         ref={ref}
+        data-done={done ? 'true' : undefined}
         {...(clickable
           ? {
               role: 'button',
@@ -86,9 +114,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
               },
             }
           : {})}
-        className={`rounded-lg border bg-card p-4 flex flex-col gap-2 h-44 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 ${
-          isDragging ? 'shadow-lg opacity-75' : ''
-        } ${clickable ? 'cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-ring' : ''}`}
+        className={cardClassName}
       >
         <div className="flex items-start gap-3 flex-shrink-0">
           <div
@@ -99,17 +125,21 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
             style={{ backgroundColor: color, color: readableTextColor(color) }}
           >
             {readOnly ? (
-              order
+              badgeFace
             ) : (
               <>
                 <span className="transition-opacity group-hover/badge:opacity-0">
-                  {order}
+                  {badgeFace}
                 </span>
                 <GripVertical className="w-4 h-4 absolute inset-0 m-auto opacity-0 transition-opacity group-hover/badge:opacity-100" />
               </>
             )}
           </div>
-          <h3 className="flex-1 min-w-0 text-base font-semibold leading-snug tracking-tight line-clamp-2">
+          <h3
+            className={`flex-1 min-w-0 text-base font-semibold leading-snug tracking-tight line-clamp-2 ${
+              done ? 'line-through text-muted-foreground' : ''
+            }`}
+          >
             {isCore && (
               // Marks the heart of the pitch. The star only renders on the core
               // scope, so non-core cards keep a clean, full-width title. Flagging
@@ -121,7 +151,10 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
             )}
             {title}
           </h3>
-          <Badge variant={tier} className="flex-shrink-0 mt-0.5">
+          <Badge
+            variant={tier}
+            className={`flex-shrink-0 mt-0.5 ${done ? 'opacity-50' : ''}`}
+          >
             {tier}
           </Badge>
           {!readOnly && (onDelete || onToggleCore) && (

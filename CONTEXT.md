@@ -25,7 +25,7 @@ A shaped piece of work within a cycle. Has a stage, timebox, frame, scopes, and 
 _Avoid_: Project, epic, initiative, ticket
 
 **Stage**:
-A pitch's current lifecycle phase: `framing`, `shaping`, `building`, `done`. Can move forward or backward. Cooldown pitches start at `building`.
+A pitch's current lifecycle phase: `framing`, `shaping`, `building`, `done`. Can move forward or backward. Cooldown pitches start at `building`. A pitch **auto-advances to `done`** when an update sets the **Needle** to 100% — posting a 100% update is the act of shipping.
 _Avoid_: Status (ambiguous — see Flagged ambiguities)
 
 **Frame**:
@@ -86,6 +86,10 @@ _Avoid_: Description, acceptance criteria, definition of done
 **Hill Progress**:
 A scope's position on the hill chart (0..1). Left side (0–0.5) = figuring it out (unknown). Right side (0.5–1.0) = figured out, making it happen (known). Updated by dragging dots.
 _Avoid_: Completion percentage, progress bar
+
+**Done Scope**:
+A scope whose Hill Progress is exactly `1` — dragged all the way to the foot of the downhill (the last step, 12/12). This is the only point a scope counts as "done"; anything less is still "making it happen". Distinct from the pitch **Stage** value `done` — a scope is never a Stage. Always qualify in conversation ("done scope" / "scope is done" vs. "pitch stage is done").
+_Avoid_: Using bare "done" where it could mean the pitch Stage
 
 **Hill Chart**:
 Visualization of all scopes' hill progress on a hill-shaped curve. Each scope is a numbered, tier-colored dot. Left = unknown, right = known.

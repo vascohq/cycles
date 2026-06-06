@@ -75,8 +75,18 @@ export function pointToProgress(x: number): number {
   return best.s
 }
 
-export function clampHillProgress(progress: number): number {
-  return Math.min(0.98, Math.max(0.02, progress))
+// A scope is "done" only when it reaches the very foot of the downhill
+// (hill_progress === 1, the last step). Anything less is still "making it
+// happen". Distinct from the pitch Stage value `done` — see CONTEXT.md.
+export function isHillProgressDone(progress: number): boolean {
+  return progress >= 1
+}
+
+// True only on the transition INTO done: the scope was not done before and is
+// done now. Used to fire the one-shot completion confetti on drag release —
+// never on reload or when a scope is dragged back off the foot.
+export function shouldCelebrateCompletion(prev: number, next: number): boolean {
+  return !isHillProgressDone(prev) && isHillProgressDone(next)
 }
 
 export { WIDTH, HEIGHT, BASELINE_Y, PEAK_Y }
