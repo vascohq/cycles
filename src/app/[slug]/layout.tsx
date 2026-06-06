@@ -28,7 +28,22 @@ export default async function OrgLayout({
               href="/"
               className="flex items-center gap-2 font-display text-lg transition-colors hover:text-foreground/70"
             >
-              <Image src="/logo-cycles.png" alt="" width={24} height={24} className="size-6" />
+              {/* Theme-aware logo: dark-on-light in light mode, light-on-dark in
+                  dark mode. Swapped via the `dark` class (no flash). */}
+              <Image
+                src="/web-app-manifest-512x512.png"
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 dark:hidden"
+              />
+              <Image
+                src="/web-app-manifest-512x512-light.png"
+                alt=""
+                width={24}
+                height={24}
+                className="hidden size-6 dark:block"
+              />
               Cycles
             </Link>
             <SignedIn>
