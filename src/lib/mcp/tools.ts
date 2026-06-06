@@ -10,6 +10,7 @@ import { computeTimebox } from '@/lib/timebox-engine'
 import { normalizeEmoji, validateNotionUrl } from '@/lib/pitch-identity-engine'
 import { formatSlackMessage, type SlackMessageParams } from '@/lib/slack-message'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
+import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
 import type { Zone, Needle } from '@/cycle-liveblocks.config'
@@ -330,10 +331,11 @@ export async function handlePreviewUpdate(
   const ctx = resolveUpdateContext(storage, pitch, orgSlug, cycleSlug, input)
   const postedAt = new Date().toISOString()
   const slack_text = formatSlackMessage(ctx.slackParams(postedAt)).text
+  const webhookUrl = await getSlackWebhookUrl(orgId)
 
   return jsonResult({
     slack_text,
-    would_deliver: isSlackConfigured(),
+    would_deliver: isSlackConfigured(webhookUrl),
     resolved: {
       weekNumber: ctx.timebox.currentWeek,
       totalWeeks: ctx.timebox.totalWeeks,
@@ -388,7 +390,8 @@ export async function handlePostUpdate(
 
   // Mark the intent to deliver before persisting, mirroring the app's
   // markSlackAttempted → deliver → markSlackDelivered sequence.
-  const enabled = isSlackConfigured()
+  const webhookUrl = await getSlackWebhookUrl(orgId)
+  const enabled = isSlackConfigured(webhookUrl)
   if (enabled) built.slack_attempted = true
 
   try {
@@ -400,7 +403,7 @@ export async function handlePostUpdate(
   // Slack failure is non-fatal — the update is already persisted.
   let slack: 'delivered' | 'failed' | 'disabled' = 'disabled'
   if (enabled) {
-    const result = await deliverSlackUpdate(ctx.slackParams(built.posted_at))
+    const result = await deliverSlackUpdate(ctx.slackParams(built.posted_at), webhookUrl)
     if (result.ok) {
       await markSlackDelivered(roomId, built.id, result.delivered_at)
       slack = 'delivered'

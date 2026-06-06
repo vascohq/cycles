@@ -5,6 +5,7 @@ import { ChevronRight } from 'lucide-react'
 import type { Metadata } from 'next'
 import { getIntegrationConfig } from '@/lib/calendar/org-integrations'
 import { IntegrationsForm } from './integrations-form'
+import { SlackWebhookForm } from './slack-webhook-form'
 
 export const metadata: Metadata = {
   title: 'Integrations | Settings | Cycles',
@@ -71,9 +72,26 @@ export default async function IntegrationsSettingsPage({
   const config = await getIntegrationConfig(orgId)
 
   return (
-    <main className="mx-auto flex w-full max-w-screen-md flex-col gap-6 px-6 py-8">
+    <main className="mx-auto flex w-full max-w-screen-md flex-col gap-8 px-6 py-8">
       {header}
-      <IntegrationsForm initialFeeds={config.feeds} />
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+          Calendar feeds
+        </h2>
+        <IntegrationsForm initialFeeds={config.feeds} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+          Slack
+        </h2>
+        <p className="max-w-prose text-sm text-muted-foreground">
+          Incoming webhook URL for posting needle updates. Leave blank to disable
+          Slack delivery for this organization.
+        </p>
+        <SlackWebhookForm initialUrl={config.slackWebhookUrl ?? ''} />
+      </section>
     </main>
   )
 }

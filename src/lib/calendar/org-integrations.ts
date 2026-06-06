@@ -49,3 +49,34 @@ export async function setIntegrationFeeds(orgId: string, feeds: Feed[]): Promise
     privateMetadata: { [METADATA_KEY]: next },
   })
 }
+
+/**
+ * The org's Slack webhook URL, or undefined. Used by the page boundaries and
+ * the delivery paths to decide whether Slack is configured (see #139).
+ */
+export async function getSlackWebhookUrl(
+  orgId: string | null | undefined
+): Promise<string | undefined> {
+  if (!orgId) return undefined
+  return (await getIntegrationConfig(orgId)).slackWebhookUrl
+}
+
+/**
+ * Set (or clear, when given an empty string) the org's Slack webhook,
+ * preserving the feed list (ADR 0011). Server-only; callers enforce admin.
+ */
+export async function setSlackWebhookUrl(orgId: string, url: string): Promise<void> {
+  const client = await clerkClient()
+  const org = await client.organizations.getOrganization({ organizationId: orgId })
+  const existing = (org.privateMetadata?.[METADATA_KEY] ?? {}) as Record<string, unknown>
+
+  const merged = { ...existing }
+  const trimmed = url.trim()
+  if (trimmed) merged.slackWebhookUrl = trimmed
+  else delete merged.slackWebhookUrl
+
+  const next = parseIntegrationConfig(merged)
+  await client.organizations.updateOrganization(orgId, {
+    privateMetadata: { [METADATA_KEY]: next },
+  })
+}

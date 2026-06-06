@@ -59,7 +59,7 @@ export default async function MissionControlPage({ params }: PageParams) {
   })
 
   return (
-    <SlackConfigProvider enabled={!!process.env.SLACK_WEBHOOK_URL}>
+    <SlackConfigProvider enabled={!!integrations.slackWebhookUrl}>
       <MissionControl
         roomId={roomId}
         cycleSlug={cycleSlug}

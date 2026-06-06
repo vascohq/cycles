@@ -5,6 +5,7 @@ import { liveblocks } from '@/lib/liveblocks'
 import { getCycleStorage, resolvePitch } from '@/lib/mcp/liveblocks-reader'
 import { formatPitchTitle } from '@/lib/pitch-title'
 import { getOrganizationUsers } from '@/lib/users'
+import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
@@ -54,9 +55,10 @@ export default async function ScopeMapPage({ params }: PageParams) {
   }
 
   const users = await getOrganizationUsers(orgId)
+  const slackWebhookUrl = await getSlackWebhookUrl(orgId)
 
   return (
-    <SlackConfigProvider enabled={!!process.env.SLACK_WEBHOOK_URL}>
+    <SlackConfigProvider enabled={!!slackWebhookUrl}>
       <ScopeMap
         roomId={roomId}
         pitchSlug={pitchSlug}

@@ -2,16 +2,18 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { slackMessageSchema } from '@/lib/slack-message'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
+import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 
 export async function POST(request: Request) {
-  const { userId } = await auth()
+  const { userId, orgId } = await auth()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  if (!isSlackConfigured()) {
+  const webhookUrl = await getSlackWebhookUrl(orgId)
+  if (!isSlackConfigured(webhookUrl)) {
     return NextResponse.json(
-      { error: 'SLACK_WEBHOOK_URL not configured' },
+      { error: 'Slack webhook not configured for this organization' },
       { status: 503 }
     )
   }
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const result = await deliverSlackUpdate(parsed.data)
+  const result = await deliverSlackUpdate(parsed.data, webhookUrl)
 
   if (!result.ok) {
     return NextResponse.json(
