@@ -48,7 +48,7 @@ export default async function MissionControlPage({ params }: PageParams) {
   const users = await getOrganizationUsers(orgId)
 
   // Calendar overlays are external reference data fetched server-side, never
-  // stored in Liveblocks (ADR 0013). We expand into a wide range around today;
+  // stored in Liveblocks (ADR 0014). We expand into a wide range around today;
   // the client clips bands to the actual cycle window. Fail-soft throughout.
   const today = new Date().toISOString().slice(0, 10)
   const year = Number(today.slice(0, 4))

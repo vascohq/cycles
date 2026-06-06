@@ -25,7 +25,18 @@ const pct = (n: number) => `${Math.min(Math.max(n, 0), 1) * 100}%`
 export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
   if (bands.length === 0) return null
 
-  const { placed, laneCount } = packLanes(bands)
+  // Holidays share the first line (they're location-wide, few, rarely overlap);
+  // Time Off lane-stacks beneath so overlapping absences each stay hoverable.
+  const holidays = bands.filter((b) => b.kind === 'holiday')
+  const timeOff = bands.filter((b) => b.kind === 'timeoff')
+  const holidayLanes = holidays.length > 0 ? 1 : 0
+
+  const packedTimeOff = packLanes(timeOff)
+  const placed = [
+    ...holidays.map((band) => ({ band, lane: 0 })),
+    ...packedTimeOff.placed.map(({ band, lane }) => ({ band, lane: lane + holidayLanes })),
+  ]
+  const laneCount = holidayLanes + packedTimeOff.laneCount
 
   return (
     <TooltipProvider delayDuration={80}>

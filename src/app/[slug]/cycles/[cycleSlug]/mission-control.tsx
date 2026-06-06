@@ -27,7 +27,7 @@ type MissionControlProps = {
   cycleTitle: string
   slug: string
   organizationUsers: OrganizationUser[]
-  /** Calendar overlay bands fetched server-side (ADR 0013). */
+  /** Calendar overlay bands fetched server-side (ADR 0014). */
   cycleBands?: OverlayBand[]
 }
 

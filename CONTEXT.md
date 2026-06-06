@@ -21,11 +21,11 @@ _Avoid_: Timebox (reserved for pitches), Sprint, deadline
 ### Calendar overlays
 
 **Holiday**:
-A statutory/public non-working day for a location (e.g. Canada, France), sourced from an external calendar feed. Location-wide — it applies to everyone in that location and is tied to no individual. Rendered as a read-only band on the **Cycle window**. Purely FYI: it never changes timebox or capacity math (overlay only — see ADR 0013).
+A statutory/public non-working day for a location (e.g. Canada, France), sourced from an external calendar feed. Location-wide — it applies to everyone in that location and is tied to no individual. Rendered as a read-only band on the **Cycle window**. Purely FYI: it never changes timebox or capacity math (overlay only — see ADR 0014).
 _Avoid_: Day off, vacation, time off (those are personal — see **Time Off**)
 
 **Time Off**:
-An individual person's absence (vacation/leave), sourced from the Humi feed. Rendered as a read-only band on the **Cycle window**. In v1 it is shown as the *union* of everyone's absences with no per-person or per-pitch attribution (no person model, no name reconciliation — deferred). Purely FYI: never changes timebox or capacity math (overlay only — see ADR 0013).
+An individual person's absence (vacation/leave), sourced from the Humi feed. Rendered as a read-only band on the **Cycle window**. In v1 it is shown as the *union* of everyone's absences with no per-person or per-pitch attribution (no person model, no name reconciliation — deferred). Purely FYI: never changes timebox or capacity math (overlay only — see ADR 0014).
 _Avoid_: Holiday (reserved for statutory days — see Flagged ambiguities), PTO, leave, OOO
 
 ### Pitch lifecycle

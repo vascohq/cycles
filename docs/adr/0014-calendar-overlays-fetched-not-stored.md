@@ -1,4 +1,4 @@
-# ADR 0013: Calendar overlays are external reference data — fetched server-side, never stored in Liveblocks
+# ADR 0014: Calendar overlays are external reference data — fetched server-side, never stored in Liveblocks
 
 ## Status
 

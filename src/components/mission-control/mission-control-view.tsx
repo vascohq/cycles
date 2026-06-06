@@ -189,6 +189,13 @@ function CycleWindowStrip({
   // hairline in the fine row, so hovering names exactly who or what.
   const overlayBands = positionBands(bands, { start, end })
 
+  const fmt = (iso: string) =>
+    new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const status =
+    info.phase === 'before' ? 'not started' : info.phase === 'after' ? 'complete' : `${info.daysLeft} days left`
+
+  // The tape renders compact (full-width track) so the overlay hairline row
+  // shares its exact horizontal scale — each mark lands on the tape's ticks.
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3">
       <div className="flex items-center justify-between text-xs font-medium">
@@ -197,8 +204,13 @@ function CycleWindowStrip({
         </span>
         <span className="tabular-nums">{weekLabel}</span>
       </div>
-      <TimeboxTape start={start} end={end} today={today} />
+      <TimeboxTape start={start} end={end} today={today} compact />
       <CalendarOverlayRow bands={overlayBands} />
+      <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground">
+        <span>{fmt(start)}</span>
+        <span className="opacity-70">{status}</span>
+        <span>{fmt(end)}</span>
+      </div>
     </div>
   )
 }
