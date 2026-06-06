@@ -50,7 +50,9 @@ export default async function OrgLayout({
               <span className="text-border" aria-hidden>
                 /
               </span>
-              <div className="flex items-center [&_.cl-organizationPreviewMainIdentifier]:text-foreground">
+              {/* -ml-2 cancels the Clerk trigger's 8px left padding so the gaps
+                  on either side of the "/" read as equal. */}
+              <div className="flex items-center -ml-2 [&_.cl-organizationPreviewMainIdentifier]:text-foreground">
                 <OrganizationSwitcher
                   afterSelectOrganizationUrl="/:slug/cycles"
                   afterSelectPersonalUrl="/me/cycles"
