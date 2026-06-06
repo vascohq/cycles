@@ -204,8 +204,8 @@ function CycleWindowStrip({
         </span>
         <span className="tabular-nums">{weekLabel}</span>
       </div>
+      <CalendarOverlayRow bands={overlayBands} anchor="bottom" />
       <TimeboxTape start={start} end={end} today={today} compact />
-      <CalendarOverlayRow bands={overlayBands} />
       <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground">
         <span>{fmt(start)}</span>
         <span className="opacity-70">{status}</span>

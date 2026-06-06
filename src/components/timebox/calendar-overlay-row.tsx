@@ -23,11 +23,20 @@ const pct = (n: number) => `${Math.min(Math.max(n, 0), 1) * 100}%`
  * holiday is. Expects individually-positioned bands (not clustered), so the
  * hover can name a single person.
  */
-export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
+export function CalendarOverlayRow({
+  bands,
+  anchor = 'top',
+}: {
+  bands: PositionedBand[]
+  /** Which edge the first lane (Holidays) sticks to — set 'bottom' when the row
+   *  sits above the tape so Holidays stay nearest the line. */
+  anchor?: 'top' | 'bottom'
+}) {
   if (bands.length === 0) return null
 
-  // Holidays share the first line (they're location-wide, few, rarely overlap);
-  // Time Off lane-stacks beneath so overlapping absences each stay hoverable.
+  // Holidays take the first lane (location-wide, few, rarely overlap); Time Off
+  // lane-stacks after so overlapping absences each stay hoverable. The first
+  // lane sits nearest the tape regardless of which side the row is on.
   const holidays = bands.filter((b) => b.kind === 'holiday')
   const timeOff = bands.filter((b) => b.kind === 'timeoff')
   const holidayLanes = holidays.length > 0 ? 1 : 0
@@ -38,6 +47,10 @@ export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
     ...packedTimeOff.placed.map(({ band, lane }) => ({ band, lane: lane + holidayLanes })),
   ]
   const laneCount = holidayLanes + packedTimeOff.laneCount
+
+  // Above the tape, lane 0 anchors to the bottom so Holidays hug the line.
+  const laneTop = (lane: number) =>
+    (anchor === 'bottom' ? laneCount - 1 - lane : lane) * LANE_HEIGHT
 
   return (
     <TooltipProvider delayDuration={80}>
@@ -50,7 +63,7 @@ export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
                 style={{
                   left: pct(band.leftFraction),
                   width: `max(2px, ${pct(band.widthFraction)})`,
-                  top: lane * LANE_HEIGHT,
+                  top: laneTop(lane),
                   height: LANE_HEIGHT,
                 }}
               >
