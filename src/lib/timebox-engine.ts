@@ -23,7 +23,7 @@ function isBusinessDay(d: Date): boolean {
 }
 
 /** Count of Monday–Friday days in the half-open span [a, b). NaN if either date is invalid. */
-function businessDaysBetween(a: string, b: string): number {
+export function businessDaysBetween(a: string, b: string): number {
   const start = new Date(a + 'T00:00:00Z').getTime()
   const end = new Date(b + 'T00:00:00Z').getTime()
   if (!Number.isFinite(start) || !Number.isFinite(end)) return NaN

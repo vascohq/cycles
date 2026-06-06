@@ -18,6 +18,16 @@ _Avoid_: Buffer, break, maintenance window
 A cycle's own fixed time boundary — its start and end dates, and where today sits between them. Shown on Mission Control as a tape-measure strip with a "Week X of Y" label. Shares the visual of a pitch's timebox but is a distinct concept (see ADR 0010): the cycle window spans the whole cycle, a timebox bounds one pitch.
 _Avoid_: Timebox (reserved for pitches), Sprint, deadline
 
+### Calendar overlays
+
+**Holiday**:
+A statutory/public non-working day for a location (e.g. Canada, France), sourced from an external calendar feed. Location-wide — it applies to everyone in that location and is tied to no individual. Rendered as a read-only band on the **Cycle window**. Purely FYI: it never changes timebox or capacity math (overlay only — see ADR 0014).
+_Avoid_: Day off, vacation, time off (those are personal — see **Time Off**)
+
+**Time Off**:
+An individual person's absence (vacation/leave), sourced from the Humi feed. Rendered as a read-only band on the **Cycle window**. In v1 it is shown as the *union* of everyone's absences with no per-person or per-pitch attribution (no person model, no name reconciliation — deferred). Purely FYI: never changes timebox or capacity math (overlay only — see ADR 0014).
+_Avoid_: Holiday (reserved for statutory days — see Flagged ambiguities), PTO, leave, OOO
+
 ### Pitch lifecycle
 
 **Pitch**:
@@ -201,5 +211,6 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **"progress"** was used to mean both **Hill Progress** (scope-level, position on hill chart) and **Needle** progress (pitch-level, position on arc). Resolved: always qualify — "hill progress" for scopes, "needle progress" for the pitch-level arc position. Note: task completion is never "progress" — the **Scope Card** shows task *presence*, not a completion metric (see [ADR 0007](docs/adr/0007-scope-cards-show-task-presence-not-completion.md)).
 - **"snapshot"** was used for the existing `PitchSnapshot` type (legacy board feature) and for the new update snapshots. Resolved: the legacy type is retired. New terms are **Needle Snapshot** and **Hill Snapshot**, both part of an **Update**.
 - **"color"** historically meant tier color (red/orange/grey on scope dots) vs zone color (green/yellow/red on the needle). Resolved + superseded: tier is no longer color-encoded (it is now a text **badge**). The scope dot and order badge now show the scope's unique **Scope Color**; zone color still appears on the needle and update cards (see [ADR 0008](docs/adr/0008-scope-identity-color.md)).
+- **"holiday"** is a terminology landmine: in British/French English it commonly means *personal vacation*, which here is **Time Off**. Resolved: **Holiday** = statutory/public non-working day for a location (from the CA/FR feeds); a person's vacation is always **Time Off** (from the Humi feed). Never use "holiday" for an individual's leave.
 - **needle position vs. zone** were coupled: position was auto-snapped from the chosen zone (on_track→0.85, some_risk→0.5, concerned→0.2). Resolved: they are independent — position is slid manually, zone is chosen separately, and the snapping derivation is removed. The needle's filled arc encodes both at once: length = position, color = zone.
 - **"team"** is ambiguous: it can mean the Clerk **organization** (the workspace tenant) or the per-cycle ownership label. Resolved: always use **Squad** for the per-cycle, color-coded group that owns pitches. Reserve "organization" for the Clerk tenant. Never use "team" unqualified in product copy or code.

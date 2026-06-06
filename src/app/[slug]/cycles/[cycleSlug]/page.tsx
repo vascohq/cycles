@@ -2,6 +2,8 @@ import { MissionControl } from './mission-control'
 import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
 import { getOrganizationUsers } from '@/lib/users'
+import { getIntegrationConfig } from '@/lib/calendar/org-integrations'
+import { fetchOverlayBands } from '@/lib/calendar/feed-fetcher'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
@@ -45,14 +47,26 @@ export default async function MissionControlPage({ params }: PageParams) {
 
   const users = await getOrganizationUsers(orgId)
 
+  // Calendar overlays are external reference data fetched server-side, never
+  // stored in Liveblocks (ADR 0014). We expand into a wide range around today;
+  // the client clips bands to the actual cycle window. Fail-soft throughout.
+  const today = new Date().toISOString().slice(0, 10)
+  const year = Number(today.slice(0, 4))
+  const integrations = await getIntegrationConfig(orgId)
+  const cycleBands = await fetchOverlayBands(integrations, {
+    start: `${year - 1}-01-01`,
+    end: `${year + 1}-12-31`,
+  })
+
   return (
-    <SlackConfigProvider enabled={!!process.env.SLACK_WEBHOOK_URL}>
+    <SlackConfigProvider enabled={!!integrations.slackWebhookUrl}>
       <MissionControl
         roomId={roomId}
         cycleSlug={cycleSlug}
         cycleTitle={cycleTitle!}
         slug={slug}
         organizationUsers={users}
+        cycleBands={cycleBands}
       />
     </SlackConfigProvider>
   )

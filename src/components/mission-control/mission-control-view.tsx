@@ -4,8 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
-import { TimeboxTape } from '@/components/timebox'
+import { TimeboxTape, CalendarOverlayRow } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
+import { positionBands, observeHolidays } from '@/lib/calendar/overlay-positioning'
+import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import {
   Dialog,
@@ -51,6 +53,8 @@ export type MissionControlViewProps = {
   /** The cycle window's boundaries (see ADR 0010). Omitted = not yet set. */
   cycleStart?: string
   cycleEnd?: string
+  /** Calendar overlay bands (Holidays / Time Off) for the cycle window. */
+  cycleBands?: OverlayBand[]
 }
 
 export function MissionControlView({
@@ -62,6 +66,7 @@ export function MissionControlView({
   onCreatePitch,
   cycleStart,
   cycleEnd,
+  cycleBands,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
@@ -106,7 +111,12 @@ export function MissionControlView({
           </div>
         </div>
         {cycleStart && cycleEnd && (
-          <CycleWindowStrip start={cycleStart} end={cycleEnd} today={today} />
+          <CycleWindowStrip
+            start={cycleStart}
+            end={cycleEnd}
+            today={today}
+            bands={cycleBands}
+          />
         )}
         {showFilter && (
           <SquadFilterBar
@@ -160,10 +170,12 @@ function CycleWindowStrip({
   start,
   end,
   today,
+  bands = [],
 }: {
   start: string
   end: string
   today: string
+  bands?: OverlayBand[]
 }) {
   const info = computeTimebox(start, end, today)
   const weekLabel =
@@ -173,6 +185,18 @@ function CycleWindowStrip({
         ? 'Complete'
         : `Week ${info.currentWeek} of ${info.totalWeeks}`
 
+  // Individual (un-clustered) bands: each Holiday / person's Time Off is its own
+  // hairline in the fine row, so hovering names exactly who or what. Weekend
+  // holidays are first shifted to their observed (in-lieu) business day.
+  const overlayBands = positionBands(observeHolidays(bands), { start, end })
+
+  const fmt = (iso: string) =>
+    new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const status =
+    info.phase === 'before' ? 'not started' : info.phase === 'after' ? 'complete' : `${info.daysLeft} days left`
+
+  // The tape renders compact (full-width track) so the overlay hairline row
+  // shares its exact horizontal scale — each mark lands on the tape's ticks.
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3">
       <div className="flex items-center justify-between text-xs font-medium">
@@ -181,7 +205,13 @@ function CycleWindowStrip({
         </span>
         <span className="tabular-nums">{weekLabel}</span>
       </div>
-      <TimeboxTape start={start} end={end} today={today} />
+      <CalendarOverlayRow bands={overlayBands} anchor="bottom" />
+      <TimeboxTape start={start} end={end} today={today} compact />
+      <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground">
+        <span>{fmt(start)}</span>
+        <span className="opacity-70">{status}</span>
+        <span>{fmt(end)}</span>
+      </div>
     </div>
   )
 }

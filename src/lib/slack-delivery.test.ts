@@ -25,13 +25,16 @@ const PARAMS: SlackMessageParams = {
 
 afterEach(() => vi.unstubAllGlobals())
 
+const WEBHOOK = 'https://hooks.slack.com/x'
+
 describe('isSlackConfigured', () => {
-  it('is true when a webhook URL is set', () => {
-    expect(isSlackConfigured({ SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x' })).toBe(true)
+  it('is true when an org webhook URL is provided', () => {
+    expect(isSlackConfigured(WEBHOOK)).toBe(true)
   })
 
-  it('is false when no webhook URL is set', () => {
-    expect(isSlackConfigured({})).toBe(false)
+  it('is false when no webhook is configured', () => {
+    expect(isSlackConfigured(undefined)).toBe(false)
+    expect(isSlackConfigured('')).toBe(false)
   })
 })
 
@@ -40,19 +43,17 @@ describe('deliverSlackUpdate', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await deliverSlackUpdate(PARAMS, {})
+    const result = await deliverSlackUpdate(PARAMS, undefined)
 
     expect(result.ok).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('posts the formatted message and returns delivered_at on success', async () => {
+  it('posts the formatted message to the org webhook and returns delivered_at', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await deliverSlackUpdate(PARAMS, {
-      SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x',
-    })
+    const result = await deliverSlackUpdate(PARAMS, WEBHOOK)
 
     expect(result.ok).toBe(true)
     expect((result as Extract<SlackDeliveryResult, { ok: true }>).delivered_at).toMatch(
@@ -60,7 +61,7 @@ describe('deliverSlackUpdate', () => {
     )
     expect(fetchMock).toHaveBeenCalledOnce()
     const call = fetchMock.mock.calls[0] as [string, { body: string }]
-    expect(call[0]).toBe('https://hooks.slack.com/x')
+    expect(call[0]).toBe(WEBHOOK)
     const body = JSON.parse(call[1].body) as { text: string }
     expect(body.text).toContain('Mission Control')
   })
@@ -71,9 +72,7 @@ describe('deliverSlackUpdate', () => {
       .mockResolvedValue({ ok: false, text: () => Promise.resolve('no_service') })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await deliverSlackUpdate(PARAMS, {
-      SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x',
-    })
+    const result = await deliverSlackUpdate(PARAMS, WEBHOOK)
 
     expect(result.ok).toBe(false)
     expect((result as Extract<SlackDeliveryResult, { ok: false }>).error).toContain('no_service')

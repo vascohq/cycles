@@ -21,7 +21,7 @@ export function CommandSearchButton() {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+      className="flex h-8 items-center gap-2 rounded-lg border bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
       aria-label="Search cycles and pitches"
     >
       <Search className="size-4" />
