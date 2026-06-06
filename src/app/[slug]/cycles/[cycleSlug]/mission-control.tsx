@@ -12,6 +12,9 @@ import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MissionControlView } from '@/components/mission-control'
 import { EditCycleButton } from './edit-cycle-dialog'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { derivePitchCards, groupBySquad } from '@/lib/mission-control-helpers'
 import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
@@ -30,6 +33,11 @@ type MissionControlProps = {
   organizationUsers: OrganizationUser[]
   /** Calendar overlay bands fetched server-side (ADR 0014). */
   cycleBands?: OverlayBand[]
+  /** Chronological neighbors for the cycle stepper. */
+  prevCycleSlug?: string
+  prevCycleTitle?: string
+  nextCycleSlug?: string
+  nextCycleTitle?: string
 }
 
 export function MissionControl({
@@ -39,6 +47,10 @@ export function MissionControl({
   slug,
   organizationUsers,
   cycleBands,
+  prevCycleSlug,
+  prevCycleTitle,
+  nextCycleSlug,
+  nextCycleTitle,
 }: MissionControlProps) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -54,6 +66,10 @@ export function MissionControl({
               cycleTitle={cycleTitle}
               slug={slug}
               cycleBands={cycleBands}
+              prevCycleSlug={prevCycleSlug}
+              prevCycleTitle={prevCycleTitle}
+              nextCycleSlug={nextCycleSlug}
+              nextCycleTitle={nextCycleTitle}
             />
           )}
         </ClientSideSuspense>
@@ -67,11 +83,19 @@ function MissionControlWired({
   cycleTitle,
   slug,
   cycleBands,
+  prevCycleSlug,
+  prevCycleTitle,
+  nextCycleSlug,
+  nextCycleTitle,
 }: {
   cycleSlug: string
   cycleTitle: string
   slug: string
   cycleBands?: OverlayBand[]
+  prevCycleSlug?: string
+  prevCycleTitle?: string
+  nextCycleSlug?: string
+  nextCycleTitle?: string
 }) {
   const pitches = useCycleStorage((root) => [...root.pitches])
   const scopes = useCycleStorage((root) => [...root.scopes])
@@ -138,6 +162,15 @@ function MissionControlWired({
       cycleStart={cycle.start_date}
       cycleEnd={cycle.end_date}
       cycleBands={cycleBands}
+      cycleNav={
+        <CycleStepper
+          slug={slug}
+          prevSlug={prevCycleSlug}
+          prevTitle={prevCycleTitle}
+          nextSlug={nextCycleSlug}
+          nextTitle={nextCycleTitle}
+        />
+      }
       headerActions={
         <EditCycleButton
           cycleSlug={cycleSlug}
@@ -148,5 +181,56 @@ function MissionControlWired({
         />
       }
     />
+  )
+}
+
+
+/** Prev/next cycle stepper, ordered chronologically (see cycleNeighbors). */
+function CycleStepper({
+  slug,
+  prevSlug,
+  prevTitle,
+  nextSlug,
+  nextTitle,
+}: {
+  slug: string
+  prevSlug?: string
+  prevTitle?: string
+  nextSlug?: string
+  nextTitle?: string
+}) {
+  const base =
+    'flex items-center justify-center h-7 w-7 rounded-lg border transition-colors'
+  return (
+    <div className="flex items-center gap-1">
+      {prevSlug ? (
+        <Link
+          href={`/${slug}/cycles/${prevSlug}`}
+          title={prevTitle ? `Previous cycle · ${prevTitle}` : 'Previous cycle'}
+          aria-label="Previous cycle"
+          className={cn(base, 'hover:bg-muted')}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Link>
+      ) : (
+        <span aria-disabled className={cn(base, 'opacity-30 cursor-not-allowed')}>
+          <ChevronLeft className="w-4 h-4" />
+        </span>
+      )}
+      {nextSlug ? (
+        <Link
+          href={`/${slug}/cycles/${nextSlug}`}
+          title={nextTitle ? `Next cycle · ${nextTitle}` : 'Next cycle'}
+          aria-label="Next cycle"
+          className={cn(base, 'hover:bg-muted')}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      ) : (
+        <span aria-disabled className={cn(base, 'opacity-30 cursor-not-allowed')}>
+          <ChevronRight className="w-4 h-4" />
+        </span>
+      )}
+    </div>
   )
 }

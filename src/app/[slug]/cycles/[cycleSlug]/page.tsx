@@ -1,6 +1,7 @@
 import { MissionControl } from './mission-control'
 import { SlackConfigProvider } from '@/components/slack-config-context'
 import { liveblocks } from '@/lib/liveblocks'
+import { cycleNeighbors, type CycleSummary } from '@/lib/cycle-list-engine'
 import { getOrganizationUsers } from '@/lib/users'
 import { getIntegrationConfig } from '@/lib/calendar/org-integrations'
 import { fetchOverlayBands } from '@/lib/calendar/feed-fetcher'
@@ -47,6 +48,19 @@ export default async function MissionControlPage({ params }: PageParams) {
 
   const users = await getOrganizationUsers(orgId)
 
+  // Chronological neighbors for the cycle stepper (cheap metadata-only query).
+  const { data: rooms } = await liveblocks.getRooms({
+    query: `roomId^"${roomPrefix}:cycle:"`,
+  })
+  const cycleSummaries: CycleSummary[] = rooms.map((room) => ({
+    slug: room.id.split(':').slice(2).join(':'),
+    title: String(room.metadata.title ?? 'Untitled cycle'),
+    type: room.metadata.type === 'cooldown' ? 'cooldown' : 'build',
+    start_date: room.metadata.start_date ? String(room.metadata.start_date) : '',
+    end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
+  }))
+  const { prev: prevCycle, next: nextCycle } = cycleNeighbors(cycleSummaries, cycleSlug)
+
   // Calendar overlays are external reference data fetched server-side, never
   // stored in Liveblocks (ADR 0014). We expand into a wide range around today;
   // the client clips bands to the actual cycle window. Fail-soft throughout.
@@ -67,6 +81,10 @@ export default async function MissionControlPage({ params }: PageParams) {
         slug={slug}
         organizationUsers={users}
         cycleBands={cycleBands}
+        prevCycleSlug={prevCycle?.slug}
+        prevCycleTitle={prevCycle?.title}
+        nextCycleSlug={nextCycle?.slug}
+        nextCycleTitle={nextCycle?.title}
       />
     </SlackConfigProvider>
   )

@@ -1,16 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { MoreHorizontal, Pencil } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import {
@@ -45,14 +50,27 @@ export function EditCycleButton({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button className="flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors">
-          <Pencil className="w-3 h-3" />
-          Edit cycle
-        </button>
-      </DialogTrigger>
-      <DialogContent>
+    <>
+      {/* Same "..." overflow menu as the scope box, even with one action. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Cycle actions"
+            className="flex-shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem onClick={() => setOpen(true)}>
+            <Pencil className="w-3.5 h-3.5 mr-2" />
+            Edit cycle
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
         <form className="flex flex-col gap-4" action={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Edit cycle</DialogTitle>
@@ -122,5 +140,6 @@ export function EditCycleButton({
         </form>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

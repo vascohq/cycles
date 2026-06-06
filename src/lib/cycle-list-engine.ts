@@ -30,6 +30,27 @@ export function cyclePhase(cycle: CycleSummary, today: string): CyclePhase {
   return 'current'
 }
 
+export type CycleNeighbors = { prev: CycleSummary | null; next: CycleSummary | null }
+
+/**
+ * The chronological neighbors of `slug`, ordered by start_date (earliest →
+ * latest); undated cycles sink to the end. Used for the cycle stepper. Returns
+ * nulls at the ends or for an unknown slug.
+ */
+export function cycleNeighbors(cycles: CycleSummary[], slug: string): CycleNeighbors {
+  const ordered = [...cycles].sort((a, b) => {
+    if (!a.start_date) return 1
+    if (!b.start_date) return -1
+    return a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0
+  })
+  const i = ordered.findIndex((c) => c.slug === slug)
+  if (i === -1) return { prev: null, next: null }
+  return {
+    prev: i > 0 ? ordered[i - 1] : null,
+    next: i < ordered.length - 1 ? ordered[i + 1] : null,
+  }
+}
+
 export type LandingTarget = { kind: 'cycle'; slug: string } | { kind: 'list' }
 
 // Default landing is the top of the sorted `current` group — i.e. the most

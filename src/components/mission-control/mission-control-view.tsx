@@ -3,12 +3,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
-import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape, CalendarOverlayRow } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { positionBands, observeHolidays } from '@/lib/calendar/overlay-positioning'
 import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
-import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import {
   Dialog,
   DialogContent,
@@ -16,31 +14,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { PitchCard, SquadSection } from '@/lib/mission-control-helpers'
-import {
-  sectionKey,
-  filterSquadSections,
-} from '@/lib/mission-control-helpers'
-import type { Stage } from '@/cycle-liveblocks.config'
+import type { SquadSection } from '@/lib/mission-control-helpers'
+import { sectionKey, filterSquadSections } from '@/lib/mission-control-helpers'
 import { cn } from '@/lib/utils'
-import { slugify } from '@/lib/slugify'
-
-const STAGE_BADGE_STYLES: Record<Stage, string> = {
-  framing: 'bg-muted text-muted-foreground',
-  shaping: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  building: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  done: 'bg-foreground text-background',
-}
-
-function formatRelativeTime(isoDate: string): string {
-  const diff = Date.now() - new Date(isoDate).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `Updated ${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `Updated ${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `Updated ${days}d ago`
-}
+import { PitchTimeline, TIMELINE_GRID } from './pitch-timeline'
 
 export type MissionControlViewProps = {
   slug: string
@@ -56,6 +33,8 @@ export type MissionControlViewProps = {
   cycleBands?: OverlayBand[]
   /** Optional controls rendered in the header (e.g. Edit cycle). */
   headerActions?: React.ReactNode
+  /** Controls rendered on the breadcrumb row (e.g. the cycle stepper). */
+  cycleNav?: React.ReactNode
 }
 
 export function MissionControlView({
@@ -69,6 +48,7 @@ export function MissionControlView({
   cycleEnd,
   cycleBands,
   headerActions,
+  cycleNav,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
@@ -78,17 +58,20 @@ export function MissionControlView({
   const visibleSections = filterSquadSections(sections, activeFilter)
 
   return (
-    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-8">
+    <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link
-            href={`/${slug}/cycles`}
-            className="hover:text-foreground transition-colors"
-          >
-            Cycles
-          </Link>
-          <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground font-medium">{cycleTitle}</span>
+        <nav className="-mb-1 flex items-center justify-between gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Link
+              href={`/${slug}/cycles`}
+              className="hover:text-foreground transition-colors"
+            >
+              Cycles
+            </Link>
+            <ChevronRight className="w-3 h-3 shrink-0" />
+            <span className="text-foreground font-medium truncate">{cycleTitle}</span>
+          </div>
+          {cycleNav}
         </nav>
         <div className="flex items-end justify-between gap-3">
           <h1 className="text-3xl font-display">
@@ -115,31 +98,31 @@ export function MissionControlView({
             bands={cycleBands}
           />
         )}
-        {showFilter && (
+      </header>
+
+      {showFilter && (
+        <div className="-my-4">
           <SquadFilterBar
             sections={sections}
             active={activeFilter}
             onChange={setActiveFilter}
           />
-        )}
-      </header>
+        </div>
+      )}
 
       {isEmpty ? (
         <div className="border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">
           No pitches yet.
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
-          {visibleSections.map((section) => (
-            <SquadSectionBlock
-              key={sectionKey(section)}
-              section={section}
-              slug={slug}
-              cycleSlug={cycleSlug}
-              today={today}
-            />
-          ))}
-        </div>
+        <PitchTimeline
+          sections={visibleSections}
+          slug={slug}
+          cycleSlug={cycleSlug}
+          today={today}
+          cycleStart={cycleStart}
+          cycleEnd={cycleEnd}
+        />
       )}
 
       {onCreatePitch && (
@@ -188,22 +171,24 @@ function CycleWindowStrip({
   const status =
     info.phase === 'before' ? 'not started' : info.phase === 'after' ? 'complete' : `${info.daysLeft} days left`
 
-  // The tape renders compact (full-width track) so the overlay hairline row
-  // shares its exact horizontal scale — each mark lands on the tape's ticks.
+  // Aligned [gutter | track] grid (shared TIMELINE_GRID) so the tape track and
+  // the pitch-timeline bars below share one scale — the "now" markers line up.
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3">
-      <div className="flex items-center justify-between text-xs font-medium">
-        <span className="uppercase tracking-wide text-muted-foreground">
-          Cycle window
-        </span>
-        <span className="tabular-nums">{weekLabel}</span>
-      </div>
-      <CalendarOverlayRow bands={overlayBands} anchor="bottom" />
-      <TimeboxTape start={start} end={end} today={today} compact />
-      <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground">
-        <span>{fmt(start)}</span>
-        <span className="opacity-70">{status}</span>
-        <span>{fmt(end)}</span>
+    <div className="rounded-lg border bg-card px-4 py-3">
+      <div className={TIMELINE_GRID}>
+        <div className="text-xs font-medium">
+          <div className="uppercase tracking-wide text-muted-foreground">Cycle window</div>
+          <div className="tabular-nums text-muted-foreground">{weekLabel}</div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <CalendarOverlayRow bands={overlayBands} anchor="bottom" />
+          <TimeboxTape start={start} end={end} today={today} compact />
+          <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground">
+            <span>{fmt(start)}</span>
+            <span className="opacity-70">{status}</span>
+            <span>{fmt(end)}</span>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -258,172 +243,6 @@ function SquadFilterBar({
         )
       })}
     </div>
-  )
-}
-
-function SquadSectionBlock({
-  section,
-  slug,
-  cycleSlug,
-  today,
-}: {
-  section: SquadSection
-  slug: string
-  cycleSlug: string
-  today: string
-}) {
-  const { squad, cards } = section
-  return (
-    <section>
-      <div className="flex items-center gap-2.5 mb-4">
-        {squad ? (
-          <>
-            <span
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: squad.color }}
-            />
-            <h2 className="text-sm font-semibold tracking-tight">{squad.name}</h2>
-          </>
-        ) : (
-          <h2 className="text-sm font-semibold tracking-tight text-muted-foreground">
-            Unassigned
-          </h2>
-        )}
-        <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded-full">
-          {cards.length}
-        </span>
-      </div>
-      <PitchGrid
-        cards={cards}
-        slug={slug}
-        cycleSlug={cycleSlug}
-        today={today}
-        squadColor={squad?.color}
-      />
-    </section>
-  )
-}
-
-function PitchGrid({
-  cards,
-  slug,
-  cycleSlug,
-  today,
-  squadColor,
-}: {
-  cards: PitchCard[]
-  slug: string
-  cycleSlug: string
-  today: string
-  squadColor?: string
-}) {
-  if (cards.length === 0) {
-    return (
-      <div className="border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">
-        No pitches yet.
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {cards.map((card, i) => (
-        <PitchCardItem
-          key={card.id}
-          card={card}
-          slug={slug}
-          cycleSlug={cycleSlug}
-          today={today}
-          delay={i * 0.04}
-          squadColor={squadColor}
-        />
-      ))}
-    </div>
-  )
-}
-
-function PitchCardItem({
-  card,
-  slug,
-  cycleSlug,
-  today,
-  delay,
-  squadColor,
-}: {
-  card: PitchCard
-  slug: string
-  cycleSlug: string
-  today: string
-  delay: number
-  squadColor?: string
-}) {
-  const pitchSlug = slugify(card.title)
-  const zoneLabel = card.needle
-    ? card.needle.zone.replace('_', ' ')
-    : null
-  const zoneColor = card.needle ? ZONE_COLORS[card.needle.zone] : undefined
-
-  return (
-    <Link
-      href={`/${slug}/cycles/${cycleSlug}/${pitchSlug}`}
-      className={cn(
-        'rounded-lg border border-border/70 bg-card p-5 flex flex-col gap-3',
-        'shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200',
-        'hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-border hover:bg-muted/30',
-        'animate-in fade-in slide-in-from-bottom-1'
-      )}
-      style={{
-        animationDelay: `${delay}s`,
-        animationFillMode: 'backwards',
-        // Squad identity accent: a colored left edge tying the card to its
-        // squad section. Omitted for Unassigned pitches.
-        ...(squadColor
-          ? { borderLeftColor: squadColor, borderLeftWidth: 3 }
-          : {}),
-      }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <MiniNeedle needle={card.needle} delay={delay} />
-        <span
-          className={cn(
-            'text-xs px-2 py-0.5 rounded-full',
-            STAGE_BADGE_STYLES[card.stage]
-          )}
-        >
-          {card.stage}
-        </span>
-      </div>
-
-      {zoneLabel && (
-        <span
-          className="text-xs font-medium self-start"
-          style={{ color: zoneColor }}
-        >
-          {zoneLabel.charAt(0).toUpperCase() + zoneLabel.slice(1)}
-        </span>
-      )}
-
-      <h3 className="text-sm font-semibold leading-snug tracking-tight">
-        {card.emoji && <span className="mr-1.5">{card.emoji}</span>}
-        {card.title}
-      </h3>
-
-      <TimeboxTape
-        start={card.timebox_start}
-        end={card.timebox_end}
-        today={today}
-        compact
-      />
-
-      <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
-        <span>
-          {card.scopesTotal} scope{card.scopesTotal === 1 ? '' : 's'}
-        </span>
-        {card.lastUpdatedAt && (
-          <span>{formatRelativeTime(card.lastUpdatedAt)}</span>
-        )}
-      </div>
-    </Link>
   )
 }
 

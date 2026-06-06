@@ -185,6 +185,9 @@ export function ScopeMapView({
   const [openScopeId, setOpenScopeId] = useState<string | null>(null)
   const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
+  // A timebox is optional; guard the tape and labels so an unset one doesn't
+  // render as 'Invalid Date' / NaN.
+  const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
 
   // The drawer reads live from scopeGridItems so edits and task toggles reflect
   // instantly; it closes itself if the open scope is deleted.
@@ -264,12 +267,12 @@ export function ScopeMapView({
             <MoveNeedleModal
               open={moveNeedleOpen}
               onOpenChange={setMoveNeedleOpen}
-              weekLabel={`Week ${timebox.currentWeek} of ${timebox.totalWeeks}`}
+              weekLabel={hasTimebox ? `Week ${timebox.currentWeek} of ${timebox.totalWeeks}` : ''}
               dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               userName={userName}
               pitchTitle={pitch.title}
               pitchEmoji={pitch.emoji}
-              daysLeft={timebox.daysLeft}
+              daysLeft={hasTimebox ? timebox.daysLeft : 0}
               currentProgress={pitch.needle?.progress ?? 0.02}
               currentZone={pitch.needle?.zone ?? null}
               previousZone={previousZone}
@@ -589,12 +592,14 @@ function HeroCard({
           </div>
         </div>
 
-        <TimeboxTape
-          start={pitch.timebox_start}
-          end={pitch.timebox_end}
-          today={today}
-          done={isDone}
-        />
+        {pitch.timebox_start && pitch.timebox_end && (
+          <TimeboxTape
+            start={pitch.timebox_start}
+            end={pitch.timebox_end}
+            today={today}
+            done={isDone}
+          />
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
