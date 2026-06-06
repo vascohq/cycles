@@ -68,9 +68,16 @@ export function CalendarOverlayRow({
                 }}
               >
                 <div
-                  className={`h-[3px] rounded-full ${
-                    band.kind === 'holiday' ? 'bg-amber-500' : 'bg-sky-500'
-                  }`}
+                  className={
+                    band.observed
+                      ? // In-lieu (weekend holiday shifted to its observed workday): dashed.
+                        `border-t-[3px] border-dashed ${
+                          band.kind === 'holiday' ? 'border-amber-500' : 'border-sky-500'
+                        }`
+                      : `h-[3px] rounded-full ${
+                          band.kind === 'holiday' ? 'bg-amber-500' : 'bg-sky-500'
+                        }`
+                  }
                   // Inset a little so adjacent marks read as separate, not one bar.
                   style={{ width: 'max(2px, calc(100% - 4px))' }}
                 />

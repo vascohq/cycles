@@ -6,7 +6,7 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape, CalendarOverlayRow } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
-import { positionBands } from '@/lib/calendar/overlay-positioning'
+import { positionBands, observeHolidays } from '@/lib/calendar/overlay-positioning'
 import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import {
@@ -186,8 +186,9 @@ function CycleWindowStrip({
         : `Week ${info.currentWeek} of ${info.totalWeeks}`
 
   // Individual (un-clustered) bands: each Holiday / person's Time Off is its own
-  // hairline in the fine row, so hovering names exactly who or what.
-  const overlayBands = positionBands(bands, { start, end })
+  // hairline in the fine row, so hovering names exactly who or what. Weekend
+  // holidays are first shifted to their observed (in-lieu) business day.
+  const overlayBands = positionBands(observeHolidays(bands), { start, end })
 
   const fmt = (iso: string) =>
     new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })

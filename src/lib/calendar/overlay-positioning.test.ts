@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { positionBands } from './overlay-positioning'
+import { positionBands, observeHolidays } from './overlay-positioning'
 import type { OverlayBand } from './ics-normalizer'
 
 // 2026-06-01 (Mon) .. 2026-06-15 (Mon) = 10 BUSINESS days (two Mon–Fri weeks),
@@ -48,5 +48,52 @@ describe('positionBands', () => {
 
   it('excludes a band entirely outside the window', () => {
     expect(positionBands([holiday('2026-07-01', '2026-07-02')], WINDOW)).toEqual([])
+  })
+})
+
+describe('observeHolidays', () => {
+  it('shifts a Saturday holiday to the following Monday and flags it observed', () => {
+    // Boxing Day, Sat Dec 26 2026 → observed Mon Dec 28.
+    const [observed] = observeHolidays([holiday('2026-12-26', '2026-12-26', 'Boxing Day')])
+
+    expect(observed).toMatchObject({
+      startDate: '2026-12-28',
+      endDate: '2026-12-28',
+      observed: true,
+    })
+  })
+
+  it('shifts a Sunday holiday past the weekend to Monday', () => {
+    const [observed] = observeHolidays([holiday('2026-06-21', '2026-06-21')])
+
+    expect(observed.startDate).toBe('2026-06-22') // Mon
+    expect(observed.observed).toBe(true)
+  })
+
+  it('leaves a weekday holiday untouched', () => {
+    const [band] = observeHolidays([holiday('2026-07-01', '2026-07-01')]) // Wed
+
+    expect(band.startDate).toBe('2026-07-01')
+    expect(band.observed).toBeUndefined()
+  })
+
+  it('leaves a holiday that already spans a weekday untouched', () => {
+    // Fri–Sun: the Friday is a working day, so no in-lieu shift.
+    const [band] = observeHolidays([holiday('2026-06-19', '2026-06-21')])
+
+    expect(band.startDate).toBe('2026-06-19')
+    expect(band.observed).toBeUndefined()
+  })
+
+  it('passes Time Off through unchanged', () => {
+    const timeOff: OverlayBand = {
+      kind: 'timeoff',
+      label: 'Humi',
+      summary: 'Sam',
+      startDate: '2026-06-06',
+      endDate: '2026-06-07',
+    }
+
+    expect(observeHolidays([timeOff])).toEqual([timeOff])
   })
 })
