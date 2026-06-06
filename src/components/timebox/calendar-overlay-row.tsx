@@ -46,7 +46,7 @@ export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
           <Tooltip key={i}>
             <TooltipTrigger asChild>
               <div
-                className="absolute flex items-center"
+                className="absolute flex items-center justify-center"
                 style={{
                   left: pct(band.leftFraction),
                   width: `max(2px, ${pct(band.widthFraction)})`,
@@ -55,9 +55,11 @@ export function CalendarOverlayRow({ bands }: { bands: PositionedBand[] }) {
                 }}
               >
                 <div
-                  className={`h-[3px] w-full rounded-full ${
+                  className={`h-[3px] rounded-full ${
                     band.kind === 'holiday' ? 'bg-amber-500' : 'bg-sky-500'
                   }`}
+                  // Inset a little so adjacent marks read as separate, not one bar.
+                  style={{ width: 'max(2px, calc(100% - 4px))' }}
                 />
               </div>
             </TooltipTrigger>
