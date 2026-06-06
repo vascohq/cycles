@@ -7,7 +7,7 @@ import {
 } from '@/lib/cycle-list-engine'
 import { liveblocks } from '@/lib/liveblocks'
 import { getCycleStorage } from '@/lib/mcp/liveblocks-reader'
-import { businessDaysUntil, computeTimebox } from '@/lib/timebox-engine'
+import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
@@ -30,13 +30,6 @@ function formatDate(iso: string): string {
 
 function typeLabel(type: CycleSummary['type']): string {
   return type === 'cooldown' ? 'Cooldown' : 'Build cycle'
-}
-
-function startsInLabel(today: string, start: string): string {
-  const days = businessDaysUntil(today, start)
-  // Fall back to the date if the countdown isn't meaningful (0 / invalid).
-  if (!Number.isFinite(days) || days <= 0) return `Starts ${formatDate(start)}`
-  return `Starts in ${days} business ${days === 1 ? 'day' : 'days'}`
 }
 
 export default async function CyclesPage({
@@ -130,7 +123,7 @@ export default async function CyclesPage({
                     key={c.slug}
                     cycle={c}
                     href={`/${urlSlug}/cycles/${c.slug}`}
-                    detail={startsInLabel(today, c.start_date)}
+                    detail={`Starts ${formatDate(c.start_date)}`}
                   />
                 ))}
               </ul>

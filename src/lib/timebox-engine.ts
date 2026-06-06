@@ -35,15 +35,6 @@ export function businessDaysBetween(a: string, b: string): number {
   return count
 }
 
-/**
- * Business days (Mon–Fri) from `from` up to `to`, end-exclusive — i.e. "starts
- * in N business days". 0 when `to` is on or before `from`; NaN for invalid
- * dates. Counts in business days per ADR 0013, so it holds flat over weekends.
- */
-export function businessDaysUntil(from: string, to: string): number {
-  return businessDaysBetween(from, to)
-}
-
 export type DayTick = {
   position: number
   major: boolean
