@@ -6,6 +6,8 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { TimeboxTape } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
+import { positionBands } from '@/lib/calendar/overlay-positioning'
+import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
 import { ZONE_COLORS } from '@/components/needle/zone-colors'
 import {
   Dialog,
@@ -51,6 +53,8 @@ export type MissionControlViewProps = {
   /** The cycle window's boundaries (see ADR 0010). Omitted = not yet set. */
   cycleStart?: string
   cycleEnd?: string
+  /** Calendar overlay bands (Holidays / Time Off) for the cycle window. */
+  cycleBands?: OverlayBand[]
 }
 
 export function MissionControlView({
@@ -62,6 +66,7 @@ export function MissionControlView({
   onCreatePitch,
   cycleStart,
   cycleEnd,
+  cycleBands,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
@@ -106,7 +111,12 @@ export function MissionControlView({
           </div>
         </div>
         {cycleStart && cycleEnd && (
-          <CycleWindowStrip start={cycleStart} end={cycleEnd} today={today} />
+          <CycleWindowStrip
+            start={cycleStart}
+            end={cycleEnd}
+            today={today}
+            bands={cycleBands}
+          />
         )}
         {showFilter && (
           <SquadFilterBar
@@ -160,10 +170,12 @@ function CycleWindowStrip({
   start,
   end,
   today,
+  bands = [],
 }: {
   start: string
   end: string
   today: string
+  bands?: OverlayBand[]
 }) {
   const info = computeTimebox(start, end, today)
   const weekLabel =
@@ -173,6 +185,8 @@ function CycleWindowStrip({
         ? 'Complete'
         : `Week ${info.currentWeek} of ${info.totalWeeks}`
 
+  const overlayBands = positionBands(bands, { start, end })
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3">
       <div className="flex items-center justify-between text-xs font-medium">
@@ -181,7 +195,7 @@ function CycleWindowStrip({
         </span>
         <span className="tabular-nums">{weekLabel}</span>
       </div>
-      <TimeboxTape start={start} end={end} today={today} />
+      <TimeboxTape start={start} end={end} today={today} overlayBands={overlayBands} />
     </div>
   )
 }

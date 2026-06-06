@@ -1,4 +1,5 @@
 import type { PitchCard, SquadLike } from '@/lib/mission-control-helpers'
+import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
 
 export const SQUADS: SquadLike[] = [
   { id: 'sq-platform', name: 'Platform', color: '#3e63dd' },
@@ -85,4 +86,16 @@ export const FIXTURE = {
   cycleSlug: 'cycle-34',
   cycleTitle: 'Cycle 34',
   today: '2026-06-10',
+  cycleStart: '2026-05-26',
+  cycleEnd: '2026-07-03',
 }
+
+// Sample Holiday overlay bands for the cycle window. In production these come
+// from fetched + normalized calendar feeds; here they exercise the Holiday
+// layer on the tape (one mid-cycle stat day, Canada Day near the end, plus a
+// pre-cycle day that should be clipped out).
+export const CYCLE_BANDS: OverlayBand[] = [
+  { kind: 'holiday', label: 'Canada', summary: 'St-Jean-Baptiste Day', startDate: '2026-06-24', endDate: '2026-06-24' },
+  { kind: 'holiday', label: 'Canada', summary: 'Canada Day', startDate: '2026-07-01', endDate: '2026-07-01' },
+  { kind: 'holiday', label: 'Canada', summary: 'Victoria Day (before cycle)', startDate: '2026-05-18', endDate: '2026-05-18' },
+]

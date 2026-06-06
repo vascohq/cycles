@@ -19,6 +19,7 @@ import { getTeamToday } from '@/lib/team-time'
 import { useMemo } from 'react'
 import { nanoid } from 'nanoid'
 import { LiveObject } from '@liveblocks/client'
+import type { OverlayBand } from '@/lib/calendar/ics-normalizer'
 
 type MissionControlProps = {
   roomId: string
@@ -26,6 +27,8 @@ type MissionControlProps = {
   cycleTitle: string
   slug: string
   organizationUsers: OrganizationUser[]
+  /** Calendar overlay bands fetched server-side (ADR 0013). */
+  cycleBands?: OverlayBand[]
 }
 
 export function MissionControl({
@@ -34,6 +37,7 @@ export function MissionControl({
   cycleTitle,
   slug,
   organizationUsers,
+  cycleBands,
 }: MissionControlProps) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -48,6 +52,7 @@ export function MissionControl({
               cycleSlug={cycleSlug}
               cycleTitle={cycleTitle}
               slug={slug}
+              cycleBands={cycleBands}
             />
           )}
         </ClientSideSuspense>
@@ -60,10 +65,12 @@ function MissionControlWired({
   cycleSlug,
   cycleTitle,
   slug,
+  cycleBands,
 }: {
   cycleSlug: string
   cycleTitle: string
   slug: string
+  cycleBands?: OverlayBand[]
 }) {
   const pitches = useCycleStorage((root) => [...root.pitches])
   const scopes = useCycleStorage((root) => [...root.scopes])
@@ -127,6 +134,7 @@ function MissionControlWired({
       onCreatePitch={onCreatePitch}
       cycleStart={cycle.start_date}
       cycleEnd={cycle.end_date}
+      cycleBands={cycleBands}
     />
   )
 }

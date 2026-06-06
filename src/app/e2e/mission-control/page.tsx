@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { MissionControlView } from '@/components/mission-control'
 import { groupBySquad, type PitchCard } from '@/lib/mission-control-helpers'
-import { FIXTURE, CARDS, SQUADS } from './fixture'
+import { FIXTURE, CARDS, SQUADS, CYCLE_BANDS } from './fixture'
 
 export default function MissionControlE2EPage() {
   const [cards, setCards] = useState<PitchCard[]>(CARDS)
@@ -12,6 +12,7 @@ export default function MissionControlE2EPage() {
   return (
     <MissionControlView
       {...FIXTURE}
+      cycleBands={CYCLE_BANDS}
       sections={sections}
       onCreatePitch={(title) =>
         setCards((prev) => [
