@@ -3,6 +3,7 @@ import {
   cyclePhase,
   groupCycles,
   resolveLanding,
+  cycleNeighbors,
   type CycleSummary,
 } from './cycle-list-engine'
 
@@ -97,5 +98,36 @@ describe('groupCycles', () => {
     expect(slugs(groups.upcoming)).toEqual(['up-soon', 'up-late'])
     expect(slugs(groups.past)).toEqual(['past-recent', 'past-old'])
     expect(slugs(groups.current)).toEqual(['now-late', 'now-early'])
+  })
+})
+
+
+describe('cycleNeighbors', () => {
+  const cycles = [
+    cycle({ slug: 'c2', start_date: '2026-03-01' }),
+    cycle({ slug: 'c1', start_date: '2026-01-01' }),
+    cycle({ slug: 'c3', start_date: '2026-05-01' }),
+  ]
+
+  it('returns the chronological previous and next by start_date', () => {
+    const { prev, next } = cycleNeighbors(cycles, 'c2')
+    expect(prev?.slug).toBe('c1')
+    expect(next?.slug).toBe('c3')
+  })
+
+  it('has no previous for the earliest cycle', () => {
+    const { prev, next } = cycleNeighbors(cycles, 'c1')
+    expect(prev).toBeNull()
+    expect(next?.slug).toBe('c2')
+  })
+
+  it('has no next for the latest cycle', () => {
+    const { prev, next } = cycleNeighbors(cycles, 'c3')
+    expect(prev?.slug).toBe('c2')
+    expect(next).toBeNull()
+  })
+
+  it('returns nulls for an unknown slug', () => {
+    expect(cycleNeighbors(cycles, 'nope')).toEqual({ prev: null, next: null })
   })
 })

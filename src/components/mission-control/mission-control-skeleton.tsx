@@ -1,47 +1,96 @@
 import { Skeleton } from '@/components/ui/skeleton'
 
+/**
+ * Loading state for Mission Control. Hand-built to mirror the real layout (see
+ * mission-control-view.tsx / pitch-timeline.tsx): breadcrumb + cycle stepper,
+ * title row, the aligned Cycle window strip, then squad groups of two-line
+ * pitch-timeline rows (header + timebox bar).
+ */
 export function MissionControlSkeleton() {
   return (
-    <main className="w-full max-w-screen-xl mx-auto px-6 py-8 flex flex-col gap-10">
+    <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <div className="flex items-center gap-1.5">
-          <Skeleton className="h-4 w-12" />
-          <Skeleton className="h-3 w-3 rounded-full" />
-          <Skeleton className="h-4 w-20" />
+        {/* breadcrumb + cycle stepper */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-3 w-3 rounded-full" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <div className="flex items-center gap-1">
+            <Skeleton className="h-7 w-7 rounded-lg" />
+            <Skeleton className="h-7 w-7 rounded-lg" />
+          </div>
         </div>
-        <Skeleton className="h-8 w-52" />
+
+        {/* title + actions */}
+        <div className="flex items-end justify-between gap-3">
+          <Skeleton className="h-9 w-52" />
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-7 w-20 rounded-lg" />
+            <Skeleton className="h-7 w-7 rounded" />
+          </div>
+        </div>
+
+        {/* aligned Cycle window strip */}
+        <div className="rounded-lg border bg-card px-4 py-3 flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-1.5 w-full rounded-full" />
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-2.5 w-10" />
+              <Skeleton className="h-2.5 w-14" />
+              <Skeleton className="h-2.5 w-10" />
+            </div>
+          </div>
+        </div>
       </header>
 
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-5 w-6 rounded-full" />
-          <Skeleton className="ml-auto h-7 w-20 rounded-lg" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <PitchCardSkeleton key={i} />
-          ))}
-        </div>
-      </section>
+      {/* squad filter chips */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[16, 20, 14].map((w, i) => (
+          <Skeleton key={i} className="h-7 rounded-full" style={{ width: `${w * 4}px` }} />
+        ))}
+      </div>
+
+      {/* squad-grouped timeline */}
+      <div className="flex flex-col gap-4">
+        <SquadGroupSkeleton rows={3} />
+        <SquadGroupSkeleton rows={2} />
+      </div>
     </main>
   )
 }
 
-function PitchCardSkeleton() {
+function SquadGroupSkeleton({ rows }: { rows: number }) {
   return (
-    <div className="rounded-lg border bg-card p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <Skeleton className="h-7 w-12" />
-        <Skeleton className="h-5 w-16 rounded-full" />
+    <div>
+      <div className="flex items-center gap-2 px-1 pb-1.5">
+        <Skeleton className="h-2.5 w-2.5 rounded-full" />
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="h-3 w-4" />
       </div>
-      <Skeleton className="h-3.5 w-20" />
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-1.5 w-full rounded-full" />
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-3 w-14" />
-        <Skeleton className="h-3 w-24" />
+      <div className="rounded-lg border bg-card divide-y overflow-hidden">
+        {Array.from({ length: rows }).map((_, i) => (
+          <PitchRowSkeleton key={i} />
+        ))}
       </div>
+    </div>
+  )
+}
+
+function PitchRowSkeleton() {
+  return (
+    <div className="px-4 pt-2.5 pb-3 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-5 w-8" />
+        <Skeleton className="h-4 w-2/5 max-w-[16rem]" />
+        <Skeleton className="ml-auto h-5 w-16 rounded-full" />
+      </div>
+      <Skeleton className="h-2 w-full rounded-full" />
     </div>
   )
 }

@@ -47,7 +47,7 @@ The problem/outcome definition of a pitch. Two columns: Problem (why this matter
 _Avoid_: Brief, requirements, spec, PRD
 
 **Timebox**:
-The fixed time boundary of a pitch. Has start and end dates. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010). All of its math — days left, elapsed fill, "Week X of Y" — counts **business days**, not calendar days (see ADR 0013).
+The fixed time boundary of a pitch. Has start and end dates — but is **optional**: a pitch may have no timebox, in which case its tape is hidden (never "Invalid Date") and it draws no bar on the **Pitch timeline**. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010). All of its math — days left, elapsed fill, "Week X of Y" — counts **business days**, not calendar days (see ADR 0013).
 _Avoid_: Deadline, due date, sprint length
 
 **Business day**:
@@ -154,17 +154,21 @@ A named, color-coded team that owns pitches within a cycle. A pitch belongs to z
 _Avoid_: Team (ambiguous with the Clerk organization), group, pod, roster
 
 **Squad Color**:
-A squad's identity color, used to tell squads apart across a cycle — shown on the squad chip (Scope Map), the squad's Mission Control section header, and each pitch card. Drawn from the same curated palette as **Scope Color** but a conceptually distinct concept: Squad Color groups pitches across a cycle, Scope Color distinguishes scopes within one pitch. Auto-assigned (hue-distant from sibling squads) when not chosen; overridable from the palette only — no free hex (parity with ADR 0008).
+A squad's identity color, used to tell squads apart across a cycle — shown on the squad chip (Scope Map), the squad's Mission Control section header, and each pitch row / timebox bar. Drawn from the same curated palette as **Scope Color** but a conceptually distinct concept: Squad Color groups pitches across a cycle, Scope Color distinguishes scopes within one pitch. Auto-assigned (hue-distant from sibling squads) when not chosen; overridable from the palette only — no free hex (parity with ADR 0008).
 _Avoid_: Scope color, tier color, zone color, theme color
 
 **Unassigned**:
 The implicit bucket for pitches with no squad (`squadId` null) — not a stored squad. Always rendered last in Mission Control. Deleting a squad moves its pitches here rather than deleting them, so work is never lost by removing a team.
 _Avoid_: No squad, null squad, default squad, backlog
 
+**Pitch timeline**:
+The Mission Control pitch list rendered as a timeline. Pitches are grouped by squad (declared squad order, **Unassigned** last); each is a two-line row — a header (mini **Needle**, title, **Stage** badge) and its **Timebox** as a bar on a shared cycle-window scale measured in business days (ADR 0013). Every bar shares one grid with the aligned **Cycle window** strip above, so a single *today* ("now") line runs down the whole view. A **done** pitch is struck through, dimmed, and sorts to the bottom of its squad; a pitch with no **Timebox** shows "no timebox" (a timebox is optional). Bars are colored by **Squad Color**; each row links to that pitch's **Scope Map**. The view narrows with the **SquadFilterBar**. *Derived* at render time from pitches + squads; never stored. See [ADR 0016](docs/adr/0016-mission-control-pitch-timeline.md).
+_Avoid_: Card grid, Gantt, board, pitch band, squad span
+
 ### Views
 
 **Mission Control**:
-The overview surface showing all pitches in a cycle. Each pitch renders as a card with a mini needle, timebox tape, stage badge, and context note.
+The overview surface showing all pitches in a cycle, rendered as a **Pitch timeline** grouped by squad: each pitch is a row with a mini needle, title, stage badge, and its **Timebox** drawn as a bar on the cycle's shared scale (aligned to the **Cycle window** strip above, with one "now" line down the page).
 _Avoid_: Dashboard, board listing, overview page
 
 **Scope Map**:
@@ -194,6 +198,7 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - A **Cycle** contains zero or more **Squads**; a **Pitch** belongs to zero or one **Squad**
 - **Mission Control** groups **Pitches** into a section per **Squad**, with **Unassigned** last
 - Deleting a **Squad** moves its **Pitches** to **Unassigned** (never deletes them)
+- **Mission Control** renders its pitches as a **Pitch timeline** — per-pitch **Timebox** bars grouped by squad on the **Cycle window**'s shared scale; derived, never stored
 
 ## Example dialogue
 
