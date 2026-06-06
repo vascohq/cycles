@@ -46,9 +46,17 @@ export default async function CyclesPage({
     <main className="w-full max-w-screen-md mx-auto px-6 py-8">
       <div className="mb-4 flex justify-between items-center">
         <h1 className="text-2xl font-display">Cycles</h1>
-        <CreateCycleDialog>
-          <CreateCycleForm />
-        </CreateCycleDialog>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/${slug}/settings/integrations`}
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Integrations
+          </Link>
+          <CreateCycleDialog>
+            <CreateCycleForm />
+          </CreateCycleDialog>
+        </div>
       </div>
       {rooms.length === 0 && (
         <div className="flex items-center justify-center border p-2 rounded-lg text-sm text-muted-foreground text-center h-40">

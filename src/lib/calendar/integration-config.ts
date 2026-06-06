@@ -11,6 +11,9 @@ const feedSchema = z.object({
 
 const integrationConfigSchema = z.object({
   feeds: z.array(feedSchema).default([]),
+  // The org's Slack webhook (see #139). Optional/partial: omitting it must
+  // leave any stored value untouched (ADR 0011) — the writer merges.
+  slackWebhookUrl: z.string().min(1).optional(),
 })
 
 export type Feed = z.infer<typeof feedSchema>
