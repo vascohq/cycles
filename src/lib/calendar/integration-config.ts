@@ -9,6 +9,9 @@ const feedSchema = z.object({
   kind: z.enum(['holiday', 'timeoff']),
   label: z.string(),
   url: z.string().min(1),
+  // The feed's identity color (from the shared palette), used to tell feeds
+  // apart on the cycle window. Not a secret — safe to send to the browser.
+  color: z.string().min(1),
 })
 
 const integrationConfigSchema = z.object({
@@ -31,19 +34,28 @@ export type FeedInput = {
   id: string
   kind: 'holiday' | 'timeoff'
   label: string
+  color: string
   url?: string
 }
 
-// What the settings page may safely send to the browser — never the URL.
+// What the settings page may safely send to the browser — never the URL. Color
+// and the "is a url set" flag are fine; the URL itself is write-only.
 export type RedactedFeed = {
   id: string
   kind: 'holiday' | 'timeoff'
   label: string
+  color: string
   hasUrl: boolean
 }
 
 export function redactFeeds(feeds: Feed[]): RedactedFeed[] {
-  return feeds.map((f) => ({ id: f.id, kind: f.kind, label: f.label, hasUrl: Boolean(f.url) }))
+  return feeds.map((f) => ({
+    id: f.id,
+    kind: f.kind,
+    label: f.label,
+    color: f.color,
+    hasUrl: Boolean(f.url),
+  }))
 }
 
 /**
@@ -56,14 +68,15 @@ export function mergeFeedInputs(existing: Feed[], inputs: FeedInput[]): Feed[] {
   const byId = new Map(existing.map((f) => [f.id, f]))
 
   return inputs.map((input) => {
+    const base = { id: input.id, kind: input.kind, label: input.label, color: input.color }
     const url = input.url?.trim()
     if (url) {
-      return { id: input.id, kind: input.kind, label: input.label, url }
+      return { ...base, url }
     }
     const prior = byId.get(input.id)
     if (!prior) {
       throw new Error(`Feed "${input.label || input.id}" needs a URL.`)
     }
-    return { id: input.id, kind: input.kind, label: input.label, url: prior.url }
+    return { ...base, url: prior.url }
   })
 }

@@ -6,6 +6,8 @@ export type OverlayBand = {
   summary: string
   startDate: string
   endDate: string
+  /** The feed's identity color, attached downstream of the parser (optional). */
+  color?: string
 }
 
 export type FeedMeta = {

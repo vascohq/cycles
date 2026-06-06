@@ -12,6 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ColorPicker } from '@/components/color-picker'
+import { assignScopeColor } from '@/lib/color-engine'
 import { useToast } from '@/components/ui/use-toast'
 import type { FeedInput, RedactedFeed } from '@/lib/calendar/integration-config'
 import { saveIntegrationFeeds } from './actions'
@@ -22,6 +29,7 @@ type Row = {
   id: string
   kind: 'holiday' | 'timeoff'
   label: string
+  color: string
   hasUrl: boolean
   url: string
 }
@@ -39,7 +47,14 @@ export function IntegrationsForm({ initialFeeds }: { initialFeeds: RedactedFeed[
   const addRow = () =>
     setRows((prev) => [
       ...prev,
-      { id: nanoid(), kind: 'holiday', label: '', hasUrl: false, url: '' },
+      {
+        id: nanoid(),
+        kind: 'holiday',
+        label: '',
+        color: assignScopeColor(prev.map((r) => r.color)),
+        hasUrl: false,
+        url: '',
+      },
     ])
 
   const removeRow = (id: string) => setRows((prev) => prev.filter((r) => r.id !== id))
@@ -50,6 +65,7 @@ export function IntegrationsForm({ initialFeeds }: { initialFeeds: RedactedFeed[
         id: r.id,
         kind: r.kind,
         label: r.label,
+        color: r.color,
         url: r.url.trim() || undefined,
       }))
       const result = await saveIntegrationFeeds(feeds)
@@ -76,6 +92,23 @@ export function IntegrationsForm({ initialFeeds }: { initialFeeds: RedactedFeed[
             key={row.id}
             className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"
           >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Feed color"
+                  className="size-6 shrink-0 rounded-full ring-1 ring-inset ring-black/10 transition-transform hover:scale-110"
+                  style={{ backgroundColor: row.color }}
+                />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="p-2">
+                <ColorPicker
+                  value={row.color}
+                  usedColors={rows.filter((r) => r.id !== row.id).map((r) => r.color)}
+                  onPick={(color) => update(row.id, { color })}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Select
               value={row.kind}
               onValueChange={(value) => update(row.id, { kind: value as Row['kind'] })}

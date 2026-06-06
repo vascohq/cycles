@@ -55,40 +55,43 @@ export function CalendarOverlayRow({
   return (
     <TooltipProvider delayDuration={80}>
       <div className="relative w-full" style={{ height: laneCount * LANE_HEIGHT }}>
-        {placed.map(({ band, lane }, i) => (
-          <Tooltip key={i}>
-            <TooltipTrigger asChild>
-              <div
-                className="absolute flex items-center justify-center"
-                style={{
-                  left: pct(band.leftFraction),
-                  width: `max(2px, ${pct(band.widthFraction)})`,
-                  top: laneTop(lane),
-                  height: LANE_HEIGHT,
-                }}
-              >
+        {placed.map(({ band, lane }, i) => {
+          // Each feed's identity color; fall back to a per-kind default.
+          const color = band.color ?? (band.kind === 'holiday' ? '#f59e0b' : '#0ea5e9')
+          return (
+            <Tooltip key={i}>
+              <TooltipTrigger asChild>
                 <div
-                  className={
-                    band.observed
-                      ? // In-lieu (weekend holiday shifted to its observed workday): dashed.
-                        `border-t-[3px] border-dashed ${
-                          band.kind === 'holiday' ? 'border-amber-500' : 'border-sky-500'
-                        }`
-                      : `h-[3px] rounded-full ${
-                          band.kind === 'holiday' ? 'bg-amber-500' : 'bg-sky-500'
-                        }`
-                  }
-                  // Inset a little so adjacent marks read as separate, not one bar.
-                  style={{ width: 'max(2px, calc(100% - 4px))' }}
-                />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent className="text-xs">
-              <span className="font-medium">{band.summary}</span>
-              <span className="text-muted-foreground"> · {band.label}</span>
-            </TooltipContent>
-          </Tooltip>
-        ))}
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: pct(band.leftFraction),
+                    width: `max(2px, ${pct(band.widthFraction)})`,
+                    top: laneTop(lane),
+                    height: LANE_HEIGHT,
+                  }}
+                >
+                  <div
+                    className={
+                      band.observed
+                        ? // In-lieu (weekend holiday shifted to its observed workday): dashed.
+                          'border-t-[3px] border-dashed'
+                        : 'h-[3px] rounded-full'
+                    }
+                    // Inset a little so adjacent marks read as separate, not one bar.
+                    style={{
+                      width: 'max(2px, calc(100% - 4px))',
+                      ...(band.observed ? { borderColor: color } : { backgroundColor: color }),
+                    }}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="text-xs">
+                <span className="font-medium">{band.summary}</span>
+                <span className="text-muted-foreground"> · {band.label}</span>
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
       </div>
     </TooltipProvider>
   )

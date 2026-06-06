@@ -32,7 +32,11 @@ export async function fetchOverlayBands(
           return []
         }
         const text = await res.text()
-        return normalizeIcsFeed(text, { kind: feed.kind, label: feed.label }, range)
+        // Attach the feed's identity color to each band (the parser is
+        // color-agnostic; color is a feed/presentation concern).
+        return normalizeIcsFeed(text, { kind: feed.kind, label: feed.label }, range).map(
+          (band) => ({ ...band, color: feed.color })
+        )
       } catch (err) {
         console.warn(`[calendar] feed "${feed.label}" failed to load; skipping`, err)
         return []

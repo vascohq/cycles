@@ -7,6 +7,8 @@ export type PositionedBand = {
   summary: string
   leftFraction: number
   widthFraction: number
+  /** The feed's identity color (optional — falls back to a kind color). */
+  color?: string
   /** A weekend Holiday shifted to its observed (in-lieu) business day. */
   observed?: boolean
 }
@@ -85,6 +87,7 @@ export function positionBands(bands: ObservedBand[], window: Window): Positioned
       summary: band.summary,
       leftFraction: left / totalDays,
       widthFraction: (right - left) / totalDays,
+      ...(band.color ? { color: band.color } : {}),
       ...(band.observed ? { observed: true } : {}),
     })
   }

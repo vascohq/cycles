@@ -10,8 +10,8 @@ describe('parseIntegrationConfig', () => {
   it('accepts a valid feed list', () => {
     const raw = {
       feeds: [
-        { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://example.com/ca.ics' },
-        { id: 'b', kind: 'timeoff', label: 'Humi', url: 'webcal://api.humi.ca/feed.ics' },
+        { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://example.com/ca.ics', color: '#3e63dd' },
+        { id: 'b', kind: 'timeoff', label: 'Humi', url: 'webcal://api.humi.ca/feed.ics', color: '#30a46c' },
       ],
     }
 
@@ -36,15 +36,15 @@ describe('parseIntegrationConfig', () => {
 })
 
 const stored: Feed[] = [
-  { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://ca.ics' },
-  { id: 'b', kind: 'timeoff', label: 'Humi', url: 'webcal://humi.ics?token=secret' },
+  { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://ca.ics', color: '#3e63dd' },
+  { id: 'b', kind: 'timeoff', label: 'Humi', url: 'webcal://humi.ics?token=secret', color: '#30a46c' },
 ]
 
 describe('redactFeeds', () => {
-  it('exposes id/kind/label and whether a url is set, never the url', () => {
+  it('exposes id/kind/label/color and whether a url is set, never the url', () => {
     expect(redactFeeds(stored)).toEqual([
-      { id: 'a', kind: 'holiday', label: 'Canada', hasUrl: true },
-      { id: 'b', kind: 'timeoff', label: 'Humi', hasUrl: true },
+      { id: 'a', kind: 'holiday', label: 'Canada', color: '#3e63dd', hasUrl: true },
+      { id: 'b', kind: 'timeoff', label: 'Humi', color: '#30a46c', hasUrl: true },
     ])
   })
 })
@@ -52,33 +52,44 @@ describe('redactFeeds', () => {
 describe('mergeFeedInputs', () => {
   it('keeps the stored url when an input leaves it blank (label-only edit)', () => {
     const merged = mergeFeedInputs(stored, [
-      { id: 'a', kind: 'holiday', label: 'Canada 🇨🇦', url: '' },
-      { id: 'b', kind: 'timeoff', label: 'Humi' },
+      { id: 'a', kind: 'holiday', label: 'Canada 🇨🇦', color: '#3e63dd', url: '' },
+      { id: 'b', kind: 'timeoff', label: 'Humi', color: '#30a46c' },
     ])
 
     expect(merged).toEqual([
-      { id: 'a', kind: 'holiday', label: 'Canada 🇨🇦', url: 'https://ca.ics' },
-      { id: 'b', kind: 'timeoff', label: 'Humi', url: 'webcal://humi.ics?token=secret' },
+      { id: 'a', kind: 'holiday', label: 'Canada 🇨🇦', color: '#3e63dd', url: 'https://ca.ics' },
+      { id: 'b', kind: 'timeoff', label: 'Humi', color: '#30a46c', url: 'webcal://humi.ics?token=secret' },
     ])
   })
 
   it('replaces the url when an input provides a new one', () => {
     const [merged] = mergeFeedInputs(stored, [
-      { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://new.ics' },
+      { id: 'a', kind: 'holiday', label: 'Canada', color: '#3e63dd', url: 'https://new.ics' },
     ])
 
     expect(merged.url).toBe('https://new.ics')
   })
 
+  it('keeps the new color on a label/colour edit', () => {
+    const [merged] = mergeFeedInputs(stored, [
+      { id: 'a', kind: 'holiday', label: 'Canada', color: '#8e4ec6' },
+    ])
+
+    expect(merged.color).toBe('#8e4ec6')
+    expect(merged.url).toBe('https://ca.ics')
+  })
+
   it('drops a stored feed that is absent from the inputs', () => {
-    const merged = mergeFeedInputs(stored, [{ id: 'a', kind: 'holiday', label: 'Canada' }])
+    const merged = mergeFeedInputs(stored, [
+      { id: 'a', kind: 'holiday', label: 'Canada', color: '#3e63dd' },
+    ])
 
     expect(merged.map((f) => f.id)).toEqual(['a'])
   })
 
   it('throws when a brand-new feed has no url to store', () => {
     expect(() =>
-      mergeFeedInputs(stored, [{ id: 'new', kind: 'holiday', label: 'France', url: '' }])
+      mergeFeedInputs(stored, [{ id: 'new', kind: 'holiday', label: 'France', color: '#e5484d', url: '' }])
     ).toThrow()
   })
 })

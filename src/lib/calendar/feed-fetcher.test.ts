@@ -29,8 +29,8 @@ describe('fetchOverlayBands', () => {
     const bands = await fetchOverlayBands(
       {
         feeds: [
-          { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://good.example/ca.ics' },
-          { id: 'b', kind: 'timeoff', label: 'Humi', url: 'https://broken.example/x.ics' },
+          { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://good.example/ca.ics', color: '#3e63dd' },
+          { id: 'b', kind: 'timeoff', label: 'Humi', url: 'https://broken.example/x.ics', color: '#30a46c' },
         ],
       },
       RANGE,
@@ -39,6 +39,7 @@ describe('fetchOverlayBands', () => {
 
     expect(bands).toHaveLength(1)
     expect(bands[0]?.summary).toBe('Canada Day')
+    expect(bands[0]?.color).toBe('#3e63dd') // the feed's color is attached
   })
 
   it('returns no bands instead of throwing when a fetch rejects', async () => {
@@ -47,7 +48,7 @@ describe('fetchOverlayBands', () => {
     })
 
     const bands = await fetchOverlayBands(
-      { feeds: [{ id: 'a', kind: 'timeoff', label: 'Humi', url: 'https://humi.example/x.ics' }] },
+      { feeds: [{ id: 'a', kind: 'timeoff', label: 'Humi', url: 'https://humi.example/x.ics', color: '#30a46c' }] },
       RANGE,
       fetchImpl
     )
@@ -59,7 +60,7 @@ describe('fetchOverlayBands', () => {
     const fetchImpl = vi.fn(async () => ok(HOLIDAY_ICS))
 
     await fetchOverlayBands(
-      { feeds: [{ id: 'a', kind: 'timeoff', label: 'Humi', url: 'webcal://api.humi.ca/feed.ics' }] },
+      { feeds: [{ id: 'a', kind: 'timeoff', label: 'Humi', url: 'webcal://api.humi.ca/feed.ics', color: '#30a46c' }] },
       RANGE,
       fetchImpl
     )
