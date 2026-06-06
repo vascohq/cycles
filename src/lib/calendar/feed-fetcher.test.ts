@@ -29,8 +29,8 @@ describe('fetchOverlayBands', () => {
     const bands = await fetchOverlayBands(
       {
         feeds: [
-          { kind: 'holiday', label: 'Canada', url: 'https://good.example/ca.ics' },
-          { kind: 'timeoff', label: 'Humi', url: 'https://broken.example/x.ics' },
+          { id: 'a', kind: 'holiday', label: 'Canada', url: 'https://good.example/ca.ics' },
+          { id: 'b', kind: 'timeoff', label: 'Humi', url: 'https://broken.example/x.ics' },
         ],
       },
       RANGE,
@@ -47,7 +47,7 @@ describe('fetchOverlayBands', () => {
     })
 
     const bands = await fetchOverlayBands(
-      { feeds: [{ kind: 'timeoff', label: 'Humi', url: 'https://humi.example/x.ics' }] },
+      { feeds: [{ id: 'a', kind: 'timeoff', label: 'Humi', url: 'https://humi.example/x.ics' }] },
       RANGE,
       fetchImpl
     )
@@ -59,7 +59,7 @@ describe('fetchOverlayBands', () => {
     const fetchImpl = vi.fn(async () => ok(HOLIDAY_ICS))
 
     await fetchOverlayBands(
-      { feeds: [{ kind: 'timeoff', label: 'Humi', url: 'webcal://api.humi.ca/feed.ics' }] },
+      { feeds: [{ id: 'a', kind: 'timeoff', label: 'Humi', url: 'webcal://api.humi.ca/feed.ics' }] },
       RANGE,
       fetchImpl
     )

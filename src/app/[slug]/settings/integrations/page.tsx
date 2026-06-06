@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import type { Metadata } from 'next'
-import { getIntegrationConfig } from '@/lib/calendar/org-integrations'
+import { getRedactedIntegrationConfig } from '@/lib/calendar/org-integrations'
 import { IntegrationsForm } from './integrations-form'
 import { SlackWebhookForm } from './slack-webhook-form'
 
@@ -69,7 +69,9 @@ export default async function IntegrationsSettingsPage({
     )
   }
 
-  const config = await getIntegrationConfig(orgId)
+  // Redacted: the form gets labels and "is set" flags, never the stored URLs
+  // (write-only secrets, ADR 0014).
+  const config = await getRedactedIntegrationConfig(orgId)
 
   return (
     <main className="mx-auto flex w-full max-w-screen-md flex-col gap-8 px-6 py-8">
@@ -87,10 +89,11 @@ export default async function IntegrationsSettingsPage({
           Slack
         </h2>
         <p className="max-w-prose text-sm text-muted-foreground">
-          Incoming webhook URL for posting needle updates. Leave blank to disable
-          Slack delivery for this organization.
+          Incoming webhook URL for posting needle updates. Stored privately and
+          never shown again — paste a new URL to replace it, or clear it to
+          disable Slack delivery for this organization.
         </p>
-        <SlackWebhookForm initialUrl={config.slackWebhookUrl ?? ''} />
+        <SlackWebhookForm configured={config.slackConfigured} />
       </section>
     </main>
   )

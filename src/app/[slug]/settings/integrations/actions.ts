@@ -2,7 +2,7 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { setIntegrationFeeds, setSlackWebhookUrl } from '@/lib/calendar/org-integrations'
-import type { Feed } from '@/lib/calendar/integration-config'
+import type { FeedInput } from '@/lib/calendar/integration-config'
 
 export type SaveResult = { ok: true } | { ok: false; error: string }
 
@@ -21,11 +21,13 @@ async function requireOrgAdmin(): Promise<
 }
 
 /**
- * Persist the org's calendar feed list. Admin-only and org-scoped; the feed
- * URLs (capability tokens) only ever travel from this admin form to the server,
- * never to a regular cycle viewer. Validation happens in setIntegrationFeeds.
+ * Persist the org's calendar feeds. Admin-only and org-scoped. URLs are
+ * write-only (ADR 0014): a row with a blank url keeps the stored one; a new row
+ * must carry a url. The URLs only ever travel from this admin form to the
+ * server, never back to any browser. Merge + validation happen in
+ * setIntegrationFeeds.
  */
-export async function saveIntegrationFeeds(feeds: Feed[]): Promise<SaveResult> {
+export async function saveIntegrationFeeds(feeds: FeedInput[]): Promise<SaveResult> {
   const gate = await requireOrgAdmin()
   if (!gate.ok) return gate
 
@@ -33,7 +35,7 @@ export async function saveIntegrationFeeds(feeds: Feed[]): Promise<SaveResult> {
     await setIntegrationFeeds(gate.orgId, feeds)
     return { ok: true }
   } catch {
-    return { ok: false, error: 'Could not save — check that every feed has a label and URL.' }
+    return { ok: false, error: 'Could not save — every new feed needs a label and URL.' }
   }
 }
 

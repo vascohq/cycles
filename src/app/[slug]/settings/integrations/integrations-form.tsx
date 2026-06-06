@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { nanoid } from 'nanoid'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,39 +13,53 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
-import type { Feed } from '@/lib/calendar/integration-config'
+import type { FeedInput, RedactedFeed } from '@/lib/calendar/integration-config'
 import { saveIntegrationFeeds } from './actions'
 
-// Local rows carry a stable key for React; it never leaves the browser.
-type Row = Feed & { key: string }
+// A row carries the redacted feed (no URL) plus a write-only `url` field: blank
+// means "keep the saved one" for an existing feed, or "missing" for a new one.
+type Row = {
+  id: string
+  kind: 'holiday' | 'timeoff'
+  label: string
+  hasUrl: boolean
+  url: string
+}
 
-let counter = 0
-const newKey = () => `row-${counter++}`
+const toRows = (feeds: RedactedFeed[]): Row[] => feeds.map((f) => ({ ...f, url: '' }))
 
-const toRows = (feeds: Feed[]): Row[] => feeds.map((f) => ({ ...f, key: newKey() }))
-
-export function IntegrationsForm({ initialFeeds }: { initialFeeds: Feed[] }) {
+export function IntegrationsForm({ initialFeeds }: { initialFeeds: RedactedFeed[] }) {
   const [rows, setRows] = useState<Row[]>(() => toRows(initialFeeds))
   const [isSaving, startSaving] = useTransition()
   const { toast } = useToast()
 
-  const update = (key: string, patch: Partial<Feed>) =>
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+  const update = (id: string, patch: Partial<Row>) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
 
   const addRow = () =>
-    setRows((prev) => [...prev, { key: newKey(), kind: 'holiday', label: '', url: '' }])
+    setRows((prev) => [
+      ...prev,
+      { id: nanoid(), kind: 'holiday', label: '', hasUrl: false, url: '' },
+    ])
 
-  const removeRow = (key: string) => setRows((prev) => prev.filter((r) => r.key !== key))
+  const removeRow = (id: string) => setRows((prev) => prev.filter((r) => r.id !== id))
 
   const save = () =>
     startSaving(async () => {
-      const feeds: Feed[] = rows.map(({ key: _key, ...feed }) => feed)
+      const feeds: FeedInput[] = rows.map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        label: r.label,
+        url: r.url.trim() || undefined,
+      }))
       const result = await saveIntegrationFeeds(feeds)
-      toast(
-        result.ok
-          ? { title: 'Integrations saved' }
-          : { title: 'Could not save', description: result.error, variant: 'destructive' }
-      )
+      if (result.ok) {
+        // Clear the write-only inputs and mark every surviving row as saved.
+        setRows((prev) => prev.map((r) => ({ ...r, hasUrl: true, url: '' })))
+        toast({ title: 'Integrations saved' })
+      } else {
+        toast({ title: 'Could not save', description: result.error, variant: 'destructive' })
+      }
     })
 
   return (
@@ -58,12 +73,12 @@ export function IntegrationsForm({ initialFeeds }: { initialFeeds: Feed[] }) {
 
         {rows.map((row) => (
           <div
-            key={row.key}
+            key={row.id}
             className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"
           >
             <Select
               value={row.kind}
-              onValueChange={(value) => update(row.key, { kind: value as Feed['kind'] })}
+              onValueChange={(value) => update(row.id, { kind: value as Row['kind'] })}
             >
               <SelectTrigger className="sm:w-36" aria-label="Feed type">
                 <SelectValue />
@@ -77,20 +92,22 @@ export function IntegrationsForm({ initialFeeds }: { initialFeeds: Feed[] }) {
               className="sm:w-40"
               placeholder="Label (e.g. Canada)"
               value={row.label}
-              onChange={(e) => update(row.key, { label: e.target.value })}
+              onChange={(e) => update(row.id, { label: e.target.value })}
             />
             <Input
               className="flex-1 font-mono text-xs"
-              placeholder="https://… or webcal://…"
+              placeholder={
+                row.hasUrl ? '•••••••• saved — paste to replace' : 'https://… or webcal://…'
+              }
               value={row.url}
-              onChange={(e) => update(row.key, { url: e.target.value })}
+              onChange={(e) => update(row.id, { url: e.target.value })}
             />
             <Button
               type="button"
               variant="ghost"
               size="icon"
               aria-label="Remove feed"
-              onClick={() => removeRow(row.key)}
+              onClick={() => removeRow(row.id)}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

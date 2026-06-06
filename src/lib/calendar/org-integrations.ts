@@ -1,11 +1,20 @@
 import { clerkClient } from '@clerk/nextjs/server'
 import {
   parseIntegrationConfig,
-  type Feed,
+  mergeFeedInputs,
+  redactFeeds,
+  type FeedInput,
   type IntegrationConfig,
+  type RedactedFeed,
 } from './integration-config'
 
 const EMPTY: IntegrationConfig = { feeds: [] }
+
+/** What the settings page may safely receive — URLs/webhook are write-only. */
+export type RedactedIntegrationConfig = {
+  feeds: RedactedFeed[]
+  slackConfigured: boolean
+}
 
 // Key under the Clerk organization's privateMetadata where the calendar feed
 // list (and, later, the Slack webhook) lives. privateMetadata keeps the
@@ -32,18 +41,34 @@ export async function getIntegrationConfig(
 }
 
 /**
- * Replace the org's feed list, preserving every other key already under
- * `calendarIntegrations` (notably the Slack webhook — ADR 0011: a partial save
- * must never wipe a sibling field). Validates through the schema before
- * writing. Server-only; callers must enforce the admin check.
+ * The redacted config safe to hand the browser: feed id/kind/label + whether a
+ * URL is set, and whether Slack is configured — never the URLs themselves
+ * (write-only secrets, ADR 0014).
  */
-export async function setIntegrationFeeds(orgId: string, feeds: Feed[]): Promise<void> {
+export async function getRedactedIntegrationConfig(
+  orgId: string | null | undefined
+): Promise<RedactedIntegrationConfig> {
+  const config = await getIntegrationConfig(orgId)
+  return {
+    feeds: redactFeeds(config.feeds),
+    slackConfigured: Boolean(config.slackWebhookUrl),
+  }
+}
+
+/**
+ * Apply the settings form's feed inputs, merging over the stored feeds so the
+ * write-only URLs survive a label-only edit (ADR 0014) and preserving every
+ * other key under `calendarIntegrations` — notably the Slack webhook (ADR 0011).
+ * Validates before writing. Server-only; callers must enforce the admin check.
+ */
+export async function setIntegrationFeeds(orgId: string, inputs: FeedInput[]): Promise<void> {
   const client = await clerkClient()
   const org = await client.organizations.getOrganization({ organizationId: orgId })
-  const existing = (org.privateMetadata?.[METADATA_KEY] ?? {}) as Record<string, unknown>
+  const existing = parseIntegrationConfig(org.privateMetadata?.[METADATA_KEY] ?? {})
+  const raw = (org.privateMetadata?.[METADATA_KEY] ?? {}) as Record<string, unknown>
 
-  // Validate the merged shape; throws on bad input before anything is written.
-  const next = parseIntegrationConfig({ ...existing, feeds })
+  const feeds = mergeFeedInputs(existing.feeds, inputs)
+  const next = parseIntegrationConfig({ ...raw, feeds })
 
   await client.organizations.updateOrganization(orgId, {
     privateMetadata: { [METADATA_KEY]: next },

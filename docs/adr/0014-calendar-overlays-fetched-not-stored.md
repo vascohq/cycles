@@ -58,6 +58,15 @@ limitation.
    Cycle window still renders and the error is logged server-side. A broken Humi
    token must never take down Mission Control.
 
+6. **Write-only secrets.** The feed URLs (the Humi one embeds a capability
+   token) and the Slack webhook are set from the settings page but **never read
+   back to any browser** — not even the admin's. The page receives a *redacted*
+   view (each feed's `id` / `kind` / `label` / `hasUrl`, and a `slackConfigured`
+   flag); the actual URLs only ever travel browser → server. To support editing
+   a feed's label without re-entering its URL, feeds carry a stable `id` and the
+   save path merges by id: a blank URL keeps the stored one, a new URL replaces
+   it, a new feed must supply one. The Slack webhook is set/replaced or cleared.
+
 ## Consequences
 
 - v1 is **cycle-window only**, with **no person model** and **no name
