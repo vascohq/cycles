@@ -65,7 +65,7 @@ describe('listCycleRooms', () => {
 describe('getCycleStorage', () => {
   it('fetches storage as JSON for the correct room ID', async () => {
     const fakeStorage = {
-      cycle: { name: 'Q2', type: 'build', start_date: '', end_date: '', slack_channel: '' },
+      cycle: { name: 'Q2', type: 'build', start_date: '', end_date: '' },
       pitches: [],
       scopes: [],
       tasks: [],
@@ -83,7 +83,7 @@ describe('getCycleStorage', () => {
 
 describe('resolvePitch', () => {
   const storage = {
-    cycle: { name: 'Q2', type: 'build' as const, start_date: '', end_date: '', slack_channel: '' },
+    cycle: { name: 'Q2', type: 'build' as const, start_date: '', end_date: '' },
     pitches: [
       { id: 'p1', title: 'Mission Control', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
       { id: 'p2', title: 'Agentic Skills', stage: 'framing' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },

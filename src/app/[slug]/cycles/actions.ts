@@ -1,9 +1,11 @@
 'use server'
 
 import { liveblocks } from '@/lib/liveblocks'
+import { updateCycle } from '@/lib/mcp/liveblocks-writer'
 import type { PaletteCycleItem } from '@/components/command-palette/types'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
 /**
  * List the current org's cycles for the command palette. Mirrors the listing in
@@ -59,9 +61,6 @@ export async function createCycleRoom(formData: FormData) {
   const type = String(formData.get('type') ?? 'build')
   const startDate = String(formData.get('start_date') ?? '')
   const endDate = String(formData.get('end_date') ?? '')
-  const slackChannel = String(
-    formData.get('slack_channel') ?? '#product-general'
-  )
 
   const roomPrefix = orgId ?? userId
   const roomId = `${roomPrefix}:cycle:${slug}`
@@ -75,7 +74,6 @@ export async function createCycleRoom(formData: FormData) {
         type,
         start_date: startDate,
         end_date: endDate,
-        slack_channel: slackChannel,
       },
       defaultAccesses: ['room:write'],
     })
@@ -90,7 +88,6 @@ export async function createCycleRoom(formData: FormData) {
             type,
             start_date: startDate,
             end_date: endDate,
-            slack_channel: slackChannel,
           },
         },
         pitches: { liveblocksType: 'LiveList', data: [] },
@@ -103,4 +100,33 @@ export async function createCycleRoom(formData: FormData) {
   }
 
   redirect(`/${orgSlug ?? 'me'}/cycles/${slug}`)
+}
+
+/**
+ * Edit a cycle's fields from the UI. The slug (room ID) is immutable, so it is
+ * never a parameter here. Reuses the same `updateCycle` writer the MCP server
+ * uses — one writer keeps the storage `cycle` object and the room metadata in
+ * sync (see ADR 0015 / ADR 0011). `cycleSlug` is bound on the client; the rest
+ * come from the form.
+ */
+export async function updateCycleRoom(cycleSlug: string, formData: FormData) {
+  const { userId, orgId, orgSlug } = await auth()
+  if (!userId) throw new Error('Not authenticated')
+
+  const roomPrefix = orgId ?? userId
+  const roomId = `${roomPrefix}:cycle:${cycleSlug}`
+
+  const type = String(formData.get('type') ?? 'build')
+  await updateCycle(roomId, {
+    name: String(formData.get('name') ?? ''),
+    type: type === 'cooldown' ? 'cooldown' : 'build',
+    start_date: String(formData.get('start_date') ?? ''),
+    end_date: String(formData.get('end_date') ?? ''),
+  })
+
+  // The breadcrumb title and the listing read room metadata server-side, so
+  // refresh them; in-page content tracks the live storage object reactively.
+  const urlSlug = orgSlug ?? 'me'
+  revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
+  revalidatePath(`/${urlSlug}/cycles`)
 }

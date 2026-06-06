@@ -22,7 +22,6 @@ import {
   filterSquadSections,
 } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
-import { useSlackEnabled } from '@/components/slack-config-context'
 import { cn } from '@/lib/utils'
 import { slugify } from '@/lib/slugify'
 
@@ -55,6 +54,8 @@ export type MissionControlViewProps = {
   cycleEnd?: string
   /** Calendar overlay bands (Holidays / Time Off) for the cycle window. */
   cycleBands?: OverlayBand[]
+  /** Optional controls rendered in the header (e.g. Edit cycle). */
+  headerActions?: React.ReactNode
 }
 
 export function MissionControlView({
@@ -67,10 +68,10 @@ export function MissionControlView({
   cycleStart,
   cycleEnd,
   cycleBands,
+  headerActions,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
-  const slackEnabled = useSlackEnabled()
   const isEmpty = sections.length === 0
   // Show the filter only when there's more than one section to choose between.
   const showFilter = sections.length > 1
@@ -94,11 +95,6 @@ export function MissionControlView({
             Mission Control
           </h1>
           <div className="flex items-center gap-3">
-            {slackEnabled && (
-              <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
-                Updates posted to Slack
-              </span>
-            )}
             {onCreatePitch && (
               <button
                 onClick={() => setCreateOpen(true)}
@@ -108,6 +104,7 @@ export function MissionControlView({
                 Add pitch
               </button>
             )}
+            {headerActions}
           </div>
         </div>
         {cycleStart && cycleEnd && (
@@ -152,10 +149,6 @@ export function MissionControlView({
           onCreate={onCreatePitch}
         />
       )}
-
-      <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
-        mission control · click a pitch to open its scope map
-      </footer>
     </main>
   )
 }

@@ -412,10 +412,6 @@ export function ScopeMapView({
         onRetrySlack={onRetrySlack}
         onDeleteUpdate={isDone ? undefined : onDeleteUpdate}
       />
-
-      <footer className="text-xs text-muted-foreground/40 font-mono text-center pb-8">
-        scope map · drag dots on the hill · check tasks · move the needle
-      </footer>
     </main>
   )
 }

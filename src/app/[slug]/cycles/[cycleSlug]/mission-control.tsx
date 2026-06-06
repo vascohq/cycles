@@ -11,6 +11,7 @@ import {
 import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MissionControlView } from '@/components/mission-control'
+import { EditCycleButton } from './edit-cycle-dialog'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { derivePitchCards, groupBySquad } from '@/lib/mission-control-helpers'
 import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
@@ -79,6 +80,8 @@ function MissionControlWired({
   const squads = useCycleStorage((root) => [...root.squads])
 
   const cycle = useCycleStorage((root) => ({
+    name: root.cycle.name,
+    type: root.cycle.type,
     start_date: root.cycle.start_date,
     end_date: root.cycle.end_date,
   }))
@@ -135,6 +138,15 @@ function MissionControlWired({
       cycleStart={cycle.start_date}
       cycleEnd={cycle.end_date}
       cycleBands={cycleBands}
+      headerActions={
+        <EditCycleButton
+          cycleSlug={cycleSlug}
+          name={cycle.name}
+          type={cycle.type}
+          start_date={cycle.start_date}
+          end_date={cycle.end_date}
+        />
+      }
     />
   )
 }

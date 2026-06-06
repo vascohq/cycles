@@ -39,7 +39,6 @@ export function cycleInitialStorage(): CycleStorage {
       type: 'build',
       start_date: '',
       end_date: '',
-      slack_channel: '',
     }),
     pitches: new LiveList([]),
     scopes: new LiveList([]),

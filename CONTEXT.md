@@ -10,6 +10,10 @@ Cycles is a Shape Up project management tool. Teams work in fixed time-boxed cyc
 A time-boxed period of work containing pitches. Either a build cycle (6 weeks) or a cooldown (2 weeks).
 _Avoid_: Sprint, iteration, board
 
+**Cycle phase**:
+A cycle's lifecycle state — `upcoming`, `current`, or `past` — **derived purely from its dates** against today (the same `before`/`during`/`after` the cycle window already computes), never a stored field. There is no "active" flag and no "archive" action: a cycle becomes past by ending, not by a human toggling it. "Archiving" is only a _visual_ treatment (a past cycle folds/dims in the Cycles list), not a state change. Default landing resolves to the `current` cycle (see [ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)).
+_Avoid_: Archive, archived, active/inactive, status, closed
+
 **Cooldown**:
 A short cycle (typically 2 weeks) between build cycles for small fixes and exploration. Pitches in a cooldown skip to the building stage.
 _Avoid_: Buffer, break, maintenance window
