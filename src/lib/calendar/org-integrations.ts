@@ -3,6 +3,7 @@ import {
   parseIntegrationConfig,
   mergeFeedInputs,
   redactFeeds,
+  type Feed,
   type FeedInput,
   type IntegrationConfig,
   type RedactedFeed,
@@ -64,15 +65,29 @@ export async function getRedactedIntegrationConfig(
 export async function setIntegrationFeeds(orgId: string, inputs: FeedInput[]): Promise<void> {
   const client = await clerkClient()
   const org = await client.organizations.getOrganization({ organizationId: orgId })
-  const existing = parseIntegrationConfig(org.privateMetadata?.[METADATA_KEY] ?? {})
   const raw = (org.privateMetadata?.[METADATA_KEY] ?? {}) as Record<string, unknown>
 
-  const feeds = mergeFeedInputs(existing.feeds, inputs)
-  const next = parseIntegrationConfig({ ...raw, feeds })
+  // Read existing feeds leniently — a stale/old-shape stored entry must not
+  // block a fresh save (the new inputs carry their own URLs anyway).
+  let existingFeeds: Feed[] = []
+  try {
+    existingFeeds = parseIntegrationConfig(raw).feeds
+  } catch {
+    existingFeeds = []
+  }
+
+  const feeds = mergeFeedInputs(existingFeeds, inputs)
+  const next = parseIntegrationConfig({ feeds, slackWebhookUrl: existingSlackWebhook(raw) })
 
   await client.organizations.updateOrganization(orgId, {
     privateMetadata: { [METADATA_KEY]: next },
   })
+}
+
+// Pull a usable Slack webhook out of possibly-stale stored metadata.
+function existingSlackWebhook(raw: Record<string, unknown>): string | undefined {
+  const value = raw.slackWebhookUrl
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
 /**
@@ -93,14 +108,19 @@ export async function getSlackWebhookUrl(
 export async function setSlackWebhookUrl(orgId: string, url: string): Promise<void> {
   const client = await clerkClient()
   const org = await client.organizations.getOrganization({ organizationId: orgId })
-  const existing = (org.privateMetadata?.[METADATA_KEY] ?? {}) as Record<string, unknown>
+  const raw = (org.privateMetadata?.[METADATA_KEY] ?? {}) as Record<string, unknown>
 
-  const merged = { ...existing }
+  // Preserve the feed list (read leniently so stale entries don't block).
+  let feeds: Feed[] = []
+  try {
+    feeds = parseIntegrationConfig(raw).feeds
+  } catch {
+    feeds = []
+  }
+
   const trimmed = url.trim()
-  if (trimmed) merged.slackWebhookUrl = trimmed
-  else delete merged.slackWebhookUrl
+  const next = parseIntegrationConfig({ feeds, slackWebhookUrl: trimmed || undefined })
 
-  const next = parseIntegrationConfig(merged)
   await client.organizations.updateOrganization(orgId, {
     privateMetadata: { [METADATA_KEY]: next },
   })

@@ -34,8 +34,10 @@ export async function saveIntegrationFeeds(feeds: FeedInput[]): Promise<SaveResu
   try {
     await setIntegrationFeeds(gate.orgId, feeds)
     return { ok: true }
-  } catch {
-    return { ok: false, error: 'Could not save — every new feed needs a label and URL.' }
+  } catch (err) {
+    console.error('[integrations] saveIntegrationFeeds failed', err)
+    const detail = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: `Could not save: ${detail}` }
   }
 }
 
@@ -50,7 +52,9 @@ export async function saveSlackWebhook(url: string): Promise<SaveResult> {
   try {
     await setSlackWebhookUrl(gate.orgId, url)
     return { ok: true }
-  } catch {
-    return { ok: false, error: 'Could not save the Slack webhook.' }
+  } catch (err) {
+    console.error('[integrations] saveSlackWebhook failed', err)
+    const detail = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: `Could not save: ${detail}` }
   }
 }
