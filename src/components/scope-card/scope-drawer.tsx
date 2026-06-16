@@ -3,6 +3,7 @@
 import { useState, useRef, useLayoutEffect } from 'react'
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   PointerSensor,
   KeyboardSensor,
@@ -157,12 +158,18 @@ function ScopeDrawerBody({
   const canReorder =
     !readOnly && !!onTaskReorder && !isFiltered && visibleTasks.length > 1
 
+  // The task currently being dragged — rendered as a fixed-size clone in a
+  // DragOverlay so its wrapping title can't reflow ("squish") mid-drag.
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const draggingTask = visibleTasks.find((t) => t.id === draggingId) ?? null
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
   function handleDragEnd(event: DragEndEvent) {
+    setDraggingId(null)
     const { active, over } = event
     if (over && active.id !== over.id) {
       onTaskReorder?.(String(active.id), String(over.id))
@@ -259,6 +266,8 @@ function ScopeDrawerBody({
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragStart={(e) => setDraggingId(String(e.active.id))}
+              onDragCancel={() => setDraggingId(null)}
               onDragEnd={handleDragEnd}
             >
               <SortableContext
@@ -269,6 +278,9 @@ function ScopeDrawerBody({
                   <SortableTaskRow key={task.id} {...rowProps(task)} />
                 ))}
               </SortableContext>
+              <DragOverlay>
+                {draggingTask && <TaskRow {...rowProps(draggingTask)} overlay />}
+              </DragOverlay>
             </DndContext>
           ) : (
             visibleTasks.map((task) => <TaskRow key={task.id} {...rowProps(task)} />)
@@ -546,6 +558,8 @@ type TaskRowProps = {
   onAssign?: (assigneeId: string | null) => void
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>
   isDragging?: boolean
+  /** Rendered inside the DragOverlay — a lifted, fixed-size clone. */
+  overlay?: boolean
 }
 
 // A single task line: [grip] [done-square] [title] [assignee] [⋯]. Only the
@@ -563,6 +577,7 @@ function TaskRow({
   onAssign,
   dragHandleProps,
   isDragging,
+  overlay,
 }: TaskRowProps) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(task.title)
@@ -614,8 +629,12 @@ function TaskRow({
   return (
     <div
       className={`relative flex items-start gap-2 rounded-md py-1 transition-colors ${
-        readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted dark:hover:bg-muted/50'
-      } ${isDragging ? 'opacity-60' : ''}`}
+        overlay
+          ? 'px-2 bg-popover shadow-lg cursor-grabbing'
+          : readOnly
+            ? '-mx-2 px-2'
+            : 'group -mx-2 px-2 hover:bg-muted dark:hover:bg-muted/50'
+      } ${isDragging && !overlay ? 'opacity-40' : ''}`}
     >
       {/* Drag handle — pulled out of flow into the left gutter (absolute) so it
           never shifts the checkbox, which stays aligned with the filter bar
