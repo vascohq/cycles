@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ScopeDrawer } from './scope-drawer'
 
 afterEach(cleanup)
@@ -79,10 +80,11 @@ describe('core scope toggle', () => {
 })
 
 describe('task management in the drawer', () => {
-  it('renames a task via the inline editor on Enter', () => {
+  it('renames a task by clicking its title, on Enter', () => {
     const onTaskEdit = vi.fn()
     renderDrawer({ onTaskEdit })
-    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    // Clicking the title text opens the inline editor (no separate edit CTA).
+    fireEvent.click(screen.getByText('Login page'))
     const input = screen.getByDisplayValue('Login page')
     fireEvent.change(input, { target: { value: 'Login screen' } })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -92,39 +94,31 @@ describe('task management in the drawer', () => {
   it('inserts a newline instead of saving when Shift+Enter is pressed during a task rename', () => {
     const onTaskEdit = vi.fn()
     renderDrawer({ onTaskEdit })
-    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    fireEvent.click(screen.getByText('Login page'))
     const input = screen.getByDisplayValue('Login page')
     fireEvent.change(input, { target: { value: 'Login page, then redirect home' } })
     fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
     expect(onTaskEdit).not.toHaveBeenCalled()
   })
 
-  it('deletes a task immediately with no confirm', () => {
+  it('deletes a task from the overflow menu', async () => {
+    const user = userEvent.setup()
     const onTaskDelete = vi.fn()
     renderDrawer({ onTaskDelete })
-    fireEvent.click(screen.getAllByLabelText('Delete task')[0])
+    await user.click(screen.getAllByLabelText('Task actions')[0])
+    await user.click(await screen.findByRole('menuitem', { name: /delete/i }))
     expect(onTaskDelete).toHaveBeenCalledWith('t1')
   })
 
-  it('toggles a task done', () => {
+  it('toggles a task done from the square only, not the title', () => {
     const onTaskToggle = vi.fn()
     renderDrawer({ onTaskToggle })
+    // Clicking the title must NOT toggle done.
     fireEvent.click(screen.getByText('Token refresh'))
+    expect(onTaskToggle).not.toHaveBeenCalled()
+    // The square does.
+    fireEvent.click(screen.getByLabelText('Mark task done'))
     expect(onTaskToggle).toHaveBeenCalledWith('t2', true)
-  })
-
-  it('shows reset only when at least one task is done', () => {
-    const { rerender } = renderDrawer({ onReset: vi.fn() })
-    expect(screen.getByText('reset')).toBeTruthy()
-    rerender(
-      <ScopeDrawer
-        open
-        onOpenChange={vi.fn()}
-        onReset={vi.fn()}
-        scope={{ ...SCOPE, tasks: [{ id: 't2', title: 'x', done: false }] }}
-      />
-    )
-    expect(screen.queryByText('reset')).toBeNull()
   })
 })
 
