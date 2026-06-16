@@ -154,11 +154,11 @@ function ScopeDrawerBody({
     assigneeId: assigneeFilter ?? undefined,
   })
 
-  // Reordering operates on the full list, so it's only unambiguous when the
-  // list is unfiltered — a filtered subset can't map positions back cleanly.
-  const isFiltered = openOnly || assigneeFilter !== null
-  const canReorder =
-    !readOnly && !!onTaskReorder && !isFiltered && visibleTasks.length > 1
+  // Reordering works even while filtered: the mutation moves the dragged task to
+  // the target task's ABSOLUTE position in the full list (looked up by id), so
+  // the visible relative order lands as dragged and hidden tasks keep their
+  // slots. Needs >1 visible task to have somewhere to drop.
+  const canReorder = !readOnly && !!onTaskReorder && visibleTasks.length > 1
 
   // The task currently being dragged — rendered as a fixed-size clone in a
   // DragOverlay so its wrapping title can't reflow ("squish") mid-drag.
