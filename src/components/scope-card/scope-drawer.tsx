@@ -3,7 +3,7 @@
 import { useState, useRef, useLayoutEffect } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
-import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2 } from 'lucide-react'
+import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2, ChevronDown } from 'lucide-react'
 import { ColorPicker } from '@/components/color-picker'
 import {
   Sheet,
@@ -21,11 +21,7 @@ import {
 import type { ScopeCardTask } from './scope-card'
 import type { OrganizationUser } from '@/lib/users'
 import { AssigneePicker, UserAvatar } from './assignee-picker'
-import {
-  filterTasks,
-  filterControlVisibility,
-  assigneeFilterOptions,
-} from '@/lib/task-engine'
+import { filterTasks, assigneeFilterOptions } from '@/lib/task-engine'
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 
@@ -127,7 +123,6 @@ function ScopeDrawerBody({
   // resets when the drawer closes and the body unmounts.
   const [openOnly, setOpenOnly] = useState(false)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
-  const { showOpenToggle, showAssigneeFilter } = filterControlVisibility(scope.tasks)
   const assigneeOptions = assigneeFilterOptions(scope.tasks, orgUsers)
   const visibleTasks = filterTasks(scope.tasks, {
     openOnly,
@@ -210,12 +205,10 @@ function ScopeDrawerBody({
           tasks
         </p>
 
-        {(showOpenToggle || showAssigneeFilter) && (
+        {scope.tasks.length > 0 && (
           <TaskFilterBar
             openOnly={openOnly}
-            onToggleOpenOnly={() => setOpenOnly((v) => !v)}
-            showOpenToggle={showOpenToggle}
-            showAssigneeFilter={showAssigneeFilter}
+            onSetOpenOnly={setOpenOnly}
             assigneeOptions={assigneeOptions}
             assigneeFilter={assigneeFilter}
             onPickAssignee={setAssigneeFilter}
@@ -423,6 +416,21 @@ function TierControl({
   )
 }
 
+// Char index of the caret at a viewport point — used to land the cursor where
+// the user clicked when opening the inline title editor. Browser-prefixed APIs;
+// returns null when unavailable (caller falls back to end-of-text).
+function caretIndexFromPoint(x: number, y: number): number | null {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null
+    caretPositionFromPoint?: (x: number, y: number) => { offset: number } | null
+  }
+  const range = doc.caretRangeFromPoint?.(x, y)
+  if (range) return range.startOffset
+  const pos = doc.caretPositionFromPoint?.(x, y)
+  if (pos) return pos.offset
+  return null
+}
+
 // A single task line: [done-square] [title] [assignee] [⋯]. Only the square
 // toggles done. Clicking the title opens a seamless inline editor (a textarea
 // styled to match the read text exactly, so the swap is invisible). Delete lives
@@ -448,6 +456,9 @@ function TaskRow({
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(task.title)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Where to put the caret when entering edit — the char index under the click,
+  // so the cursor blinks where you clicked rather than selecting everything.
+  const caretRef = useRef<number | null>(null)
 
   // Typography shared by the read span and the edit textarea so the transition
   // between them is invisible (no visible "it's a textarea" box).
@@ -463,8 +474,22 @@ function TaskRow({
     el.style.height = `${el.scrollHeight}px`
   }, [editing, value])
 
-  function startEdit() {
+  // Place the caret at the clicked character (not a select-all) on entering edit.
+  useLayoutEffect(() => {
+    if (!editing) return
+    const el = textareaRef.current
+    if (!el) return
+    const at =
+      caretRef.current == null
+        ? el.value.length
+        : Math.min(caretRef.current, el.value.length)
+    el.setSelectionRange(at, at)
+    caretRef.current = null
+  }, [editing])
+
+  function startEdit(e: React.MouseEvent) {
     if (readOnly || !onEdit) return
+    caretRef.current = caretIndexFromPoint(e.clientX, e.clientY)
     setValue(task.title)
     setEditing(true)
   }
@@ -510,7 +535,6 @@ function TaskRow({
               setEditing(false)
             }
           }}
-          onFocus={(e) => e.currentTarget.select()}
           onBlur={save}
           className={`${titleType} bg-transparent border-0 p-0 m-0 outline-none resize-none overflow-hidden text-foreground`}
           autoFocus
@@ -553,7 +577,7 @@ function TaskRow({
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Task actions"
-            className="mt-0.5 flex-shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity outline-none group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
+            className="-mr-1.5 mt-0.5 flex-shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity outline-none group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
           </DropdownMenuTrigger>
@@ -572,74 +596,81 @@ function TaskRow({
   )
 }
 
-// Drawer-local task filters: an All/Open toggle (Open = not done; never
-// "active") and by-assignee chips. Each control is only rendered when there's a
-// choice to make (its visibility is decided upstream by filterControlVisibility).
+// Drawer-local task filters, always present (so the controls are predictable):
+// a labelled All/Open segmented control on the left, and an assignee dropdown on
+// the right showing the current selection. Open = not done (never "active").
 function TaskFilterBar({
   openOnly,
-  onToggleOpenOnly,
-  showOpenToggle,
-  showAssigneeFilter,
+  onSetOpenOnly,
   assigneeOptions,
   assigneeFilter,
   onPickAssignee,
 }: {
   openOnly: boolean
-  onToggleOpenOnly: () => void
-  showOpenToggle: boolean
-  showAssigneeFilter: boolean
+  onSetOpenOnly: (openOnly: boolean) => void
   assigneeOptions: OrganizationUser[]
   assigneeFilter: string | null
   onPickAssignee: (userId: string | null) => void
 }) {
-  const chip = 'rounded-full border px-2.5 py-0.5 text-xs transition-colors'
-  const active = 'bg-foreground text-background border-foreground'
-  const idle = 'text-muted-foreground hover:text-foreground'
+  const selected = assigneeOptions.find((u) => u.userId === assigneeFilter)
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-      {showOpenToggle && (
-        <button
-          type="button"
-          aria-pressed={openOnly}
-          onClick={onToggleOpenOnly}
-          className={`${chip} ${openOnly ? active : idle}`}
-        >
-          {openOnly ? 'Open' : 'All'}
-        </button>
-      )}
+    <div className="mb-3 flex items-center justify-between gap-2">
+      {/* Segmented All | Open — the active segment fills, so the two states and
+          which one is on are obvious at a glance. */}
+      <div className="inline-flex rounded-md border p-0.5 text-xs">
+        {([['All', false], ['Open', true]] as const).map(([label, value]) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={openOnly === value}
+            onClick={() => onSetOpenOnly(value)}
+            className={`rounded px-2.5 py-0.5 transition-colors ${
+              openOnly === value
+                ? 'bg-foreground text-background font-medium'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {showAssigneeFilter && (
-        <div className="flex flex-wrap items-center gap-1">
-          {assigneeOptions.map((user) => {
-            const selected = assigneeFilter === user.userId
-            return (
-              <button
-                key={user.userId}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onPickAssignee(selected ? null : user.userId)}
-                title={`Filter to ${user.name}`}
-                className={`flex items-center gap-1 rounded-full border py-0.5 pl-0.5 pr-2 text-xs transition-colors ${
-                  selected ? 'border-foreground bg-muted' : idle
-                }`}
-              >
-                <UserAvatar user={user} className="h-4 w-4" />
-                <span className="truncate max-w-20">{user.name}</span>
-              </button>
-            )
-          })}
-          {assigneeFilter && (
-            <button
-              type="button"
-              onClick={() => onPickAssignee(null)}
-              className={`${chip} ${idle}`}
-            >
-              Clear
-            </button>
+      {/* Assignee filter — a dropdown labelled by the current selection. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          {selected ? (
+            <>
+              <UserAvatar user={selected} className="h-4 w-4" />
+              <span className="truncate max-w-24">{selected.name}</span>
+            </>
+          ) : (
+            <span>Everyone</span>
           )}
-        </div>
-      )}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem
+            onSelect={() => onPickAssignee(null)}
+            className={!assigneeFilter ? 'bg-muted' : ''}
+          >
+            Everyone
+          </DropdownMenuItem>
+          {assigneeOptions.map((user) => (
+            <DropdownMenuItem
+              key={user.userId}
+              onSelect={() => onPickAssignee(user.userId)}
+              className={`gap-2 ${user.userId === assigneeFilter ? 'bg-muted' : ''}`}
+            >
+              <UserAvatar user={user} className="h-5 w-5" />
+              <span className="truncate">{user.name}</span>
+            </DropdownMenuItem>
+          ))}
+          {assigneeOptions.length === 0 && (
+            <DropdownMenuItem disabled>No one assigned yet</DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

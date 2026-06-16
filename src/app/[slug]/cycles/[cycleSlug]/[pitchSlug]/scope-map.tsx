@@ -280,9 +280,12 @@ function ScopeMapWired({
   const onTaskAssign = useCycleMutation(
     ({ storage }, _scopeId: string, taskId: string, assigneeId: string | null) => {
       const task = storage.get('tasks').find((t) => t.get('id') === taskId)
-      // null clears to Unassigned; a userId assigns. Stored as undefined when
-      // cleared so resolveTaskAssignee treats it as Unassigned (see ADR 0017).
-      task?.set('assigneeId', assigneeId ?? undefined)
+      if (!task) return
+      // Clearing must DELETE the key — set(undefined) leaves the old value
+      // resolving (same trap as core_scope_id, see ADR 0012). Deleting makes
+      // resolveTaskAssignee fall to Unassigned.
+      if (assigneeId === null) task.delete('assigneeId')
+      else task.set('assigneeId', assigneeId)
     },
     []
   )
