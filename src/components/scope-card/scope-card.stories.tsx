@@ -92,6 +92,34 @@ export const NoTasks: Story = {
   },
 }
 
+const CLUSTER_ORG_USERS = [
+  { userId: 'u_simon', name: 'Simon', initials: 'SI', hasImage: false, imageUrl: '' },
+  { userId: 'u_marie', name: 'Marie', initials: 'MA', hasImage: false, imageUrl: '' },
+  { userId: 'u_emile', name: 'Emile', initials: 'EM', hasImage: false, imageUrl: '' },
+  { userId: 'u_seb', name: 'Seb', initials: 'SE', hasImage: false, imageUrl: '' },
+]
+
+// Deduped assignee cluster: Simon + Marie + Emile + Seb across tasks (cap 3 →
+// "+1"), plus a former member (u_gone) who has left the org.
+export const WithAssignees: Story = {
+  args: {
+    id: 's8',
+    order: 2,
+    title: 'Stripe checkout wiring',
+    tier: 'must',
+    color: '#f5a524',
+    litmus_text: 'A trial user can self-upgrade to a paying plan',
+    orgUsers: CLUSTER_ORG_USERS,
+    tasks: [
+      { id: 't1', title: 'Port products', done: true, assigneeId: 'u_simon' },
+      { id: 't2', title: 'Switch secrets', done: false, assigneeId: 'u_marie' },
+      { id: 't3', title: 'Enable guard', done: false, assigneeId: 'u_emile' },
+      { id: 't4', title: 'Provision tiers', done: false, assigneeId: 'u_seb' },
+      { id: 't5', title: 'Confirm webhooks', done: false, assigneeId: 'u_gone' },
+    ],
+  },
+}
+
 export const ReadOnly: Story = {
   args: {
     id: 's7',

@@ -17,14 +17,17 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ScopeCard, type ScopeCardProps } from './scope-card'
+import type { OrganizationUser } from '@/lib/users'
 
 type ScopeGridItem = Omit<
   ScopeCardProps,
-  'dragHandleProps' | 'isDragging' | 'onOpen' | 'onDelete' | 'onToggleCore'
+  'dragHandleProps' | 'isDragging' | 'onOpen' | 'onDelete' | 'onToggleCore' | 'orgUsers'
 >
 
 type ScopeGridProps = {
   scopes: ScopeGridItem[]
+  /** Cycle org members, forwarded to each card for the assignee cluster. */
+  orgUsers?: OrganizationUser[]
   onReorder?: (activeId: string, overId: string) => void
   onOpenScope?: (scopeId: string) => void
   onDeleteScope?: (scopeId: string) => void
@@ -34,11 +37,13 @@ type ScopeGridProps = {
 
 function SortableScopeCard({
   scope,
+  orgUsers,
   onOpen,
   onDelete,
   onToggleCore,
 }: {
   scope: ScopeGridItem
+  orgUsers?: OrganizationUser[]
   onOpen?: () => void
   onDelete?: () => void
   onToggleCore?: (next: boolean) => void
@@ -61,6 +66,7 @@ function SortableScopeCard({
     <div ref={setNodeRef} style={style} {...attributes}>
       <ScopeCard
         {...scope}
+        orgUsers={orgUsers}
         dragHandleProps={listeners}
         isDragging={isDragging}
         onOpen={onOpen}
@@ -73,6 +79,7 @@ function SortableScopeCard({
 
 export function ScopeGrid({
   scopes,
+  orgUsers,
   onReorder,
   onOpenScope,
   onDeleteScope,
@@ -102,6 +109,7 @@ export function ScopeGrid({
           <ScopeCard
             key={scope.id}
             {...scope}
+            orgUsers={orgUsers}
             readOnly
             onOpen={onOpenScope ? () => onOpenScope(scope.id) : undefined}
           />
@@ -125,6 +133,7 @@ export function ScopeGrid({
             <SortableScopeCard
               key={scope.id}
               scope={scope}
+              orgUsers={orgUsers}
               onOpen={onOpenScope ? () => onOpenScope(scope.id) : undefined}
               onDelete={onDeleteScope ? () => onDeleteScope(scope.id) : undefined}
               onToggleCore={

@@ -2,9 +2,12 @@
 
 import { forwardRef } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
+import type { OrganizationUser } from '@/lib/users'
+import { deriveAssigneeCluster } from '@/lib/task-engine'
+import { UserAvatar } from './assignee-picker'
 import { readableTextColor } from '@/lib/color-engine'
 import { Badge } from '@/components/ui/badge'
-import { MoreHorizontal, Trash2, GripVertical, Star, Check } from 'lucide-react'
+import { MoreHorizontal, Trash2, GripVertical, Star, Check, UserMinus } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +34,8 @@ export type ScopeCardProps = {
   /** True when this scope is the pitch's Core Scope (see ADR 0012). */
   isCore?: boolean
   tasks: ScopeCardTask[]
+  /** Cycle org members, to resolve the assignee cluster. Empty = no cluster. */
+  orgUsers?: OrganizationUser[]
   /** Hill progress has reached the foot (1) — card is muted and marked done. */
   done?: boolean
   /** Open the scope drawer — fired by clicking anywhere on the card body. */
@@ -62,6 +67,7 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
       litmus_text,
       isCore,
       tasks,
+      orgUsers = [],
       done,
       onOpen,
       onToggleCore,
@@ -74,6 +80,11 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
   ) {
     const totalCount = tasks.length
     const clickable = !!onOpen
+    // Deduped people across this scope's tasks — an identity signal (who's on
+    // it), never a completion claim, so it stays within ADR 0007.
+    const cluster = deriveAssigneeCluster(tasks, orgUsers, 3)
+    const hasCluster =
+      cluster.faces.length > 0 || cluster.overflow > 0 || cluster.hasFormerMember
 
     // A done scope recedes via a grayed background (clearer than dimming the
     // whole card) while staying readable; in-progress cards keep the bright
@@ -183,7 +194,18 @@ export const ScopeCard = forwardRef<HTMLDivElement, ScopeCardProps>(
 
         <div className="flex-1" />
 
-        {totalCount > 0 && <TaskPresence tasks={tasks} />}
+        {(totalCount > 0 || hasCluster) && (
+          <div className="flex items-center justify-between gap-2 flex-shrink-0">
+            {totalCount > 0 ? <TaskPresence tasks={tasks} /> : <span />}
+            {hasCluster && (
+              <AssigneeCluster
+                faces={cluster.faces}
+                overflow={cluster.overflow}
+                hasFormerMember={cluster.hasFormerMember}
+              />
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -217,6 +239,42 @@ function TaskPresence({ tasks }: { tasks: ScopeCardTask[] }) {
       <span className="text-xs text-muted-foreground/70">
         {total} task{total === 1 ? '' : 's'}
       </span>
+    </div>
+  )
+}
+
+// Deduped avatar cluster — who's on this scope. Overlapping faces, a "+N"
+// overflow chip past the cap, and a greyed person-minus when a former member
+// holds a task. Identity, not completion (see ADR 0007).
+function AssigneeCluster({
+  faces,
+  overflow,
+  hasFormerMember,
+}: {
+  faces: OrganizationUser[]
+  overflow: number
+  hasFormerMember: boolean
+}) {
+  return (
+    <div className="flex items-center -space-x-1.5">
+      {faces.map((user) => (
+        <span key={user.userId} className="ring-2 ring-card rounded-full">
+          <UserAvatar user={user} className="h-5 w-5" />
+        </span>
+      ))}
+      {hasFormerMember && (
+        <span
+          title="A former member holds a task here"
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground/60 ring-2 ring-card"
+        >
+          <UserMinus className="h-3 w-3" />
+        </span>
+      )}
+      {overflow > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-medium text-muted-foreground ring-2 ring-card">
+          +{overflow}
+        </span>
+      )}
     </div>
   )
 }
