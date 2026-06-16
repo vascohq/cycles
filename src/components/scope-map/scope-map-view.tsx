@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { NeedleGauge } from '@/components/needle'
+import { useOrganizationUsers } from '@/components/organization-users-context'
 import { HillHistory, type HillScope } from '@/components/hill-chart'
 import type { ScopeTrail } from '@/lib/hill-trail-engine'
 import type { HillHistoryFrame } from '@/lib/scope-map-helpers'
@@ -94,6 +95,7 @@ export type ScopeMapViewProps = {
   onTaskToggle?: (scopeId: string, taskId: string, done: boolean) => void
   onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
   onTaskDelete?: (scopeId: string, taskId: string) => void
+  onTaskAssign?: (scopeId: string, taskId: string, assigneeId: string | null) => void
   onAddTask?: (scopeId: string, title: string) => void
   onAddScope?: (title: string, tier: string, litmus_text: string) => void
   onEditScope?: (
@@ -149,6 +151,7 @@ export function ScopeMapView({
   onTaskToggle,
   onTaskEdit,
   onTaskDelete,
+  onTaskAssign,
   onAddTask,
   onAddScope,
   onEditScope,
@@ -168,6 +171,9 @@ export function ScopeMapView({
   onDeleteUpdate,
 }: ScopeMapViewProps) {
   usePitchDocumentTitle(pitch, cycleTitle)
+  // Org members for the per-task assignee picker — read from context (no prop
+  // drilling), same source the rest of the page uses.
+  const orgUsers = useOrganizationUsers()
   const isDone = pitch.stage === 'done'
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
@@ -371,6 +377,12 @@ export function ScopeMapView({
               ? (taskId) => onTaskDelete(openScopeId, taskId)
               : undefined
           }
+          onTaskAssign={
+            !isDone && onTaskAssign && openScopeId
+              ? (taskId, assigneeId) => onTaskAssign(openScopeId, taskId, assigneeId)
+              : undefined
+          }
+          orgUsers={orgUsers}
           onAddTask={
             !isDone && onAddTask && openScopeId
               ? (title) => onAddTask(openScopeId, title)

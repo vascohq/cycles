@@ -20,6 +20,12 @@ const baseScope = {
     'A trial user can pick a plan and become a paying customer without touching sales or CS.',
 }
 
+const ORG_USERS = [
+  { userId: 'u_simon', name: 'Simon', initials: 'SI', hasImage: false, imageUrl: '' },
+  { userId: 'u_marie', name: 'Marie', initials: 'MA', hasImage: false, imageUrl: '' },
+  { userId: 'u_emile', name: 'Emile', initials: 'EM', hasImage: false, imageUrl: '' },
+]
+
 const baseHandlers = {
   open: true,
   onOpenChange: fn(),
@@ -28,8 +34,10 @@ const baseHandlers = {
   onTaskToggle: fn(),
   onTaskEdit: fn(),
   onTaskDelete: fn(),
+  onTaskAssign: fn(),
   onAddTask: fn(),
   onReset: fn(),
+  orgUsers: ORG_USERS,
 }
 
 // The case Emile reported: a long task title used to clip with "…". It should
@@ -40,7 +48,12 @@ export const LongTaskTitles: Story = {
     scope: {
       ...baseScope,
       tasks: [
-        { id: 't1', title: 'Port products from test account to real account', done: false },
+        {
+          id: 't1',
+          title: 'Port products from test account to real account',
+          done: false,
+          assigneeId: 'u_marie',
+        },
         {
           id: 't2',
           title:
@@ -52,6 +65,13 @@ export const LongTaskTitles: Story = {
           title:
             'BE/Simon - Enable checkout isPublic guard + provision the new plan tiers end to end so a trial can self-upgrade',
           done: true,
+          assigneeId: 'u_simon',
+        },
+        {
+          id: 't4',
+          title: 'Confirm webhooks fire (assignee since left the org)',
+          done: false,
+          assigneeId: 'u_gone',
         },
       ],
     },

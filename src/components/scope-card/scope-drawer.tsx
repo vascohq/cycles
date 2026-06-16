@@ -13,6 +13,8 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet'
 import type { ScopeCardTask } from './scope-card'
+import type { OrganizationUser } from '@/lib/users'
+import { AssigneePicker } from './assignee-picker'
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 
@@ -42,8 +44,12 @@ export type ScopeDrawerProps = {
   onTaskToggle?: (taskId: string, done: boolean) => void
   onTaskEdit?: (taskId: string, title: string) => void
   onTaskDelete?: (taskId: string) => void
+  /** Set (userId) or clear (null) a task's assignee. */
+  onTaskAssign?: (taskId: string, assigneeId: string | null) => void
   onAddTask?: (title: string) => void
   onReset?: () => void
+  /** The cycle's org members, for the per-task assignee picker/avatars. */
+  orgUsers?: OrganizationUser[]
   readOnly?: boolean
 }
 
@@ -60,8 +66,10 @@ export function ScopeDrawer({
   onTaskToggle,
   onTaskEdit,
   onTaskDelete,
+  onTaskAssign,
   onAddTask,
   onReset,
+  orgUsers,
   readOnly,
 }: ScopeDrawerProps) {
   return (
@@ -76,8 +84,10 @@ export function ScopeDrawer({
             onTaskToggle={onTaskToggle}
             onTaskEdit={onTaskEdit}
             onTaskDelete={onTaskDelete}
+            onTaskAssign={onTaskAssign}
             onAddTask={onAddTask}
             onReset={onReset}
+            orgUsers={orgUsers}
             readOnly={readOnly}
           />
         )}
@@ -94,8 +104,10 @@ function ScopeDrawerBody({
   onTaskToggle,
   onTaskEdit,
   onTaskDelete,
+  onTaskAssign,
   onAddTask,
   onReset,
+  orgUsers = [],
   readOnly,
 }: Omit<ScopeDrawerProps, 'open' | 'onOpenChange' | 'scope'> & {
   scope: ScopeDrawerScope
@@ -194,12 +206,18 @@ function ScopeDrawerBody({
             <TaskRow
               key={task.id}
               task={task}
+              orgUsers={orgUsers}
               readOnly={readOnly}
               onToggle={
                 onTaskToggle ? () => onTaskToggle(task.id, !task.done) : undefined
               }
               onEdit={onTaskEdit ? (title) => onTaskEdit(task.id, title) : undefined}
               onDelete={onTaskDelete ? () => onTaskDelete(task.id) : undefined}
+              onAssign={
+                onTaskAssign
+                  ? (assigneeId) => onTaskAssign(task.id, assigneeId)
+                  : undefined
+              }
             />
           ))}
 
@@ -378,20 +396,26 @@ function TierControl({
   )
 }
 
-// A single task line: checkbox + title toggle done; hover reveals inline rename
-// (pencil) and delete (X). Enter/blur saves a rename, Esc cancels, empty reverts.
+// A single task line: a three-part row — [done-circle] [title, wraps] [assignee
+// avatar] (the binary done-circle sits where Linear puts a status icon; we have
+// no workflow states). Hover reveals inline rename (pencil) and delete (X).
+// Enter/blur saves a rename, Esc cancels, empty reverts.
 function TaskRow({
   task,
+  orgUsers = [],
   readOnly,
   onToggle,
   onEdit,
   onDelete,
+  onAssign,
 }: {
   task: ScopeCardTask
+  orgUsers?: OrganizationUser[]
   readOnly?: boolean
   onToggle?: () => void
   onEdit?: (title: string) => void
   onDelete?: () => void
+  onAssign?: (assigneeId: string | null) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(task.title)
@@ -486,6 +510,27 @@ function TaskRow({
             </button>
           )}
         </div>
+      )}
+
+      {onAssign ? (
+        <AssigneePicker
+          orgUsers={orgUsers}
+          assigneeId={task.assigneeId}
+          onAssign={(userId) => onAssign(userId)}
+          onClear={() => onAssign(null)}
+          readOnly={readOnly}
+        />
+      ) : (
+        // Read-only: show the avatar only when assigned, no picker affordance.
+        task.assigneeId && (
+          <AssigneePicker
+            orgUsers={orgUsers}
+            assigneeId={task.assigneeId}
+            onAssign={() => {}}
+            onClear={() => {}}
+            readOnly
+          />
+        )
       )}
     </div>
   )

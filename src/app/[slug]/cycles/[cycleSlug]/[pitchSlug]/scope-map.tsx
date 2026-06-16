@@ -277,6 +277,16 @@ function ScopeMapWired({
     []
   )
 
+  const onTaskAssign = useCycleMutation(
+    ({ storage }, _scopeId: string, taskId: string, assigneeId: string | null) => {
+      const task = storage.get('tasks').find((t) => t.get('id') === taskId)
+      // null clears to Unassigned; a userId assigns. Stored as undefined when
+      // cleared so resolveTaskAssignee treats it as Unassigned (see ADR 0017).
+      task?.set('assigneeId', assigneeId ?? undefined)
+    },
+    []
+  )
+
   const onAddTask = useCycleMutation(
     ({ storage }, scopeId: string, title: string) => {
       const task: ScopeTask = { id: nanoid(), scopeId, title, done: false }
@@ -722,6 +732,7 @@ function ScopeMapWired({
       onTaskToggle={onTaskToggle}
       onTaskEdit={onTaskEdit}
       onTaskDelete={onTaskDelete}
+      onTaskAssign={onTaskAssign}
       onAddTask={onAddTask}
       onAddScope={onAddScope}
       onEditScope={onEditScope}

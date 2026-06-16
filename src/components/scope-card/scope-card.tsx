@@ -16,6 +16,8 @@ export type ScopeCardTask = {
   id: string
   title: string
   done: boolean
+  /** Clerk userId of the assignee, or undefined when Unassigned (see ADR 0017). */
+  assigneeId?: string
 }
 
 export type ScopeCardProps = {
