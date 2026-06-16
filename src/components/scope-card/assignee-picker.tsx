@@ -95,7 +95,7 @@ export function AssigneePicker({
           <DropdownMenuItem
             key={u.userId}
             onSelect={() => onAssign(u.userId)}
-            className={u.userId === assigneeId ? 'bg-muted' : ''}
+            className={`gap-2 ${u.userId === assigneeId ? 'bg-muted' : ''}`}
           >
             <UserAvatar user={u} className="h-5 w-5" />
             <span className="truncate">{u.name}</span>

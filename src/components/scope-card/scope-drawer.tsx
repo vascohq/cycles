@@ -560,7 +560,7 @@ function TaskRow({
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onSelect={() => onDelete()}
-              className="text-destructive focus:text-destructive"
+              className="gap-2 text-destructive focus:text-destructive"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Delete
