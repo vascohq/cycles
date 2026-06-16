@@ -277,6 +277,31 @@ function ScopeMapWired({
     []
   )
 
+  const onTaskReorder = useCycleMutation(
+    ({ storage }, activeId: string, overId: string) => {
+      const tasksList = storage.get('tasks')
+      const from = tasksList.findIndex((t) => t.get('id') === activeId)
+      const to = tasksList.findIndex((t) => t.get('id') === overId)
+      // Move within the flat tasks LiveList by absolute index — order is the
+      // list position (no order field), mirroring scope reordering.
+      if (from !== -1 && to !== -1 && from !== to) tasksList.move(from, to)
+    },
+    []
+  )
+
+  const onTaskAssign = useCycleMutation(
+    ({ storage }, _scopeId: string, taskId: string, assigneeId: string | null) => {
+      const task = storage.get('tasks').find((t) => t.get('id') === taskId)
+      if (!task) return
+      // Clearing must DELETE the key — set(undefined) leaves the old value
+      // resolving (same trap as core_scope_id, see ADR 0012). Deleting makes
+      // resolveTaskAssignee fall to Unassigned.
+      if (assigneeId === null) task.delete('assigneeId')
+      else task.set('assigneeId', assigneeId)
+    },
+    []
+  )
+
   const onAddTask = useCycleMutation(
     ({ storage }, scopeId: string, title: string) => {
       const task: ScopeTask = { id: nanoid(), scopeId, title, done: false }
@@ -333,17 +358,6 @@ function ScopeMapWired({
       scopesList.move(pitchScopes[activeIdx].index, pitchScopes[overIdx].index)
     },
     [pitchId]
-  )
-
-  const onScopeReset = useCycleMutation(
-    ({ storage }, scopeId: string) => {
-      const tasksList = storage.get('tasks')
-      for (let i = 0; i < tasksList.length; i++) {
-        const task = tasksList.get(i)!
-        if (task.get('scopeId') === scopeId) task.set('done', false)
-      }
-    },
-    []
   )
 
   // Flag/clear a scope as the pitch's Core Scope. Stored as a single pointer on
@@ -722,13 +736,14 @@ function ScopeMapWired({
       onTaskToggle={onTaskToggle}
       onTaskEdit={onTaskEdit}
       onTaskDelete={onTaskDelete}
+      onTaskAssign={onTaskAssign}
+      onTaskReorder={onTaskReorder}
       onAddTask={onAddTask}
       onAddScope={onAddScope}
       onEditScope={onEditScope}
       onToggleCoreScope={onToggleCoreScope}
       onDeleteScope={onDeleteScope}
       onScopeReorder={onScopeReorder}
-      onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}
       onPostUpdate={onPostUpdate}
       userName={userName}

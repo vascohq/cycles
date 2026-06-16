@@ -114,8 +114,20 @@ A scope's movement since the last update, drawn on the hill chart: a dimmed ghos
 _Avoid_: Diff, delta, change indicator
 
 **Task**:
-A checklist item within a scope. Binary: done or not done. No assignee, no type, no intermediate states.
+A checklist item within a scope. Still binary: done or not done, no intermediate states. **May have an assignee** — a person (Clerk org user) responsible for it. The original "no assignee, no type" rule was a deliberate _keep-it-dumb-until-there's-pull_ stance; assignment was promoted to a first-class field once devs started faking it with `BE/Simon`-style title prefixes (see Flagged ambiguities). A task is never a sub-pitch or a routed ticket — it stays a lightweight checklist line that now also says _who_ (see [ADR 0017](docs/adr/0017-tasks-carry-a-single-assignee.md)).
 _Avoid_: Subtask, to-do, issue, ticket
+
+**Assignee**:
+The one person responsible for a **Task** — a single, nullable pointer to a Clerk org user (`assigneeId`, undefined = **Unassigned**). At most one per task: if two people genuinely own distinct work, that is two tasks. The assignable set is the cycle's current org members (the same `OrganizationUser` faces already rendered on Scope Map / Mission Control); no per-task name snapshot is stored — the avatar/initials resolve live from `assigneeId`. Mirrors the **Core Scope** pointer pattern: a dangling id (assignee left the org) resolves to **Former member**, never an "Unknown user" with a fabricated name.
+_Avoid_: Owner (reserved tone for Squad ownership), reviewer, multiple assignees
+
+**Unassigned (task)**:
+A task with no `assigneeId` — nobody has claimed it yet. Rendered as an empty/dashed avatar slot that invites picking an assignee. Distinct from **Former member**: unassigned means _never claimed_, not _claimed by someone now gone_.
+_Avoid_: Conflating with **Former member** or with the squad-level **Unassigned** bucket
+
+**Former member**:
+The state of a task whose `assigneeId` no longer matches any current org member (the person left the org, or the cycle was reopened/cloned past their membership). We cannot reliably tell account-deactivation from org-removal, so the honest meaning is _no longer a member of this org_ — never "deactivated". Rendered as an **anonymous** dimmed/greyed ghost avatar with a person-minus glyph, clickable to reassign; no name is shown because none is stored. Flags work that needs re-homing, as opposed to work never claimed (**Unassigned**).
+_Avoid_: Deactivated, deleted user, Unknown user, ex-employee
 
 **Parking Lot**:
 Open decisions on a pitch that need resolving but aren't scopes. Not work items — questions and choices.
@@ -176,11 +188,11 @@ The per-pitch detail view. Shows hero card, needle, hill chart, scope grid, upda
 _Avoid_: Pitch detail, pitch page
 
 **Scope Card**:
-A big-picture tile in the scope grid. Leads with the scope's name and its "what it ships" (Litmus Text); when the scope has tasks it shows a non-numeric **task presence indicator** (one tick per task, filling as tasks complete) — never a count or completion bar (see [ADR 0007](docs/adr/0007-scope-cards-show-task-presence-not-completion.md)). Clicking the card body opens the Scope Drawer.
+A big-picture tile in the scope grid. Leads with the scope's name and its "what it ships" (Litmus Text); when the scope has tasks it shows a non-numeric **task presence indicator** (one tick per task, filling as tasks complete) — never a count or completion bar (see [ADR 0007](docs/adr/0007-scope-cards-show-task-presence-not-completion.md)). Also shows a **deduped assignee cluster** — the distinct people across the scope's tasks, capped to a few faces + "+N". This is an _identity_ signal (who's on it), not a completion signal, so it sits within ADR 0007's boundary, not against it. Clicking the card body opens the Scope Drawer.
 _Avoid_: Story card, ticket, work-item card
 
 **Scope Drawer**:
-A right-side panel opened from a Scope Card. The single editor for one scope — its name, tier, Litmus Text, and tasks — using inline auto-save. Where all task management lives.
+A right-side panel opened from a Scope Card. The single editor for one scope — its name, tier, Litmus Text, and tasks — using inline auto-save. Where all task management lives, including each task's **Assignee** (a per-row avatar + picker drawn from the cycle's org members). Each task row follows a three-part shape borrowed from Linear's row rhythm but with this tool's semantics — `[done-circle] [title, wraps to full text] [assignee avatar]` — where Linear puts a status icon, we put the binary done-circle (no workflow states). The picker is a cmdk type-ahead (reusing `ui/command.tsx` + the `squad-picker` pattern). Its task list can be narrowed by two **drawer-local filters** — an **All / Open** toggle (Open = not done; never "active") and a **by-assignee** filter. These are ephemeral per-viewer view state (never stored in Liveblocks — a filter must not change a collaborator's screen), each control self-hides when there's no choice to make (assignee filter only with >1 assignee present; All/Open toggle only when ≥1 task is done), and filtering never alters the Scope Card's true presence ticks or assignee cluster.
 _Avoid_: Scope modal, scope detail dialog, side panel
 
 ## Relationships
@@ -223,3 +235,6 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **"holiday"** is a terminology landmine: in British/French English it commonly means *personal vacation*, which here is **Time Off**. Resolved: **Holiday** = statutory/public non-working day for a location (from the CA/FR feeds); a person's vacation is always **Time Off** (from the Humi feed). Never use "holiday" for an individual's leave.
 - **needle position vs. zone** were coupled: position was auto-snapped from the chosen zone (on_track→0.85, some_risk→0.5, concerned→0.2). Resolved: they are independent — position is slid manually, zone is chosen separately, and the snapping derivation is removed. The needle's filled arc encodes both at once: length = position, color = zone.
 - **"team"** is ambiguous: it can mean the Clerk **organization** (the workspace tenant) or the per-cycle ownership label. Resolved: always use **Squad** for the per-cycle, color-coded group that owns pitches. Reserve "organization" for the Clerk tenant. Never use "team" unqualified in product copy or code.
+- **"Linear-quality" / "lean toward Linear"** — means Linear's **interaction feel** (type-ahead pickers, keyboard fluency, optimistic/instant, quiet density), **not** its **data model**. Task statuses/workflow, priority, labels, sub-issues, estimates, and due dates stay out — they reintroduce the issue-tracker this tool defines itself against (tasks are binary; progress is the **Needle** + **Hill Chart**, not a task tally — ADR 0007). The door to *some* model borrowing is deliberately left ajar for later (like discipline tags), but as of now the rule is **feel yes, ontology no**. Within "feel", full **keyboard row-navigation** (single-key shortcuts, roving focus across task rows) is also deferred — v1's keyboard fluency comes for free inside the type-ahead assignee picker, not from a drawer-wide hotkey layer.
+- **"active" for tasks** — a not-done task is **Open**, never "active". "Active/inactive" is already reserved-against for **Cycle phase**, and "status" is a known landmine; the Scope Drawer's task filter toggle is labelled **All / Open**, not "All / Active".
+- **`BE/Simon`-style task prefixes** encoded two orthogonal things in the title: a **discipline** (`BE`/`FE`/design) and an **assignee** (`Simon`). Resolved (v1): only the **assignee** half becomes a first-class field (a Clerk org user on the **Task**). The discipline half — a task **type/tag** — stays deferred; the glossary's "no type" stance still holds for now. Revisit tags only if the prefix hack persists after assignment ships.

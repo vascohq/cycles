@@ -68,7 +68,7 @@ export function deriveScopeGridItems(
     isCore: s.id === coreId,
     tasks: tasks
       .filter((t) => t.scopeId === s.id)
-      .map((t) => ({ id: t.id, title: t.title, done: t.done })),
+      .map((t) => ({ id: t.id, title: t.title, done: t.done, assigneeId: t.assigneeId })),
     done: isHillProgressDone(s.hill_progress),
   }))
 }
