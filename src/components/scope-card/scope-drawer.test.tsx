@@ -3,7 +3,17 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ScopeDrawer } from './scope-drawer'
 
+// canvas-confetti has no real canvas in jsdom; stub the task-done pop so toggling
+// a task doesn't crash the run with an async clearRect error.
+vi.mock('@/lib/confetti', () => ({ fireTaskDoneConfetti: vi.fn() }))
+
 afterEach(cleanup)
+
+// The drawer task filter defaults to "Open", which hides done tasks. Tests that
+// act on a done task switch to "All" first to reveal it.
+function showAllTasks() {
+  fireEvent.click(screen.getByRole('button', { name: 'All' }))
+}
 
 const SCOPE = {
   id: 's1',
@@ -83,6 +93,7 @@ describe('task management in the drawer', () => {
   it('renames a task by clicking its title, on Enter', () => {
     const onTaskEdit = vi.fn()
     renderDrawer({ onTaskEdit })
+    showAllTasks()
     // Clicking the title text opens the inline editor (no separate edit CTA).
     fireEvent.click(screen.getByText('Login page'))
     const input = screen.getByDisplayValue('Login page')
@@ -94,6 +105,7 @@ describe('task management in the drawer', () => {
   it('inserts a newline instead of saving when Shift+Enter is pressed during a task rename', () => {
     const onTaskEdit = vi.fn()
     renderDrawer({ onTaskEdit })
+    showAllTasks()
     fireEvent.click(screen.getByText('Login page'))
     const input = screen.getByDisplayValue('Login page')
     fireEvent.change(input, { target: { value: 'Login page, then redirect home' } })
@@ -105,6 +117,7 @@ describe('task management in the drawer', () => {
     const user = userEvent.setup()
     const onTaskDelete = vi.fn()
     renderDrawer({ onTaskDelete })
+    showAllTasks()
     await user.click(screen.getAllByLabelText('Task actions')[0])
     await user.click(await screen.findByRole('menuitem', { name: /delete/i }))
     expect(onTaskDelete).toHaveBeenCalledWith('t1')
