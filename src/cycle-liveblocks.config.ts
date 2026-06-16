@@ -64,6 +64,10 @@ export type ScopeTask = {
   scopeId: string
   title: string
   done: boolean
+  // The single person responsible for this task (Clerk userId). Undefined =
+  // Unassigned; a dangling id (member left the org) resolves to "Former member"
+  // via resolveTaskAssignee. At most one assignee per task (see ADR 0017).
+  assigneeId?: string
 }
 
 export type PitchUpdate = {
