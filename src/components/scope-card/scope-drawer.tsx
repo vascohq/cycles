@@ -408,12 +408,19 @@ function TaskRow({
   }
 
   if (editing && onEdit) {
+    // A textarea (not an input) so long titles are comfortable to edit and can
+    // hold newlines. Enter saves, Shift+Enter inserts a newline, Esc reverts,
+    // blur saves — matching the litmus EditableText pattern.
     return (
-      <input
+      <textarea
         value={value}
+        rows={2}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') save()
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            save()
+          }
           if (e.key === 'Escape') {
             setValue(task.title)
             setEditing(false)
@@ -421,7 +428,7 @@ function TaskRow({
         }}
         onFocus={(e) => e.currentTarget.select()}
         onBlur={save}
-        className="w-full text-sm bg-transparent border-b border-foreground/30 py-0.5 outline-none"
+        className="w-full text-sm bg-transparent border-b border-foreground/30 py-0.5 outline-none resize-none"
         autoFocus
       />
     )
@@ -429,15 +436,15 @@ function TaskRow({
 
   return (
     <div
-      className={`flex items-center gap-2 text-sm py-0.5 ${readOnly ? '' : 'group'}`}
+      className={`flex items-start gap-2 text-sm py-0.5 ${readOnly ? '' : 'group'}`}
     >
       <button
         type="button"
         {...(!readOnly && onToggle ? { onClick: onToggle } : { disabled: true })}
-        className="flex items-center gap-2 text-left min-w-0 flex-1"
+        className="flex items-start gap-2 text-left min-w-0 flex-1"
       >
         <span
-          className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+          className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
             task.done
               ? 'bg-foreground/10 border-foreground/20'
               : readOnly
@@ -448,7 +455,7 @@ function TaskRow({
           {task.done && <Check className="w-3 h-3 text-foreground/60" />}
         </span>
         <span
-          className={`truncate ${
+          className={`min-w-0 break-words whitespace-normal leading-snug ${
             task.done ? 'line-through text-muted-foreground/60' : 'text-foreground'
           }`}
         >
@@ -457,7 +464,7 @@ function TaskRow({
       </button>
 
       {!readOnly && (onEdit || onDelete) && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <div className="mt-0.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           {onEdit && (
             <button
               type="button"

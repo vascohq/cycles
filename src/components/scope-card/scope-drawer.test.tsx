@@ -89,6 +89,16 @@ describe('task management in the drawer', () => {
     expect(onTaskEdit).toHaveBeenCalledWith('t1', 'Login screen')
   })
 
+  it('inserts a newline instead of saving when Shift+Enter is pressed during a task rename', () => {
+    const onTaskEdit = vi.fn()
+    renderDrawer({ onTaskEdit })
+    fireEvent.click(screen.getAllByLabelText('Edit task')[0])
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: 'Login page, then redirect home' } })
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
+    expect(onTaskEdit).not.toHaveBeenCalled()
+  })
+
   it('deletes a task immediately with no confirm', () => {
     const onTaskDelete = vi.fn()
     renderDrawer({ onTaskDelete })
