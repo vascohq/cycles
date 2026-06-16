@@ -613,18 +613,20 @@ function TaskRow({
 
   return (
     <div
-      className={`flex items-start gap-2 rounded-md py-1 transition-colors ${
+      className={`relative flex items-start gap-2 rounded-md py-1 transition-colors ${
         readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted/50'
       } ${isDragging ? 'opacity-60' : ''}`}
     >
-      {/* Drag handle — only present when reordering is enabled. Dragging starts
-          here, so it never fights click-to-edit / toggle / assignee. */}
+      {/* Drag handle — pulled out of flow into the left gutter (absolute) so it
+          never shifts the checkbox, which stays aligned with the filter bar
+          above. Only present when reordering is enabled; dragging starts here so
+          it never fights click-to-edit / toggle / assignee. */}
       {dragHandleProps && (
         <button
           type="button"
           aria-label="Drag to reorder task"
           {...dragHandleProps}
-          className="-ml-1 mt-0.5 flex-shrink-0 cursor-grab touch-none text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground active:cursor-grabbing group-hover:opacity-100"
+          className="absolute left-0 top-1.5 -translate-x-full cursor-grab touch-none text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground active:cursor-grabbing group-hover:opacity-100"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
