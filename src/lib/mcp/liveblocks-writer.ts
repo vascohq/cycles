@@ -408,6 +408,10 @@ export async function upsertTask(
     // create. Must NOT be coerced to false before this point — that would silently
     // un-complete a task on a title-only update.
     done?: boolean
+    // Resolved Clerk userId to assign. Partial-update like done:
+    //   undefined = leave unchanged, '' = unassign (delete the key),
+    //   a userId = assign. Caller resolves email/userId → userId first.
+    assigneeId?: string
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -433,6 +437,7 @@ export async function upsertTask(
         title: params.title,
         done: params.done ?? false,
       }
+      if (params.assigneeId) task.assigneeId = params.assigneeId
       tasks.push(new LiveObject(task))
     } else {
       const existing = tasks.find((t: any) => getField(t, 'id') === id)
@@ -442,12 +447,63 @@ export async function upsertTask(
       }
       existing.set('title', params.title)
       if (params.done !== undefined) existing.set('done', params.done)
+      if (params.assigneeId !== undefined) {
+        // '' clears to Unassigned — DELETE the key (set(undefined) would leave
+        // the old value resolving, same trap as core_scope_id).
+        if (params.assigneeId === '') existing.delete('assigneeId')
+        else existing.set('assigneeId', params.assigneeId)
+      }
     }
   })
 
   if (scopeMissing) throw new Error(`Scope not found: "${params.scopeId}"`)
   if (notFound) throw new Error(`Task not found: "${id}"`)
   return { created, id }
+}
+
+// Reorder a task within the flat tasks list, relative to a sibling. Exactly one
+// of `before`/`after` (a sibling task id) must be given. Order is the list
+// position (no order field) — mirrors the in-app drag reorder via LiveList.move.
+export async function moveTask(
+  roomId: string,
+  params: { id: string; before?: string; after?: string }
+): Promise<{ moved: boolean }> {
+  const hasBefore = !!params.before
+  const hasAfter = !!params.after
+  if (hasBefore === hasAfter) {
+    throw new Error('Pass exactly one of "before" or "after" (a sibling task id)')
+  }
+  const anchorId = (params.after ?? params.before) as string
+
+  let notFound = false
+  let anchorMissing = false
+
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+    const tasks = root.get('tasks')
+    const from = tasks.findIndex((t: any) => getField(t, 'id') === params.id)
+    if (from === -1) {
+      notFound = true
+      return
+    }
+    const anchorIdx = tasks.findIndex((t: any) => getField(t, 'id') === anchorId)
+    if (anchorIdx === -1) {
+      anchorMissing = true
+      return
+    }
+    // LiveList.move(from, to): the element ends at index `to` after removal.
+    const to = hasAfter
+      ? from < anchorIdx
+        ? anchorIdx
+        : anchorIdx + 1
+      : from < anchorIdx
+        ? anchorIdx - 1
+        : anchorIdx
+    if (to !== from) tasks.move(from, to)
+  })
+
+  if (notFound) throw new Error(`Task not found: "${params.id}"`)
+  if (anchorMissing) throw new Error(`Anchor task not found: "${anchorId}"`)
+  return { moved: true }
 }
 
 // ── Parking Item ──

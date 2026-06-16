@@ -18,6 +18,7 @@ import {
   upsertPitch,
   upsertScope,
   upsertTask,
+  moveTask,
   upsertParkingItem,
   deletePitch,
   deleteScope,
@@ -91,6 +92,11 @@ function makeMockList(items: MockItem[]) {
     toArray: () => items,
     delete: (index: number) => items.splice(index, 1),
     findIndex: (fn: (item: MockItem) => boolean) => items.findIndex(fn),
+    // Mirror Liveblocks LiveList.move: remove at `from`, reinsert at `to`.
+    move: (from: number, to: number) => {
+      const [it] = items.splice(from, 1)
+      items.splice(to, 0, it)
+    },
     [Symbol.iterator]: () => items[Symbol.iterator](),
   }
 }
@@ -509,6 +515,75 @@ describe('upsertTask', () => {
     expect(existing.get('title')).toBe('Build the gauge')
     expect(existing.get('done')).toBe(true)
     expect(existing.get('assigneeId')).toBe('u_simon')
+  })
+
+  it('assigns a task when a resolved assigneeId is passed', async () => {
+    const existing = makeMockItem({ id: 't1', scopeId: 's1', title: 'Build gauge', done: false })
+    setupStorage({ tasks: [existing] })
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build gauge', assigneeId: 'u_simon' })
+    expect(existing.get('assigneeId')).toBe('u_simon')
+  })
+
+  it('unassigns by deleting the key when assigneeId is empty string', async () => {
+    const existing = makeMockItem({ id: 't1', scopeId: 's1', title: 'Build gauge', done: false, assigneeId: 'u_simon' })
+    setupStorage({ tasks: [existing] })
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build gauge', assigneeId: '' })
+    expect(existing.get('assigneeId')).toBeUndefined()
+  })
+
+  it('sets assigneeId on create when provided', async () => {
+    const scope = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI' })
+    const storage = setupStorage({ scopes: [scope] })
+    await upsertTask(ROOM, { scopeId: 's1', title: 'New', done: false, assigneeId: 'u_marie' })
+    expect(storage.tasks.toArray()[0].get('assigneeId')).toBe('u_marie')
+  })
+})
+
+describe('moveTask', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const seed = () =>
+    setupStorage({
+      tasks: [
+        makeMockItem({ id: 'a', scopeId: 's1', title: 'A', done: false }),
+        makeMockItem({ id: 'b', scopeId: 's1', title: 'B', done: false }),
+        makeMockItem({ id: 'c', scopeId: 's1', title: 'C', done: false }),
+      ],
+    })
+  const order = (s: ReturnType<typeof seed>) => s.tasks.toArray().map((t) => t.get('id'))
+
+  it('moves a task after a later sibling', async () => {
+    const s = seed()
+    await moveTask(ROOM, { id: 'a', after: 'b' })
+    expect(order(s)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('moves a task after a later sibling (to the end)', async () => {
+    const s = seed()
+    await moveTask(ROOM, { id: 'a', after: 'c' })
+    expect(order(s)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('moves a task before an earlier sibling (to the front)', async () => {
+    const s = seed()
+    await moveTask(ROOM, { id: 'c', before: 'a' })
+    expect(order(s)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('throws when neither before nor after is given', async () => {
+    seed()
+    await expect(moveTask(ROOM, { id: 'a' })).rejects.toThrow(/exactly one/i)
+  })
+
+  it('throws when both before and after are given', async () => {
+    seed()
+    await expect(moveTask(ROOM, { id: 'a', before: 'b', after: 'c' })).rejects.toThrow(/exactly one/i)
+  })
+
+  it('throws when the task or anchor is missing', async () => {
+    seed()
+    await expect(moveTask(ROOM, { id: 'ghost', after: 'b' })).rejects.toThrow(/Task not found/)
+    await expect(moveTask(ROOM, { id: 'a', after: 'ghost' })).rejects.toThrow(/Anchor task not found/)
   })
 })
 

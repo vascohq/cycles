@@ -21,9 +21,9 @@ const baseScope = {
 }
 
 const ORG_USERS = [
-  { userId: 'u_simon', name: 'Simon', initials: 'SI', hasImage: false, imageUrl: '' },
-  { userId: 'u_marie', name: 'Marie', initials: 'MA', hasImage: false, imageUrl: '' },
-  { userId: 'u_emile', name: 'Emile', initials: 'EM', hasImage: false, imageUrl: '' },
+  { userId: 'u_simon', name: 'Simon', email: 'simon@vasco.app', initials: 'SI', hasImage: false, imageUrl: '' },
+  { userId: 'u_marie', name: 'Marie', email: 'marie@vasco.app', initials: 'MA', hasImage: false, imageUrl: '' },
+  { userId: 'u_emile', name: 'Emile', email: 'emile@vasco.app', initials: 'EM', hasImage: false, imageUrl: '' },
 ]
 
 const baseHandlers = {
