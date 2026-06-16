@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { ScopeCardTask } from './scope-card'
 import type { OrganizationUser } from '@/lib/users'
+import { fireTaskDoneConfetti } from '@/lib/confetti'
 import { AssigneePicker, UserAvatar } from './assignee-picker'
 import { filterTasks, assigneeFilterOptions } from '@/lib/task-engine'
 
@@ -541,11 +542,26 @@ function TaskRow({
         readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted/50'
       }`}
     >
-      {/* The square is the ONLY done toggle. */}
+      {/* The square is the ONLY done toggle. Checking it pops a little confetti. */}
       <button
         type="button"
         aria-label={task.done ? 'Mark task not done' : 'Mark task done'}
-        {...(!readOnly && onToggle ? { onClick: onToggle } : { disabled: true })}
+        {...(!readOnly && onToggle
+          ? {
+              onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+                // Celebrate only when checking (not un-checking), bursting from
+                // the checkbox's screen position.
+                if (!task.done) {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  fireTaskDoneConfetti({
+                    x: (r.left + r.width / 2) / window.innerWidth,
+                    y: (r.top + r.height / 2) / window.innerHeight,
+                  })
+                }
+                onToggle()
+              },
+            }
+          : { disabled: true })}
         className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
           task.done
             ? 'bg-foreground/10 border-foreground/20'

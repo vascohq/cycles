@@ -27,6 +27,22 @@ export function fireScopeDoneConfetti(origin: ConfettiOrigin): void {
   })
 }
 
+// A small, snappy pop fired from a task's checkbox the moment it's checked
+// done — a little flourish, much lighter than the scope-done burst (fewer,
+// smaller, shorter-lived particles). Skipped under reduced motion.
+export function fireTaskDoneConfetti(origin: ConfettiOrigin): void {
+  if (prefersReducedMotion()) return
+  confetti({
+    origin,
+    particleCount: 24,
+    spread: 55,
+    startVelocity: 18,
+    ticks: 60,
+    scalar: 0.6,
+    gravity: 1.4,
+  })
+}
+
 // Warm gold tones for the needle-at-100% finish. Each is #RRGGBB with the red
 // channel above the blue channel, so it reads gold rather than silver/white.
 const GOLD_PALETTE = ['#FFD700', '#FDB931', '#E6BE8A', '#D4AF37', '#F9E27A']

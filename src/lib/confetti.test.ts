@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import confetti from 'canvas-confetti'
-import { fireScopeDoneConfetti, startConfettiRain } from './confetti'
+import {
+  fireScopeDoneConfetti,
+  fireTaskDoneConfetti,
+  startConfettiRain,
+} from './confetti'
 
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }))
 
@@ -34,6 +38,24 @@ describe('fireScopeDoneConfetti', () => {
   it('does nothing when the user prefers reduced motion', () => {
     setReducedMotion(true)
     fireScopeDoneConfetti({ x: 0.8, y: 0.6 })
+    expect(mockConfetti).not.toHaveBeenCalled()
+  })
+})
+
+describe('fireTaskDoneConfetti', () => {
+  it('pops a small burst from the given origin', () => {
+    setReducedMotion(false)
+    fireTaskDoneConfetti({ x: 0.5, y: 0.3 })
+    expect(mockConfetti).toHaveBeenCalledTimes(1)
+    const opts = mockConfetti.mock.calls[0][0]
+    expect(opts).toMatchObject({ origin: { x: 0.5, y: 0.3 } })
+    // Lighter than the scope-done burst (80 particles).
+    expect(opts?.particleCount).toBeLessThan(80)
+  })
+
+  it('does nothing when the user prefers reduced motion', () => {
+    setReducedMotion(true)
+    fireTaskDoneConfetti({ x: 0.5, y: 0.3 })
     expect(mockConfetti).not.toHaveBeenCalled()
   })
 })
