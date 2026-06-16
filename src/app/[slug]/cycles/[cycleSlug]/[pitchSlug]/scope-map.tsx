@@ -345,17 +345,6 @@ function ScopeMapWired({
     [pitchId]
   )
 
-  const onScopeReset = useCycleMutation(
-    ({ storage }, scopeId: string) => {
-      const tasksList = storage.get('tasks')
-      for (let i = 0; i < tasksList.length; i++) {
-        const task = tasksList.get(i)!
-        if (task.get('scopeId') === scopeId) task.set('done', false)
-      }
-    },
-    []
-  )
-
   // Flag/clear a scope as the pitch's Core Scope. Stored as a single pointer on
   // the pitch (see ADR 0012), so setting it silently steals the flag from any
   // other scope — one heart, moved. Clearing deletes the key entirely (a lingering
@@ -739,7 +728,6 @@ function ScopeMapWired({
       onToggleCoreScope={onToggleCoreScope}
       onDeleteScope={onDeleteScope}
       onScopeReorder={onScopeReorder}
-      onScopeReset={onScopeReset}
       onParkingToggle={onParkingToggle}
       onPostUpdate={onPostUpdate}
       userName={userName}

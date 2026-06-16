@@ -1,11 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { UserMinus, UserPlus } from 'lucide-react'
 import type { OrganizationUser } from '@/lib/users'
 import { resolveTaskAssignee } from '@/lib/task-engine'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
 // A small round avatar for one org user — photo when available, initials fallback.
 export function UserAvatar({
@@ -34,9 +39,12 @@ type AssigneePickerProps = {
 }
 
 // Per-task assignee control: shows the assignee as an avatar (or an unassigned
-// slot / former-member ghost) and opens a type-ahead panel of the cycle's org
-// members. Mirrors the SquadPicker's portaled-popover pattern. Keyboard-fluent
-// within the panel; full row-level keyboard nav is deferred (see CONTEXT.md).
+// slot / former-member ghost) and opens a menu of the cycle's org members.
+// Built on Radix DropdownMenu so it portals correctly AND stays interactive
+// inside the Scope Drawer's Sheet (a hand-rolled body portal gets
+// pointer-events:none from the Dialog, which made clicks fall through to the
+// task row — the "marks done while assigning" bug). DropdownMenu's native
+// typeahead lets you jump to a member by typing.
 export function AssigneePicker({
   orgUsers,
   assigneeId,
@@ -44,60 +52,11 @@ export function AssigneePicker({
   onClear,
   readOnly,
 }: AssigneePickerProps) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const rootRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
-
   const resolved = resolveTaskAssignee(assigneeId, orgUsers)
 
-  function toggleOpen() {
-    if (readOnly) return
-    if (!open) {
-      const r = triggerRef.current?.getBoundingClientRect()
-      if (r) setPos({ top: r.bottom + 4, right: window.innerWidth - r.right })
-    }
-    setOpen((o) => !o)
-  }
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (!rootRef.current?.contains(t) && !panelRef.current?.contains(t)) {
-        setOpen(false)
-      }
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const trimmed = query.trim().toLowerCase()
-  const filtered = trimmed
-    ? orgUsers.filter((u) => u.name.toLowerCase().includes(trimmed))
-    : orgUsers
-
-  function assign(userId: string) {
-    onAssign(userId)
-    setQuery('')
-    setOpen(false)
-  }
-
   const trigger = (() => {
-    if (resolved.kind === 'assigned') {
-      return <UserAvatar user={resolved.user} />
-    }
+    if (resolved.kind === 'assigned') return <UserAvatar user={resolved.user} />
     if (resolved.kind === 'former_member') {
-      // Anonymous greyed ghost — the assignee left the org; click to re-home.
       return (
         <span
           title="Assignee no longer in this org — click to reassign"
@@ -114,66 +73,46 @@ export function AssigneePicker({
     )
   })()
 
+  if (readOnly) {
+    // No affordance to change — just render the avatar/ghost.
+    return <span className="flex-shrink-0">{trigger}</span>
+  }
+
   return (
-    <div ref={rootRef} className="relative flex-shrink-0">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={toggleOpen}
-        disabled={readOnly}
-        aria-label={resolved.kind === 'assigned' ? `Assigned to ${resolved.user.name}` : 'Assign task'}
-        className={readOnly ? 'cursor-default' : 'cursor-pointer'}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={
+          resolved.kind === 'assigned'
+            ? `Assigned to ${resolved.user.name}`
+            : 'Assign task'
+        }
+        className="flex-shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {trigger}
-      </button>
-
-      {open && pos && createPortal(
-        <div
-          ref={panelRef}
-          style={{ position: 'fixed', top: pos.top, right: pos.right }}
-          className="z-50 w-60 rounded-md border bg-popover p-1 shadow-md"
-        >
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Assign to…"
-            className="w-full bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
-          />
-          <div className="mt-1 max-h-64 overflow-y-auto">
-            {filtered.map((u) => (
-              <button
-                key={u.userId}
-                type="button"
-                onClick={() => assign(u.userId)}
-                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted ${
-                  u.userId === assigneeId ? 'bg-muted' : ''
-                }`}
-              >
-                <UserAvatar user={u} />
-                <span className="truncate">{u.name}</span>
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <p className="px-2 py-1.5 text-sm text-muted-foreground/60">No members found.</p>
-            )}
-            {resolved.kind !== 'unassigned' && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClear()
-                  setQuery('')
-                  setOpen(false)
-                }}
-                className="mt-1 flex w-full items-center rounded px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-              >
-                Unassign
-              </button>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {orgUsers.map((u) => (
+          <DropdownMenuItem
+            key={u.userId}
+            onSelect={() => onAssign(u.userId)}
+            className={u.userId === assigneeId ? 'bg-muted' : ''}
+          >
+            <UserAvatar user={u} className="h-5 w-5" />
+            <span className="truncate">{u.name}</span>
+          </DropdownMenuItem>
+        ))}
+        {orgUsers.length === 0 && (
+          <DropdownMenuItem disabled>No members</DropdownMenuItem>
+        )}
+        {resolved.kind !== 'unassigned' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onClear()} className="text-muted-foreground">
+              Unassign
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

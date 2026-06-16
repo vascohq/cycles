@@ -106,7 +106,6 @@ export type ScopeMapViewProps = {
   onToggleCoreScope?: (scopeId: string, next: boolean) => void
   onDeleteScope?: (scopeId: string) => void
   onScopeReorder?: (activeId: string, overId: string) => void
-  onScopeReset?: (scopeId: string) => void
   onParkingToggle?: (itemId: string, resolved: boolean) => void
   onPostUpdate?: (progress: number, zone: Zone, narrative: string) => void | Promise<void>
   userName?: string
@@ -158,7 +157,6 @@ export function ScopeMapView({
   onToggleCoreScope,
   onDeleteScope,
   onScopeReorder,
-  onScopeReset,
   onParkingToggle,
   onPostUpdate,
   userName = 'You',
@@ -338,6 +336,7 @@ export function ScopeMapView({
         </div>
         <ScopeGrid
           scopes={scopeGridItems}
+          orgUsers={orgUsers}
           onReorder={isDone ? undefined : onScopeReorder}
           onOpenScope={(id) => setOpenScopeId(id)}
           onDeleteScope={!isDone && onDeleteScope ? (id) => setDeletingScopeId(id) : undefined}
@@ -386,11 +385,6 @@ export function ScopeMapView({
           onAddTask={
             !isDone && onAddTask && openScopeId
               ? (title) => onAddTask(openScopeId, title)
-              : undefined
-          }
-          onReset={
-            !isDone && onScopeReset && openScopeId
-              ? () => onScopeReset(openScopeId)
               : undefined
           }
         />

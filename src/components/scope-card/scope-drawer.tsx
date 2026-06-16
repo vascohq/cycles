@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
-import { Check, Plus, Pencil, X, Star } from 'lucide-react'
+import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2 } from 'lucide-react'
 import { ColorPicker } from '@/components/color-picker'
 import {
   Sheet,
@@ -12,6 +12,12 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import type { ScopeCardTask } from './scope-card'
 import type { OrganizationUser } from '@/lib/users'
 import { AssigneePicker, UserAvatar } from './assignee-picker'
@@ -52,7 +58,6 @@ export type ScopeDrawerProps = {
   /** Set (userId) or clear (null) a task's assignee. */
   onTaskAssign?: (taskId: string, assigneeId: string | null) => void
   onAddTask?: (title: string) => void
-  onReset?: () => void
   /** The cycle's org members, for the per-task assignee picker/avatars. */
   orgUsers?: OrganizationUser[]
   readOnly?: boolean
@@ -73,7 +78,6 @@ export function ScopeDrawer({
   onTaskDelete,
   onTaskAssign,
   onAddTask,
-  onReset,
   orgUsers,
   readOnly,
 }: ScopeDrawerProps) {
@@ -94,7 +98,6 @@ export function ScopeDrawer({
             onTaskDelete={onTaskDelete}
             onTaskAssign={onTaskAssign}
             onAddTask={onAddTask}
-            onReset={onReset}
             orgUsers={orgUsers}
             readOnly={readOnly}
           />
@@ -114,14 +117,11 @@ function ScopeDrawerBody({
   onTaskDelete,
   onTaskAssign,
   onAddTask,
-  onReset,
   orgUsers = [],
   readOnly,
 }: Omit<ScopeDrawerProps, 'open' | 'onOpenChange' | 'scope'> & {
   scope: ScopeDrawerScope
 }) {
-  const doneCount = scope.tasks.filter((t) => t.done).length
-
   // Drawer-local view filters — ephemeral per-viewer state, never Liveblocks
   // (a filter must not move on a collaborator's screen). State lives here, so it
   // resets when the drawer closes and the body unmounts.
@@ -206,20 +206,9 @@ function ScopeDrawerBody({
 
       {/* Tasks */}
       <div className="mt-6 flex-1">
-        <div className="flex items-center justify-between mb-2">
-          <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60">
-            tasks
-          </p>
-          {doneCount > 0 && onReset && !readOnly && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
-            >
-              reset
-            </button>
-          )}
-        </div>
+        <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60 mb-2">
+          tasks
+        </p>
 
         {(showOpenToggle || showAssigneeFilter) && (
           <TaskFilterBar
@@ -434,10 +423,11 @@ function TierControl({
   )
 }
 
-// A single task line: a three-part row — [done-circle] [title, wraps] [assignee
-// avatar] (the binary done-circle sits where Linear puts a status icon; we have
-// no workflow states). Hover reveals inline rename (pencil) and delete (X).
-// Enter/blur saves a rename, Esc cancels, empty reverts.
+// A single task line: [done-square] [title] [assignee] [⋯]. Only the square
+// toggles done. Clicking the title opens a seamless inline editor (a textarea
+// styled to match the read text exactly, so the swap is invisible). Delete lives
+// in the ⋯ menu to the right of the assignee. Enter saves, Shift+Enter newline,
+// Esc/empty reverts.
 function TaskRow({
   task,
   orgUsers = [],
@@ -457,8 +447,24 @@ function TaskRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(task.title)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Typography shared by the read span and the edit textarea so the transition
+  // between them is invisible (no visible "it's a textarea" box).
+  const titleType = 'min-w-0 flex-1 text-sm leading-snug break-words whitespace-normal'
+
+  // Auto-grow the textarea to its content height — no scrollbar, no fixed rows,
+  // so it occupies the same space as the wrapped read text.
+  useLayoutEffect(() => {
+    if (!editing) return
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [editing, value])
 
   function startEdit() {
+    if (readOnly || !onEdit) return
     setValue(task.title)
     setEditing(true)
   }
@@ -469,85 +475,57 @@ function TaskRow({
     setEditing(false)
   }
 
-  if (editing && onEdit) {
-    // A textarea (not an input) so long titles are comfortable to edit and can
-    // hold newlines. Enter saves, Shift+Enter inserts a newline, Esc reverts,
-    // blur saves — matching the litmus EditableText pattern.
-    return (
-      <textarea
-        value={value}
-        rows={2}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
-            save()
-          }
-          if (e.key === 'Escape') {
-            setValue(task.title)
-            setEditing(false)
-          }
-        }}
-        onFocus={(e) => e.currentTarget.select()}
-        onBlur={save}
-        className="w-full text-sm bg-transparent border-b border-foreground/30 py-0.5 outline-none resize-none"
-        autoFocus
-      />
-    )
-  }
-
   return (
-    <div
-      className={`flex items-start gap-2 text-sm py-0.5 ${readOnly ? '' : 'group'}`}
-    >
+    <div className={`flex items-start gap-2 py-0.5 ${readOnly ? '' : 'group'}`}>
+      {/* The square is the ONLY done toggle. */}
       <button
         type="button"
+        aria-label={task.done ? 'Mark task not done' : 'Mark task done'}
         {...(!readOnly && onToggle ? { onClick: onToggle } : { disabled: true })}
-        className="flex items-start gap-2 text-left min-w-0 flex-1"
+        className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+          task.done
+            ? 'bg-foreground/10 border-foreground/20'
+            : readOnly
+              ? 'border-foreground/20'
+              : 'border-foreground/20 group-hover:border-foreground/40'
+        }`}
       >
-        <span
-          className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-            task.done
-              ? 'bg-foreground/10 border-foreground/20'
-              : readOnly
-                ? 'border-foreground/20'
-                : 'border-foreground/20 group-hover:border-foreground/40'
-          }`}
-        >
-          {task.done && <Check className="w-3 h-3 text-foreground/60" />}
-        </span>
-        <span
-          className={`min-w-0 break-words whitespace-normal leading-snug ${
-            task.done ? 'line-through text-muted-foreground/60' : 'text-foreground'
-          }`}
-        >
-          {task.title}
-        </span>
+        {task.done && <Check className="w-3 h-3 text-foreground/60" />}
       </button>
 
-      {!readOnly && (onEdit || onDelete) && (
-        <div className="mt-0.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          {onEdit && (
-            <button
-              type="button"
-              aria-label="Edit task"
-              onClick={startEdit}
-              className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
-            >
-              <Pencil className="w-3 h-3" />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              aria-label="Delete task"
-              onClick={onDelete}
-              className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+      {/* Title: click to edit; the textarea matches the read text seamlessly. */}
+      {editing && onEdit ? (
+        <textarea
+          ref={textareaRef}
+          value={value}
+          rows={1}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              save()
+            }
+            if (e.key === 'Escape') {
+              setValue(task.title)
+              setEditing(false)
+            }
+          }}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={save}
+          className={`${titleType} bg-transparent border-0 p-0 m-0 outline-none resize-none overflow-hidden text-foreground`}
+          autoFocus
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={startEdit}
+          disabled={readOnly || !onEdit}
+          className={`${titleType} text-left ${
+            task.done ? 'line-through text-muted-foreground/60' : 'text-foreground'
+          } ${readOnly || !onEdit ? 'cursor-default' : 'cursor-text'}`}
+        >
+          {task.title}
+        </button>
       )}
 
       {onAssign ? (
@@ -559,7 +537,6 @@ function TaskRow({
           readOnly={readOnly}
         />
       ) : (
-        // Read-only: show the avatar only when assigned, no picker affordance.
         task.assigneeId && (
           <AssigneePicker
             orgUsers={orgUsers}
@@ -569,6 +546,27 @@ function TaskRow({
             readOnly
           />
         )
+      )}
+
+      {/* Overflow menu to the right of the assignee — holds Delete. */}
+      {!readOnly && onDelete && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Task actions"
+            className="mt-0.5 flex-shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity outline-none group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => onDelete()}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   )
