@@ -495,6 +495,21 @@ describe('upsertTask', () => {
     expect(existing.get('title')).toBe('Build the gauge')
     expect(existing.get('done')).toBe(true)
   })
+
+  it('leaves an existing assigneeId untouched on a title/done update', async () => {
+    // v1 MCP is reader-only for assignment: a title/done write must never
+    // clobber who a task is assigned to (see ADR 0017 / issue #162).
+    const existing = makeMockItem({
+      id: 't1', scopeId: 's1', title: 'Build gauge', done: false, assigneeId: 'u_simon',
+    })
+    setupStorage({ tasks: [existing] })
+
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build the gauge', done: true })
+
+    expect(existing.get('title')).toBe('Build the gauge')
+    expect(existing.get('done')).toBe(true)
+    expect(existing.get('assigneeId')).toBe('u_simon')
+  })
 })
 
 describe('upsertParkingItem', () => {

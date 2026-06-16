@@ -154,6 +154,25 @@ describe('handleGetPitch', () => {
     expect(data.parkingItems).toHaveLength(1)
   })
 
+  it('surfaces a task assigneeId, and omits it for an unassigned task', async () => {
+    const storage: StorageJson = {
+      ...FIXTURE_STORAGE,
+      tasks: [
+        { id: 't1', scopeId: 's1', title: 'Build gauge', done: true, assigneeId: 'u_simon' },
+        { id: 't2', scopeId: 's1', title: 'Add labels', done: false },
+      ],
+    }
+    mockGetStorage.mockResolvedValue(storage)
+    mockResolvePitch.mockReturnValue(storage.pitches[0])
+
+    const result = await handleGetPitch(ORG_ID, '2026-q2-build', 'mission-control')
+
+    const data = JSON.parse(result.content[0].text as string) as any
+    const tasks = data.scopes[0].tasks as { id: string; assigneeId?: string }[]
+    expect(tasks.find((t) => t.id === 't1')?.assigneeId).toBe('u_simon')
+    expect(tasks.find((t) => t.id === 't2')?.assigneeId).toBeUndefined()
+  })
+
   it('returns error when pitch not found', async () => {
     mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
     mockResolvePitch.mockReturnValue(undefined)
