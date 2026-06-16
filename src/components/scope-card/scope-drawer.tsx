@@ -144,7 +144,9 @@ function ScopeDrawerBody({
   // Drawer-local view filters — ephemeral per-viewer state, never Liveblocks
   // (a filter must not move on a collaborator's screen). State lives here, so it
   // resets when the drawer closes and the body unmounts.
-  const [openOnly, setOpenOnly] = useState(false)
+  // Default to Open — focus on what's left to do; done tasks are one click away
+  // via the All toggle. Resets each time the drawer opens (state unmounts).
+  const [openOnly, setOpenOnly] = useState(true)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const assigneeOptions = assigneeFilterOptions(scope.tasks, orgUsers)
   const visibleTasks = filterTasks(scope.tasks, {
