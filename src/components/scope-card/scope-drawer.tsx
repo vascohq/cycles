@@ -170,7 +170,7 @@ function ScopeDrawerBody({
       {/* Color */}
       {!readOnly && onEditScope && (
         <div className="mt-4">
-          <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60 mb-1.5">
+          <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
             color
           </p>
           <ColorPicker
@@ -183,10 +183,10 @@ function ScopeDrawerBody({
 
       {/* What it ships (litmus) — the fuller framing lives here, where there's room */}
       <div className="mt-4">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60 mb-0.5">
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">
           what it ships
         </p>
-        <p className="text-xs text-muted-foreground/60 mb-1.5 leading-snug">
+        <p className="text-[13px] text-muted-foreground/70 mb-1.5 leading-snug">
           If we only ship this scope, what does the user get — and is it useful?
         </p>
         <EditableText
@@ -201,7 +201,7 @@ function ScopeDrawerBody({
 
       {/* Tasks */}
       <div className="mt-6 flex-1">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60 mb-2">
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
           tasks
         </p>
 
