@@ -133,12 +133,12 @@ function ScopeDrawerBody({
     <>
       <SheetHeader className="pr-8">
         <div className="flex items-center gap-2">
-          <span
-            className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{ backgroundColor: scope.color, color: readableTextColor(scope.color) }}
-          >
-            {scope.order}
-          </span>
+          <ColorBadge
+            order={scope.order}
+            color={scope.color}
+            usedColors={usedColors}
+            onPick={!readOnly && onEditScope ? (color) => onEditScope({ color }) : undefined}
+          />
           <SheetTitle className="sr-only">Scope</SheetTitle>
           <SheetDescription className="sr-only">
             Edit the scope name, tier, color, what it ships, and its tasks.
@@ -166,20 +166,6 @@ function ScopeDrawerBody({
         onSave={(title) => onEditScope?.({ title })}
         className="mt-4 text-lg font-semibold leading-snug tracking-tight"
       />
-
-      {/* Color */}
-      {!readOnly && onEditScope && (
-        <div className="mt-4">
-          <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-            color
-          </p>
-          <ColorPicker
-            value={scope.color}
-            usedColors={usedColors}
-            onPick={(color) => onEditScope({ color })}
-          />
-        </div>
-      )}
 
       {/* What it ships (litmus) — the fuller framing lives here, where there's room */}
       <div className="mt-4">
@@ -378,6 +364,55 @@ function CoreToggle({
   )
 }
 
+// The scope's order/identity badge in the header doubles as the color picker —
+// click it to recolor from a popover (saves the full COLOR row of space). A
+// controlled DropdownMenu (dialog-safe inside the drawer Sheet) closes on pick.
+function ColorBadge({
+  order,
+  color,
+  usedColors,
+  onPick,
+}: {
+  order: number
+  color: string
+  usedColors: string[]
+  onPick?: (color: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const badge = (
+    <span
+      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
+      style={{ backgroundColor: color, color: readableTextColor(color) }}
+    >
+      {order}
+    </span>
+  )
+
+  if (!onPick) return badge
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger
+        aria-label="Change scope color"
+        title="Change color"
+        className="rounded-full outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {badge}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto p-2">
+        <ColorPicker
+          value={color}
+          usedColors={usedColors}
+          onPick={(c) => {
+            onPick(c)
+            setOpen(false)
+          }}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function TierControl({
   tier,
   readOnly,
@@ -501,7 +536,11 @@ function TaskRow({
   }
 
   return (
-    <div className={`flex items-start gap-2 py-0.5 ${readOnly ? '' : 'group'}`}>
+    <div
+      className={`flex items-start gap-2 rounded-md py-1 transition-colors ${
+        readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted/50'
+      }`}
+    >
       {/* The square is the ONLY done toggle. */}
       <button
         type="button"
