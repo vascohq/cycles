@@ -20,6 +20,7 @@ import {
   upsertPitch,
   upsertScope,
   upsertTask,
+  moveTask,
   upsertParkingItem,
   deletePitch,
   deleteScope,
@@ -31,6 +32,7 @@ import {
   upsertSquad,
   deleteSquad,
 } from './liveblocks-writer'
+import { getOrganizationUsers, resolveAssigneeRef } from '@/lib/users'
 
 const orgArg = {
   org: z
@@ -870,7 +872,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_task',
-    'Create or update a task under a scope. Omit id to create. Updates are PARTIAL: omit done to leave it unchanged — passing only a new title will NOT un-complete the task.',
+    'Create or update a task under a scope. Omit id to create. Updates are PARTIAL: omit done/assignee to leave them unchanged — passing only a new title will NOT un-complete or un-assign the task.',
     {
       ...orgArg,
       ...cycleSlugArg,
@@ -880,6 +882,13 @@ export function registerCyclesTools(server: any): void {
       // Optional (not .default) so a title-only update leaves done unchanged
       // rather than resetting it to false. Defaults to false on create.
       done: z.boolean().optional(),
+      // The assignee, as an email or a Clerk userId (see list_members). Omit to
+      // leave unchanged; pass "" to unassign. Resolved server-side; an unknown
+      // ref is rejected. Display names are not accepted (ambiguous).
+      assignee: z
+        .string()
+        .optional()
+        .describe('Assignee email or userId; "" to unassign; omit to leave unchanged'),
     },
     {
       title: 'Create or update task',
@@ -889,7 +898,61 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done?: boolean },
+      { org, cycle_slug, assignee, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done?: boolean; assignee?: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
+
+      // Resolve the assignee ref → userId. undefined = unchanged; '' = unassign;
+      // anything else must match a member by email or userId.
+      let assigneeId: string | undefined
+      if (assignee !== undefined) {
+        if (assignee.trim() === '') {
+          assigneeId = ''
+        } else {
+          const orgUsers = await getOrganizationUsers(resolved.org.id)
+          const match = resolveAssigneeRef(assignee, orgUsers)
+          if (!match) {
+            return errorResult(
+              `No org member matches assignee "${assignee}" (use an email or userId — see list_members)`
+            )
+          }
+          assigneeId = match
+        }
+      }
+
+      try {
+        const result = await upsertTask(roomId, { ...params, assigneeId })
+        return jsonResult(result)
+      } catch (err) {
+        return errorResult((err as Error).message)
+      }
+    }
+  )
+
+  defineTool(
+    server,
+    'move_task',
+    'Reorder a task within its scope, relative to a sibling task. Pass exactly one of `before` or `after` (a sibling task id).',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().describe('Id of the task to move'),
+      before: z.string().optional().describe('Place the task immediately before this sibling task id'),
+      after: z.string().optional().describe('Place the task immediately after this sibling task id'),
+    },
+    {
+      title: 'Move task',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async (
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id: string; before?: string; after?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -897,11 +960,32 @@ export function registerCyclesTools(server: any): void {
       if (!resolved.ok) return errorResult(resolved.error)
       const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
       try {
-        const result = await upsertTask(roomId, params)
+        const result = await moveTask(roomId, params)
         return jsonResult(result)
       } catch (err) {
         return errorResult((err as Error).message)
       }
+    }
+  )
+
+  defineTool(
+    server,
+    'list_members',
+    "List the organization's members — their userId, name, and email — so you can assign tasks (see upsert_task's assignee).",
+    { ...orgArg },
+    {
+      title: 'List members',
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    async ({ org }: { org?: string }, extra: ToolExtra) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const users = await getOrganizationUsers(resolved.org.id)
+      return jsonResult(
+        users.map((u) => ({ userId: u.userId, name: u.name, email: u.email }))
+      )
     }
   )
 

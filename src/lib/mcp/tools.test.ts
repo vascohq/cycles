@@ -16,6 +16,7 @@ vi.mock('./liveblocks-writer', () => ({
   upsertPitch: vi.fn(),
   upsertScope: vi.fn(),
   upsertTask: vi.fn(),
+  moveTask: vi.fn(),
   upsertParkingItem: vi.fn(),
   deletePitch: vi.fn(),
   deleteScope: vi.fn(),
@@ -33,9 +34,18 @@ vi.mock('@/lib/slack-delivery', () => ({
   isSlackConfigured: vi.fn(),
 }))
 
+// Keep the real (pure) resolveAssigneeRef; only stub the Clerk-backed fetch.
+vi.mock('@/lib/users', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/users')>()),
+  getOrganizationUsers: vi.fn(),
+}))
+
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
 import { deleteUpdate, pushUpdate, markSlackDelivered } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
+import { getOrganizationUsers } from '@/lib/users'
+
+const mockGetOrgUsers = vi.mocked(getOrganizationUsers)
 
 const mockListRooms = vi.mocked(listCycleRooms)
 const mockGetStorage = vi.mocked(getCycleStorage)
@@ -375,6 +385,7 @@ import {
   upsertPitch,
   upsertScope,
   upsertTask,
+  moveTask,
   upsertSquad,
   deleteSquad,
 } from './liveblocks-writer'
@@ -383,6 +394,7 @@ const mockCreateCycle = vi.mocked(createCycle)
 const mockUpsertPitch = vi.mocked(upsertPitch)
 const mockUpsertScope = vi.mocked(upsertScope)
 const mockUpsertTask = vi.mocked(upsertTask)
+const mockMoveTask = vi.mocked(moveTask)
 const mockUpsertSquad = vi.mocked(upsertSquad)
 const mockDeleteSquad = vi.mocked(deleteSquad)
 
@@ -593,7 +605,7 @@ describe('tool annotations', () => {
     return tools
   }
 
-  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update']
+  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members']
   const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
@@ -731,5 +743,96 @@ describe('upsert_* partial-update schemas', () => {
     const schema = z.object(schemaFor('update_cycle'))
     expect(schema.parse({ slug_path: 'q2-build', type: 'cooldown' }).type).toBe('cooldown')
     expect(() => schema.parse({ slug_path: 'q2-build', type: 'sprint' })).toThrow()
+  })
+})
+
+describe('task assignment & reordering via registered tools', () => {
+  // Capture a registered tool's handler (5th arg to server.tool) so we can drive
+  // it directly with a fake auth `extra`.
+  function handlerFor(toolName: string) {
+    let handler:
+      | ((args: any, extra: any) => Promise<{ content: { text: string }[]; isError?: true }>)
+      | undefined
+    const server = {
+      tool(name: string, _d: string, _s: unknown, _a: unknown, fn: any) {
+        if (name === toolName) handler = fn
+      },
+    }
+    registerCyclesTools(server)
+    if (!handler) throw new Error(`tool not registered: ${toolName}`)
+    return handler
+  }
+
+  const EXTRA = { authInfo: { extra: { memberships: [{ id: 'org_test', slug: 'vasco' }] } } }
+  const SIMON = {
+    userId: 'user_simon', email: 'simon@vasco.app', name: 'Simon',
+    initials: 'SI', hasImage: false, imageUrl: '',
+  }
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it('resolves an assignee email to a userId and assigns', async () => {
+    mockGetOrgUsers.mockResolvedValue([SIMON])
+    mockUpsertTask.mockResolvedValue({ created: false, id: 't1' })
+    await handlerFor('upsert_task')(
+      { cycle_slug: 'q2-build', id: 't1', scopeId: 's1', title: 'X', assignee: 'simon@vasco.app' },
+      EXTRA
+    )
+    expect(mockUpsertTask).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      expect.objectContaining({ assigneeId: 'user_simon' })
+    )
+  })
+
+  it('rejects an unknown assignee without writing', async () => {
+    mockGetOrgUsers.mockResolvedValue([SIMON])
+    const res = await handlerFor('upsert_task')(
+      { cycle_slug: 'q2-build', id: 't1', scopeId: 's1', title: 'X', assignee: 'ghost@example.com' },
+      EXTRA
+    )
+    expect(res.isError).toBe(true)
+    expect(mockUpsertTask).not.toHaveBeenCalled()
+  })
+
+  it('passes assigneeId="" to unassign without fetching members', async () => {
+    mockUpsertTask.mockResolvedValue({ created: false, id: 't1' })
+    await handlerFor('upsert_task')(
+      { cycle_slug: 'q2-build', id: 't1', scopeId: 's1', title: 'X', assignee: '' },
+      EXTRA
+    )
+    expect(mockUpsertTask).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      expect.objectContaining({ assigneeId: '' })
+    )
+    expect(mockGetOrgUsers).not.toHaveBeenCalled()
+  })
+
+  it('leaves assignee unchanged (assigneeId undefined) when omitted', async () => {
+    mockUpsertTask.mockResolvedValue({ created: false, id: 't1' })
+    await handlerFor('upsert_task')(
+      { cycle_slug: 'q2-build', id: 't1', scopeId: 's1', title: 'X' },
+      EXTRA
+    )
+    expect(mockUpsertTask).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      expect.objectContaining({ assigneeId: undefined })
+    )
+    expect(mockGetOrgUsers).not.toHaveBeenCalled()
+  })
+
+  it('move_task forwards before/after to the writer', async () => {
+    mockMoveTask.mockResolvedValue({ moved: true })
+    await handlerFor('move_task')(
+      { cycle_slug: 'q2-build', id: 'a', after: 'b' },
+      EXTRA
+    )
+    expect(mockMoveTask).toHaveBeenCalledWith('org_test:cycle:q2-build', { id: 'a', after: 'b' })
+  })
+
+  it('list_members returns userId, name, email', async () => {
+    mockGetOrgUsers.mockResolvedValue([SIMON])
+    const res = await handlerFor('list_members')({}, EXTRA)
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toEqual([{ userId: 'user_simon', name: 'Simon', email: 'simon@vasco.app' }])
   })
 })

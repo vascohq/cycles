@@ -3,9 +3,27 @@ import { clerkClient } from '@clerk/nextjs/server'
 export interface OrganizationUser {
   userId: string
   name: string
+  /** The member's email / identifier — used to resolve MCP assignee refs. */
+  email: string
   initials: string
   hasImage: boolean
   imageUrl: string
+}
+
+// Resolve an MCP assignee reference to a Clerk userId. Matches a raw userId or
+// an email (case-insensitive) only — never a display name, which would be
+// ambiguous. Returns null when nothing matches.
+export function resolveAssigneeRef(
+  ref: string,
+  orgUsers: OrganizationUser[]
+): string | null {
+  const trimmed = ref.trim()
+  if (!trimmed) return null
+  const byId = orgUsers.find((u) => u.userId === trimmed)
+  if (byId) return byId.userId
+  const lower = trimmed.toLowerCase()
+  const byEmail = orgUsers.find((u) => u.email.toLowerCase() === lower)
+  return byEmail ? byEmail.userId : null
 }
 
 export async function getOrganizationUsers(
@@ -18,12 +36,12 @@ export async function getOrganizationUsers(
       organizationId,
       limit: 100,
     })
-  console.log(memberships.map((m) => m.publicUserData))
   return memberships
     .map((m) => m.publicUserData)
     .filter(Boolean)
     .map<OrganizationUser>((publicUserData) => ({
       userId: publicUserData.userId,
+      email: publicUserData.identifier,
       name:
         [publicUserData.firstName, publicUserData.lastName]
           .filter(Boolean)

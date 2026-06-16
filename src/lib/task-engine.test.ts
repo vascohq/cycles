@@ -9,7 +9,14 @@ import {
 import type { OrganizationUser } from './users'
 
 function user(id: string, name: string): OrganizationUser {
-  return { userId: id, name, initials: name[0], hasImage: false, imageUrl: '' }
+  return {
+    userId: id,
+    name,
+    email: `${name.toLowerCase()}@vasco.app`,
+    initials: name[0],
+    hasImage: false,
+    imageUrl: '',
+  }
 }
 
 const simon = user('u_simon', 'Simon')
