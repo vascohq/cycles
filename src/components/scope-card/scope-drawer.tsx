@@ -79,7 +79,10 @@ export function ScopeDrawer({
 }: ScopeDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="gap-0 overflow-y-auto">
+      {/* A floating island on the right: 4px inset all sides, 8px radius, wider
+          than the default sheet. Overrides the base SheetContent's flush
+          inset-y-0/right-0/h-full/border-l via tailwind-merge. */}
+      <SheetContent className="gap-0 overflow-y-auto top-1 bottom-1 right-1 h-auto w-[calc(100%-0.5rem)] max-w-xl rounded-lg border shadow-xl">
         {scope && (
           <ScopeDrawerBody
             scope={scope}
