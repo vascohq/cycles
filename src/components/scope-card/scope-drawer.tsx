@@ -1,9 +1,25 @@
 'use client'
 
 import { useState, useRef, useLayoutEffect } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
-import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2, ChevronDown } from 'lucide-react'
+import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2, ChevronDown, GripVertical } from 'lucide-react'
 import { ColorPicker } from '@/components/color-picker'
 import {
   Sheet,
@@ -54,6 +70,8 @@ export type ScopeDrawerProps = {
   onTaskDelete?: (taskId: string) => void
   /** Set (userId) or clear (null) a task's assignee. */
   onTaskAssign?: (taskId: string, assigneeId: string | null) => void
+  /** Reorder: move task activeId to overId's position. */
+  onTaskReorder?: (activeId: string, overId: string) => void
   onAddTask?: (title: string) => void
   /** The cycle's org members, for the per-task assignee picker/avatars. */
   orgUsers?: OrganizationUser[]
@@ -74,6 +92,7 @@ export function ScopeDrawer({
   onTaskEdit,
   onTaskDelete,
   onTaskAssign,
+  onTaskReorder,
   onAddTask,
   orgUsers,
   readOnly,
@@ -94,6 +113,7 @@ export function ScopeDrawer({
             onTaskEdit={onTaskEdit}
             onTaskDelete={onTaskDelete}
             onTaskAssign={onTaskAssign}
+            onTaskReorder={onTaskReorder}
             onAddTask={onAddTask}
             orgUsers={orgUsers}
             readOnly={readOnly}
@@ -113,6 +133,7 @@ function ScopeDrawerBody({
   onTaskEdit,
   onTaskDelete,
   onTaskAssign,
+  onTaskReorder,
   onAddTask,
   orgUsers = [],
   readOnly,
@@ -128,6 +149,37 @@ function ScopeDrawerBody({
   const visibleTasks = filterTasks(scope.tasks, {
     openOnly,
     assigneeId: assigneeFilter ?? undefined,
+  })
+
+  // Reordering operates on the full list, so it's only unambiguous when the
+  // list is unfiltered — a filtered subset can't map positions back cleanly.
+  const isFiltered = openOnly || assigneeFilter !== null
+  const canReorder =
+    !readOnly && !!onTaskReorder && !isFiltered && visibleTasks.length > 1
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      onTaskReorder?.(String(active.id), String(over.id))
+    }
+  }
+
+  // Props shared by every task row, bound to the task id.
+  const rowProps = (task: ScopeCardTask) => ({
+    task,
+    orgUsers,
+    readOnly,
+    onToggle: onTaskToggle ? () => onTaskToggle(task.id, !task.done) : undefined,
+    onEdit: onTaskEdit ? (title: string) => onTaskEdit(task.id, title) : undefined,
+    onDelete: onTaskDelete ? () => onTaskDelete(task.id) : undefined,
+    onAssign: onTaskAssign
+      ? (assigneeId: string | null) => onTaskAssign(task.id, assigneeId)
+      : undefined,
   })
 
   return (
@@ -203,24 +255,24 @@ function ScopeDrawerBody({
         )}
 
         <div className="flex flex-col gap-1">
-          {visibleTasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              orgUsers={orgUsers}
-              readOnly={readOnly}
-              onToggle={
-                onTaskToggle ? () => onTaskToggle(task.id, !task.done) : undefined
-              }
-              onEdit={onTaskEdit ? (title) => onTaskEdit(task.id, title) : undefined}
-              onDelete={onTaskDelete ? () => onTaskDelete(task.id) : undefined}
-              onAssign={
-                onTaskAssign
-                  ? (assigneeId) => onTaskAssign(task.id, assigneeId)
-                  : undefined
-              }
-            />
-          ))}
+          {canReorder ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={visibleTasks.map((t) => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {visibleTasks.map((task) => (
+                  <SortableTaskRow key={task.id} {...rowProps(task)} />
+                ))}
+              </SortableContext>
+            </DndContext>
+          ) : (
+            visibleTasks.map((task) => <TaskRow key={task.id} {...rowProps(task)} />)
+          )}
 
           {scope.tasks.length === 0 && (
             <p className="text-xs text-muted-foreground/50 py-1">No tasks yet.</p>
@@ -467,11 +519,40 @@ function caretIndexFromPoint(x: number, y: number): number | null {
   return null
 }
 
-// A single task line: [done-square] [title] [assignee] [⋯]. Only the square
-// toggles done. Clicking the title opens a seamless inline editor (a textarea
-// styled to match the read text exactly, so the swap is invisible). Delete lives
-// in the ⋯ menu to the right of the assignee. Enter saves, Shift+Enter newline,
-// Esc/empty reverts.
+// Sortable wrapper: provides the dnd transform on an outer node and passes the
+// drag listeners down to the row's grip handle (so dragging starts from the
+// grip, not from the title/square/assignee controls).
+function SortableTaskRow(props: TaskRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.task.id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+    >
+      <TaskRow {...props} dragHandleProps={listeners} isDragging={isDragging} />
+    </div>
+  )
+}
+
+type TaskRowProps = {
+  task: ScopeCardTask
+  orgUsers?: OrganizationUser[]
+  readOnly?: boolean
+  onToggle?: () => void
+  onEdit?: (title: string) => void
+  onDelete?: () => void
+  onAssign?: (assigneeId: string | null) => void
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>
+  isDragging?: boolean
+}
+
+// A single task line: [grip] [done-square] [title] [assignee] [⋯]. Only the
+// square toggles done. Clicking the title opens a seamless inline editor (a
+// textarea styled to match the read text exactly). Delete lives in the ⋯ menu to
+// the right of the assignee. The grip (drag handle) only appears when reordering
+// is enabled. Enter saves, Shift+Enter newline, Esc/empty reverts.
 function TaskRow({
   task,
   orgUsers = [],
@@ -480,15 +561,9 @@ function TaskRow({
   onEdit,
   onDelete,
   onAssign,
-}: {
-  task: ScopeCardTask
-  orgUsers?: OrganizationUser[]
-  readOnly?: boolean
-  onToggle?: () => void
-  onEdit?: (title: string) => void
-  onDelete?: () => void
-  onAssign?: (assigneeId: string | null) => void
-}) {
+  dragHandleProps,
+  isDragging,
+}: TaskRowProps) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(task.title)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -540,8 +615,21 @@ function TaskRow({
     <div
       className={`flex items-start gap-2 rounded-md py-1 transition-colors ${
         readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted/50'
-      }`}
+      } ${isDragging ? 'opacity-60' : ''}`}
     >
+      {/* Drag handle — only present when reordering is enabled. Dragging starts
+          here, so it never fights click-to-edit / toggle / assignee. */}
+      {dragHandleProps && (
+        <button
+          type="button"
+          aria-label="Drag to reorder task"
+          {...dragHandleProps}
+          className="-ml-1 mt-0.5 flex-shrink-0 cursor-grab touch-none text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground active:cursor-grabbing group-hover:opacity-100"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
+
       {/* The square is the ONLY done toggle. Checking it pops a little confetti. */}
       <button
         type="button"

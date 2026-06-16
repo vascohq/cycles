@@ -96,6 +96,7 @@ export type ScopeMapViewProps = {
   onTaskEdit?: (scopeId: string, taskId: string, title: string) => void
   onTaskDelete?: (scopeId: string, taskId: string) => void
   onTaskAssign?: (scopeId: string, taskId: string, assigneeId: string | null) => void
+  onTaskReorder?: (activeId: string, overId: string) => void
   onAddTask?: (scopeId: string, title: string) => void
   onAddScope?: (title: string, tier: string, litmus_text: string) => void
   onEditScope?: (
@@ -151,6 +152,7 @@ export function ScopeMapView({
   onTaskEdit,
   onTaskDelete,
   onTaskAssign,
+  onTaskReorder,
   onAddTask,
   onAddScope,
   onEditScope,
@@ -381,6 +383,7 @@ export function ScopeMapView({
               ? (taskId, assigneeId) => onTaskAssign(openScopeId, taskId, assigneeId)
               : undefined
           }
+          onTaskReorder={!isDone ? onTaskReorder : undefined}
           orgUsers={orgUsers}
           onAddTask={
             !isDone && onAddTask && openScopeId

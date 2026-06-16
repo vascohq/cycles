@@ -35,6 +35,7 @@ const baseHandlers = {
   onTaskEdit: fn(),
   onTaskDelete: fn(),
   onTaskAssign: fn(),
+  onTaskReorder: fn(),
   onAddTask: fn(),
   orgUsers: ORG_USERS,
 }

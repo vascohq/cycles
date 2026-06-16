@@ -277,6 +277,18 @@ function ScopeMapWired({
     []
   )
 
+  const onTaskReorder = useCycleMutation(
+    ({ storage }, activeId: string, overId: string) => {
+      const tasksList = storage.get('tasks')
+      const from = tasksList.findIndex((t) => t.get('id') === activeId)
+      const to = tasksList.findIndex((t) => t.get('id') === overId)
+      // Move within the flat tasks LiveList by absolute index — order is the
+      // list position (no order field), mirroring scope reordering.
+      if (from !== -1 && to !== -1 && from !== to) tasksList.move(from, to)
+    },
+    []
+  )
+
   const onTaskAssign = useCycleMutation(
     ({ storage }, _scopeId: string, taskId: string, assigneeId: string | null) => {
       const task = storage.get('tasks').find((t) => t.get('id') === taskId)
@@ -725,6 +737,7 @@ function ScopeMapWired({
       onTaskEdit={onTaskEdit}
       onTaskDelete={onTaskDelete}
       onTaskAssign={onTaskAssign}
+      onTaskReorder={onTaskReorder}
       onAddTask={onAddTask}
       onAddScope={onAddScope}
       onEditScope={onEditScope}
