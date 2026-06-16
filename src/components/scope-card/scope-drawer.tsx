@@ -14,7 +14,12 @@ import {
 } from '@/components/ui/sheet'
 import type { ScopeCardTask } from './scope-card'
 import type { OrganizationUser } from '@/lib/users'
-import { AssigneePicker } from './assignee-picker'
+import { AssigneePicker, UserAvatar } from './assignee-picker'
+import {
+  filterTasks,
+  filterControlVisibility,
+  assigneeFilterOptions,
+} from '@/lib/task-engine'
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 
@@ -114,6 +119,18 @@ function ScopeDrawerBody({
 }) {
   const doneCount = scope.tasks.filter((t) => t.done).length
 
+  // Drawer-local view filters — ephemeral per-viewer state, never Liveblocks
+  // (a filter must not move on a collaborator's screen). State lives here, so it
+  // resets when the drawer closes and the body unmounts.
+  const [openOnly, setOpenOnly] = useState(false)
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
+  const { showOpenToggle, showAssigneeFilter } = filterControlVisibility(scope.tasks)
+  const assigneeOptions = assigneeFilterOptions(scope.tasks, orgUsers)
+  const visibleTasks = filterTasks(scope.tasks, {
+    openOnly,
+    assigneeId: assigneeFilter ?? undefined,
+  })
+
   return (
     <>
       <SheetHeader className="pr-8">
@@ -201,8 +218,20 @@ function ScopeDrawerBody({
           )}
         </div>
 
+        {(showOpenToggle || showAssigneeFilter) && (
+          <TaskFilterBar
+            openOnly={openOnly}
+            onToggleOpenOnly={() => setOpenOnly((v) => !v)}
+            showOpenToggle={showOpenToggle}
+            showAssigneeFilter={showAssigneeFilter}
+            assigneeOptions={assigneeOptions}
+            assigneeFilter={assigneeFilter}
+            onPickAssignee={setAssigneeFilter}
+          />
+        )}
+
         <div className="flex flex-col gap-1">
-          {scope.tasks.map((task) => (
+          {visibleTasks.map((task) => (
             <TaskRow
               key={task.id}
               task={task}
@@ -223,6 +252,12 @@ function ScopeDrawerBody({
 
           {scope.tasks.length === 0 && (
             <p className="text-xs text-muted-foreground/50 py-1">No tasks yet.</p>
+          )}
+
+          {scope.tasks.length > 0 && visibleTasks.length === 0 && (
+            <p className="text-xs text-muted-foreground/50 py-1">
+              No matching tasks.
+            </p>
           )}
 
           {onAddTask && !readOnly && <AddTaskInput onAddTask={onAddTask} />}
@@ -531,6 +566,78 @@ function TaskRow({
             readOnly
           />
         )
+      )}
+    </div>
+  )
+}
+
+// Drawer-local task filters: an All/Open toggle (Open = not done; never
+// "active") and by-assignee chips. Each control is only rendered when there's a
+// choice to make (its visibility is decided upstream by filterControlVisibility).
+function TaskFilterBar({
+  openOnly,
+  onToggleOpenOnly,
+  showOpenToggle,
+  showAssigneeFilter,
+  assigneeOptions,
+  assigneeFilter,
+  onPickAssignee,
+}: {
+  openOnly: boolean
+  onToggleOpenOnly: () => void
+  showOpenToggle: boolean
+  showAssigneeFilter: boolean
+  assigneeOptions: OrganizationUser[]
+  assigneeFilter: string | null
+  onPickAssignee: (userId: string | null) => void
+}) {
+  const chip = 'rounded-full border px-2.5 py-0.5 text-xs transition-colors'
+  const active = 'bg-foreground text-background border-foreground'
+  const idle = 'text-muted-foreground hover:text-foreground'
+
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-1.5">
+      {showOpenToggle && (
+        <button
+          type="button"
+          aria-pressed={openOnly}
+          onClick={onToggleOpenOnly}
+          className={`${chip} ${openOnly ? active : idle}`}
+        >
+          {openOnly ? 'Open' : 'All'}
+        </button>
+      )}
+
+      {showAssigneeFilter && (
+        <div className="flex flex-wrap items-center gap-1">
+          {assigneeOptions.map((user) => {
+            const selected = assigneeFilter === user.userId
+            return (
+              <button
+                key={user.userId}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onPickAssignee(selected ? null : user.userId)}
+                title={`Filter to ${user.name}`}
+                className={`flex items-center gap-1 rounded-full border py-0.5 pl-0.5 pr-2 text-xs transition-colors ${
+                  selected ? 'border-foreground bg-muted' : idle
+                }`}
+              >
+                <UserAvatar user={user} className="h-4 w-4" />
+                <span className="truncate max-w-20">{user.name}</span>
+              </button>
+            )
+          })}
+          {assigneeFilter && (
+            <button
+              type="button"
+              onClick={() => onPickAssignee(null)}
+              className={`${chip} ${idle}`}
+            >
+              Clear
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
