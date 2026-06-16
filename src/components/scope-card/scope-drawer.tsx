@@ -614,7 +614,7 @@ function TaskRow({
   return (
     <div
       className={`relative flex items-start gap-2 rounded-md py-1 transition-colors ${
-        readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted/50'
+        readOnly ? '-mx-2 px-2' : 'group -mx-2 px-2 hover:bg-muted dark:hover:bg-muted/50'
       } ${isDragging ? 'opacity-60' : ''}`}
     >
       {/* Drag handle — pulled out of flow into the left gutter (absolute) so it
