@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — **amended 2026-06-25** (see "Correction: `end` is inclusive" below).
 
 ## Context
 
@@ -34,6 +34,7 @@ all-or-nothing.
 
 - `totalDays` = business days in the half-open span `[start, end)`;
   `elapsed` = business days in `[start, today)`; `dayNumber = elapsed + 1`.
+  *(Superseded — `end` is now inclusive; see the 2026-06-25 correction below.)*
 - Weekends contribute zero. A weekend `start`/`end` simply adds no day, and a
   weekend "today" holds the marker flat at the prior Friday's position — the
   countdown does **not** tick across the weekend.
@@ -76,3 +77,25 @@ old cards is cosmetic and washes out within a cycle.
   in a different region, this becomes per-org configuration (defaulting to
   Montreal) — revisit here. Per-*user* timezone is explicitly rejected, not
   deferred.
+
+## Correction: `end` is inclusive (2026-06-25)
+
+The original decision made `totalDays` the business days in the **half-open**
+span `[start, end)`, excluding `end`. That was wrong for a human-facing date
+field: everywhere a person touches `end_date` it means **the last working day**
+("the cycle ends Friday Aug 28" includes Friday). The create form stores the
+picked date as-is, and the tape displays it as-is — so a Friday end dropped
+Friday, the final week rendered 4 ticks instead of 5, and on the last day the
+window read "complete" with 0 days left.
+
+**`end` (and a pitch timebox's `timebox_end`) is now inclusive — the last
+working day.** `computeTimebox` derives the exclusive boundary it needs by
+adding one calendar day (`endExclusive = end + 1d`) and feeds that to the
+unchanged half-open `businessDaysBetween`. The `today >= end` "after" guard
+becomes `today >= endExclusive`, so the last working day counts as active.
+
+Note the deliberate asymmetry: **`totalDays` counts `[start, end]` inclusive,
+but `elapsed` stays `[start, today)` exclusive** — "today" is the day in
+progress (day N), not a day already spent, so `dayNumber = elapsed + 1`. A
+Mon→Fri 6-week build is now 30 business days with the final Friday counted, and
+the tape closes week 6 with a major tick.

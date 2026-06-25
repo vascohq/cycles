@@ -49,8 +49,18 @@ export function dayTicks(totalDays: number): DayTick[] {
 
 const DAYS_PER_WEEK = 5
 
+/** ISO date one calendar day after `iso`. '' / invalid passes through unchanged. */
+function nextCalendarDay(iso: string): string {
+  const t = new Date(iso + 'T00:00:00Z').getTime()
+  if (!Number.isFinite(t)) return iso
+  return new Date(t + msPerDay).toISOString().slice(0, 10)
+}
+
 export function computeTimebox(start: string, end: string, today: string): TimeboxInfo {
-  const totalDays = businessDaysBetween(start, end)
+  // `end` is the inclusive last working day (ADR 0013 correction). The half-open
+  // engine wants an exclusive boundary, so count up to the day after `end`.
+  const endExclusive = nextCalendarDay(end)
+  const totalDays = businessDaysBetween(start, endExclusive)
 
   if (!Number.isFinite(totalDays) || totalDays <= 0) {
     return { fractionElapsed: 0, dayNumber: 0, daysLeft: 0, totalDays: 0, totalWeeks: 0, currentWeek: 0, phase: 'before' }
@@ -62,7 +72,7 @@ export function computeTimebox(start: string, end: string, today: string): Timeb
     return { fractionElapsed: 0, dayNumber: 0, daysLeft: totalDays, totalDays, totalWeeks, currentWeek: 0, phase: 'before' }
   }
 
-  if (today >= end) {
+  if (today >= endExclusive) {
     return { fractionElapsed: 1, dayNumber: totalDays, daysLeft: 0, totalDays, totalWeeks, currentWeek: totalWeeks, phase: 'after' }
   }
 
