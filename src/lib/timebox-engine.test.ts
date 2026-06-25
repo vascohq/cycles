@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeTimebox, dayTicks } from './timebox-engine'
+import { computeTimebox, dayTicks, windowFraction } from './timebox-engine'
 
 describe('computeTimebox', () => {
   // Jun 1 2026 is a Monday; Jun 1 → Fri Jun 12 (inclusive) holds two working
@@ -108,6 +108,35 @@ describe('computeTimebox', () => {
       expect(Number.isFinite(info.fractionElapsed)).toBe(true)
       expect(info.totalDays).toBe(0)
     }
+  })
+})
+
+describe('windowFraction', () => {
+  // Mon Jan 6 → Fri Feb 14 2025 (inclusive) = 30 business days. Positions divide
+  // by 30 (the tape's denominator), and the day after the inclusive end is 1.0.
+  const start = '2025-01-06'
+  const end = '2025-02-14'
+
+  it('places the start at 0', () => {
+    expect(windowFraction(start, end, start)).toBe(0)
+  })
+
+  it('places the inclusive last working day a cell short of the end', () => {
+    // Fri Feb 14 is business day 30: its start edge sits at 29/30, not 1.0.
+    expect(windowFraction(start, end, end)).toBeCloseTo(29 / 30, 5)
+  })
+
+  it('places the day after the inclusive end at the full extent', () => {
+    expect(windowFraction(start, end, '2025-02-15')).toBe(1)
+  })
+
+  it('clamps dates outside the window to [0, 1]', () => {
+    expect(windowFraction(start, end, '2024-12-01')).toBe(0)
+    expect(windowFraction(start, end, '2025-12-01')).toBe(1)
+  })
+
+  it('returns 0 for a degenerate window', () => {
+    expect(windowFraction('', '', '2025-01-06')).toBe(0)
   })
 })
 

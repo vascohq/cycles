@@ -35,6 +35,18 @@ export function businessDaysBetween(a: string, b: string): number {
   return count
 }
 
+/**
+ * Fraction [0,1] of `date` along the inclusive business-day window [start, end],
+ * the single source of truth for placing anything on the cycle-window/timebox
+ * tape (ticks, calendar overlays, pitch bars). `date` is the day's leading edge;
+ * for an inclusive trailing edge, pass the day after (see ADR 0013 correction).
+ */
+export function windowFraction(start: string, end: string, date: string): number {
+  const total = businessDaysBetween(start, nextCalendarDay(end))
+  if (!Number.isFinite(total) || total <= 0) return 0
+  return Math.min(Math.max(businessDaysBetween(start, date) / total, 0), 1)
+}
+
 export type DayTick = {
   position: number
   major: boolean

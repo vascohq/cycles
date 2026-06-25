@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { MiniNeedle } from '@/components/needle/mini-needle'
 import { slugify } from '@/lib/slugify'
-import { businessDaysBetween } from '@/lib/timebox-engine'
+import { windowFraction } from '@/lib/timebox-engine'
 import { cn } from '@/lib/utils'
 import type { SquadSection } from '@/lib/mission-control-helpers'
 import type { Stage } from '@/cycle-liveblocks.config'
@@ -73,9 +73,10 @@ export function PitchTimeline({
       </p>
     )
   }
-  const total = businessDaysBetween(cycleStart, cycleEnd)
-  const frac = (d: string) =>
-    Math.min(Math.max(businessDaysBetween(cycleStart, d) / total, 0), 1)
+  const frac = (d: string) => windowFraction(cycleStart, cycleEnd, d)
+  // timebox_end is the inclusive last day; its trailing edge is the day after.
+  const dayAfter = (d: string) =>
+    new Date(new Date(d + 'T00:00:00Z').getTime() + 86_400_000).toISOString().slice(0, 10)
   const todayFrac = frac(today)
 
   return (
@@ -91,7 +92,7 @@ export function PitchTimeline({
             {section.cards.map((card) => {
               const has = card.timebox_start && card.timebox_end
               const left = has ? frac(card.timebox_start) : 0
-              const width = has ? Math.max(0.01, frac(card.timebox_end) - left) : 0
+              const width = has ? Math.max(0.01, frac(dayAfter(card.timebox_end)) - left) : 0
               const color = section.squad?.color ?? '#94a3b8'
               return (
                 <Link
