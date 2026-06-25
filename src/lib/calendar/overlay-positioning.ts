@@ -1,5 +1,5 @@
 import type { OverlayBand } from './ics-normalizer'
-import { businessDaysBetween } from '@/lib/timebox-engine'
+import { businessDaysBetween, windowFraction } from '@/lib/timebox-engine'
 
 export type PositionedBand = {
   kind: 'holiday' | 'timeoff'
@@ -38,8 +38,6 @@ function nextBusinessDay(date: string): string {
   return d
 }
 
-const clamp = (n: number, max: number) => Math.min(Math.max(n, 0), max)
-
 /**
  * Statutory holidays that land entirely on a weekend are observed on the next
  * business day (the "day in lieu" — e.g. Boxing Day on a Saturday is taken the
@@ -69,24 +67,20 @@ export function observeHolidays(bands: OverlayBand[]): ObservedBand[] {
  * lane-stacks overlaps so each remains hoverable (see CalendarOverlayRow).
  */
 export function positionBands(bands: ObservedBand[], window: Window): PositionedBand[] {
-  const totalDays = businessDaysBetween(window.start, window.end)
-  if (!Number.isFinite(totalDays) || totalDays <= 0) return []
-
   const positioned: PositionedBand[] = []
 
   for (const band of bands) {
-    // Business-day offsets from the window start; [start, end] is inclusive, so
-    // the trailing edge is the business-day count up to the day after end.
-    const left = clamp(businessDaysBetween(window.start, band.startDate), totalDays)
-    const right = clamp(businessDaysBetween(window.start, dayAfter(band.endDate)), totalDays)
+    // `end` is inclusive, so a band's trailing edge is the day after its end.
+    const left = windowFraction(window.start, window.end, band.startDate)
+    const right = windowFraction(window.start, window.end, dayAfter(band.endDate))
     if (right <= left) continue
 
     positioned.push({
       kind: band.kind,
       label: band.label,
       summary: band.summary,
-      leftFraction: left / totalDays,
-      widthFraction: (right - left) / totalDays,
+      leftFraction: left,
+      widthFraction: right - left,
       ...(band.color ? { color: band.color } : {}),
       ...(band.observed ? { observed: true } : {}),
     })
