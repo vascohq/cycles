@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { positionBands, observeHolidays } from './overlay-positioning'
 import type { OverlayBand } from './ics-normalizer'
 
-// 2026-06-01 (Mon) .. 2026-06-15 (Mon) = 10 BUSINESS days (two Mon–Fri weeks),
-// matching the timebox/cycle-window tape, which plots business days (ADR 0013).
-const WINDOW = { start: '2026-06-01', end: '2026-06-15' }
+// 2026-06-01 (Mon) .. 2026-06-12 (Fri) = 10 BUSINESS days (two Mon–Fri weeks),
+// `end` inclusive, matching the timebox/cycle-window tape (ADR 0013).
+const WINDOW = { start: '2026-06-01', end: '2026-06-12' }
 
 const holiday = (startDate: string, endDate: string, summary = 'Holiday'): OverlayBand => ({
   kind: 'holiday',
@@ -39,6 +39,15 @@ describe('positionBands', () => {
 
     expect(band.leftFraction).toBeCloseTo(0.8, 5)
     expect(band.leftFraction + band.widthFraction).toBeCloseTo(1, 5)
+  })
+
+  it('positions a holiday on the inclusive last working day in the final cell', () => {
+    // Fri Jun 12 is the inclusive window end — the 10th and last business-day
+    // cell. It must align with the tape's final tick, not be clamped away.
+    const [band] = positionBands([holiday('2026-06-12', '2026-06-12')], WINDOW)
+
+    expect(band.leftFraction).toBeCloseTo(0.9, 5)
+    expect(band.widthFraction).toBeCloseTo(0.1, 5)
   })
 
   it('drops a purely-weekend band (no business days to occupy)', () => {
