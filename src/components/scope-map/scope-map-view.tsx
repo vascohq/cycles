@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
-import { KanbanBoard } from '@/components/scope-map/kanban-board'
+import { KanbanBoard, type BoardTask } from '@/components/scope-map/kanban-board'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
 import { CoreScopePrompt } from '@/components/scope-map/core-scope-prompt'
@@ -94,6 +94,9 @@ export type ScopeMapViewProps = {
   onStageChange?: (stage: Stage) => void
   onViewChange?: (view: PitchView) => void
   onTaskStatusChange?: (taskId: string, status: CardStatus) => void
+  /** Unscoped (triage) cards — shown untagged on the Kanban board. */
+  unscopedTasks?: BoardTask[]
+  onAddCard?: (title: string, status: CardStatus) => void
   onEmojiChange?: (emoji: string) => void
   onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
@@ -152,6 +155,8 @@ export function ScopeMapView({
   onStageChange,
   onViewChange,
   onTaskStatusChange,
+  unscopedTasks = [],
+  onAddCard,
   onEmojiChange,
   onNotionUrlChange,
   onHillProgressChange,
@@ -263,8 +268,19 @@ export function ScopeMapView({
           )}
           <KanbanBoard
             scopes={scopeGridItems}
+            unscopedTasks={unscopedTasks}
             orgUsers={orgUsers}
             onCardStatusChange={isDone ? undefined : onTaskStatusChange}
+            onCardEdit={
+              !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined
+            }
+            onCardAssign={
+              !isDone && onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined
+            }
+            onCardDelete={
+              !isDone && onTaskDelete ? (id) => onTaskDelete('', id) : undefined
+            }
+            onAddCard={isDone ? undefined : onAddCard}
           />
         </section>
       )}

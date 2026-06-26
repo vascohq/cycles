@@ -331,6 +331,22 @@ function ScopeMapWired({
     []
   )
 
+  // Create a card directly on the Kanban board: an Unscoped task (no scopeId,
+  // parented to the pitch) in the given column (see ADR 0018).
+  const onAddCard = useCycleMutation(
+    ({ storage }, title: string, status: CardStatus) => {
+      const task: ScopeTask = {
+        id: nanoid(),
+        pitchId,
+        title,
+        done: status === 'done',
+        status,
+      }
+      storage.get('tasks').push(new LiveObject(task))
+    },
+    [pitchId]
+  )
+
   const onAddScope = useCycleMutation(
     ({ storage }, title: string, tier: string, litmus_text: string) => {
       // Assign a unique identity color against the colors already in this pitch
@@ -566,6 +582,17 @@ function ScopeMapWired({
     pitchId,
     pitch?.core_scope_id
   )
+  // Unscoped (triage) cards: parented to the pitch, no scope. Surfaced on the
+  // Kanban board untagged (see ADR 0018).
+  const unscopedTasks = allTasks
+    .filter((t) => t.pitchId === pitchId && !t.scopeId)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      done: t.done,
+      status: t.status,
+      assigneeId: t.assigneeId,
+    }))
   const hillScopes = deriveHillScopes(allScopes, pitchId, pitch?.core_scope_id)
   const parkingLotItems = deriveParkingLotItems(allParkingItems, pitchId)
   const pitchUpdates = allUpdates.filter((u) => u.pitchId === pitchId)
@@ -753,6 +780,8 @@ function ScopeMapWired({
       onStageChange={onStageChange}
       onViewChange={onViewChange}
       onTaskStatusChange={onTaskStatusChange}
+      unscopedTasks={unscopedTasks}
+      onAddCard={onAddCard}
       onEmojiChange={onEmojiChange}
       onNotionUrlChange={onNotionUrlChange}
       onHillProgressChange={onHillProgressChange}
