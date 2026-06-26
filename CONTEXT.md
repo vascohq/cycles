@@ -61,6 +61,20 @@ Five business days. "Week X of Y" derives from `ceil(businessDays / 5)`, so a 6-
 The single canonical clock — `America/Montreal` — used to decide what "today" is everywhere in the app. "Days left" is a property of the **cycle**, not the viewer, so it is the same number for everyone (including remote teammates) and freezes unambiguously into update snapshots. Not per-user. See ADR 0013.
 _Avoid_: Local time, user timezone, UTC (UTC midnight rolls over at 8pm Montreal)
 
+### Kanban mode vs Kanban view
+
+**Kanban mode**:
+A property of the **Pitch**, **derived from its Timebox**: a pitch with **no timebox** (= no appetite) is in Kanban mode. A Kanban-mode pitch is **board-only** — it never shows a needle, hill, or scope map, and shows **no view switcher** (there's nothing else to render). This is the "pure kanban pitch": flow work with no fixed clock or finish line (see ADR 0018). Give it a timebox and it becomes a Shape-Up pitch.
+_Avoid_: Kanban project, board pitch, continuous pitch
+
+**Pitch view**:
+For a **Shape-Up pitch** (one that *has* a timebox), which work surface is shown below its needle/hill — a stored, switchable `view` field: `scope_map` or `kanban`. A **pure view toggle over the same data**: switching never creates, deletes, or moves anything. The **needle and hill always stay** for a Shape-Up pitch; the view only swaps the surface beneath them — **Scope Map view** shows the scope grid, **Kanban view** shows the board. (Contrast **Kanban mode** — no timebox — which has no needle/hill at all.) The **switcher only appears on Shape-Up pitches**; a Kanban-*mode* pitch has nothing to switch to. Stored team-wide (not per-viewer, unlike the ephemeral **Scope Drawer** filters); defaults to `scope_map`. So Kanban is reachable two ways: a **mode** (no timebox → board only, no needle/hill) and a **view** (a Shape-Up pitch keeps its needle/hill and shows the board instead of the scope grid).
+_Avoid_: Conflating mode and view; project type, board type
+
+**Kanban view**:
+The board rendering of a pitch: its cards (**Tasks**) shown in fixed status columns (`todo` / `doing` / `done`) instead of under scopes. A card's **scope shows as a colored tag** (reusing **Scope Color**) when it has one; an **Unscoped task** shows untagged. Cards from all scopes intermix within a column — scope is a *tag*, **not** a swimlane (a scopes-as-swimlanes × status grid is a deferred, larger layout). The needle and hill are hidden; the **Timebox** is still optional and the **Cycle window** still bounds the pitch. A "pure kanban" pitch is just one created in this view that never gets scopes or a needle. Deliberately diverges from Vasco's Kanban methodology doc: (1) the doc says Kanban flows *continuously across* cycle boundaries — here it is cycle-bound, to keep clean-slate; (2) the doc keeps hill charts for Kanban — here the hill is hidden. Often used for cooldown work and triage-style flow.
+_Avoid_: Kanban project, kanban mode, continuous pitch, swimlane (v1 uses tags)
+
 ### The Needle
 
 **Needle**:
@@ -117,6 +131,18 @@ _Avoid_: Diff, delta, change indicator
 A checklist item within a scope. Still binary: done or not done, no intermediate states. **May have an assignee** — a person (Clerk org user) responsible for it. The original "no assignee, no type" rule was a deliberate _keep-it-dumb-until-there's-pull_ stance; assignment was promoted to a first-class field once devs started faking it with `BE/Simon`-style title prefixes (see Flagged ambiguities). A task is never a sub-pitch or a routed ticket — it stays a lightweight checklist line that now also says _who_ (see [ADR 0017](docs/adr/0017-tasks-carry-a-single-assignee.md)).
 _Avoid_: Subtask, to-do, issue, ticket
 
+**Card status**:
+A task's column on a Kanban board: `todo`, `doing`, or `done`. A fixed three-column enum (no custom columns). The legacy binary `done` is now *derived* (`status === 'done'`), so existing done-counts and snapshots keep working. Intermediate state (`doing`) exists **only** as a board column — a task is still rendered as a plain done/not-done checklist line in the Scope Drawer; the column is the Kanban surface, not a new task lifecycle everywhere. WIP limits (Vasco's "2–3 in progress") are a future concern, not modelled yet.
+_Avoid_: Workflow state, stage (reserved for pitches), swimlane
+
+**Unscoped task**:
+A task that belongs to a **Pitch** but to **no scope** — `scopeId` is unset, `pitchId` points to the pitch. The "awaiting triage / not sure which scope" inbox. Every card in a **Kanban pitch** is unscoped (it has no scopes at all); a **Shape Up pitch** may also hold a few unscoped cards pending triage into a scope. Note: per-scope **update** snapshots (`task_snapshot`) don't yet count unscoped tasks — deferred.
+_Avoid_: Orphan task, loose task, backlog item
+
+**Triage tray**:
+Where **Unscoped tasks** surface in **Scope Map view** (in **Kanban view** they simply appear untagged). A small section on the Scope Map listing the pitch's unscoped cards, each with an "assign to a scope" affordance — the place you clear "awaiting triage" work. **Self-hides entirely when empty** (consistent with the **Scope Drawer**'s self-hiding filters), so it is never a standing list. This is the deliberate edge of the **No Backlog, No Noise** principle: it exists only while there's untriaged work nudging you to clear it, never as a permanent holding pen. No size cap in v1 (a count/warning is a possible future nudge).
+_Avoid_: Backlog, inbox (implies a permanent list), holding pen
+
 **Assignee**:
 The one person responsible for a **Task** — a single, nullable pointer to a Clerk org user (`assigneeId`, undefined = **Unassigned**). At most one per task: if two people genuinely own distinct work, that is two tasks. The assignable set is the cycle's current org members (the same `OrganizationUser` faces already rendered on Scope Map / Mission Control); no per-task name snapshot is stored — the avatar/initials resolve live from `assigneeId`. Mirrors the **Core Scope** pointer pattern: a dangling id (assignee left the org) resolves to **Former member**, never an "Unknown user" with a fabricated name.
 _Avoid_: Owner (reserved tone for Squad ownership), reviewer, multiple assignees
@@ -138,6 +164,10 @@ _Avoid_: Backlog, blockers, open questions list
 **Update**:
 An immutable record of a needle move. Contains the zone, needle progress, narrative text, and snapshots of all hill positions and task counts at post time. Posted to a shared Slack channel. Updates are always appended, never edited. They can be **deleted** only as a misfire undo — and only the latest update on a pitch — never as general history rewriting (see Delete Update).
 _Avoid_: Check-in, standup note, status report
+
+**Updates (Kanban mode)**:
+A **Kanban-mode** pitch (no timebox) has **no Updates** at all — no feed, no posting. Updates are the heartbeat of a Shape-Up pitch (a needle move over a timebox); with no timebox there is nothing to update against, and the **board itself is the status**. So "no timebox ⇒ no updates" (decided after an earlier card-diff exploration was dropped). A Shape-Up pitch *viewed* as Kanban still keeps its needle and Updates.
+_Avoid_: Needle update (a kanban pitch has no needle), card log
 
 **Delete Update**:
 The narrow escape hatch for undoing a misfired needle move (wrong pitch, fat-fingered position, duplicate post). Only the **latest** update on a pitch can be deleted; once another update is posted on top, the earlier one is sealed. Deleting reverts the pitch's needle to the prior update's Needle Snapshot (or `null` if it was the only update) so the on-page needle stays truthful; live scope hill positions are left untouched, and the needle Ghost and Hill Trails rebase onto the now-latest update automatically. Editing an update is never allowed — only delete-and-repost.

@@ -40,7 +40,9 @@ export function derivePitchCards(
     const pitchScopeIds = new Set(
       scopes.filter((s) => s.pitchId === p.id).map((s) => s.id)
     )
-    const pitchTasks = tasks.filter((t) => pitchScopeIds.has(t.scopeId))
+    const pitchTasks = tasks.filter(
+      (t) => t.scopeId !== undefined && pitchScopeIds.has(t.scopeId)
+    )
 
     const pitchUpdates = updates.filter((u) => u.pitchId === p.id)
     const latestUpdate =

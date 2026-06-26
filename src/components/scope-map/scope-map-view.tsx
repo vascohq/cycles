@@ -30,7 +30,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
-import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
+import { KanbanBoard, ViewToggle, CreateCardDialog, EditCardDialog, type BoardTask } from '@/components/scope-map/kanban-board'
+import { TriageTray } from '@/components/scope-map/triage-tray'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
 import { CoreScopePrompt } from '@/components/scope-map/core-scope-prompt'
@@ -40,6 +42,7 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import { SquadPicker } from '@/components/scope-map/squad-picker'
 import { usePageCelebration } from '@/components/scope-map/use-page-celebration'
 import { areAllScopesDone, pageCelebration } from '@/lib/scope-map-helpers'
+import { areAllCardsDone } from '@/lib/card-engine'
 import type { SquadLike } from '@/lib/squad-engine'
 import { usePitchDocumentTitle } from './use-pitch-document-title'
 import { STAGES } from '@/lib/stage-engine'
@@ -72,6 +75,7 @@ export type ScopeMapViewProps = {
     emoji: string
     notion_url: string
     squadId?: string
+    view?: PitchView
   }
   squads?: SquadLike[]
   currentSquadId?: string
@@ -89,6 +93,17 @@ export type ScopeMapViewProps = {
   ghost: NeedleSnapshot | null
   today: string
   onStageChange?: (stage: Stage) => void
+  onViewChange?: (view: PitchView) => void
+  onTaskStatusChange?: (taskId: string, status: CardStatus) => void
+  onTaskScopeChange?: (taskId: string, scopeId: string | null) => void
+  /** Unscoped (triage) cards — shown untagged on the Kanban board. */
+  unscopedTasks?: BoardTask[]
+  onAddCard?: (
+    title: string,
+    status: CardStatus,
+    scopeId: string | null,
+    assigneeId: string | null
+  ) => void
   onEmojiChange?: (emoji: string) => void
   onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
@@ -145,6 +160,11 @@ export function ScopeMapView({
   ghost,
   today,
   onStageChange,
+  onViewChange,
+  onTaskStatusChange,
+  onTaskScopeChange,
+  unscopedTasks = [],
+  onAddCard,
   onEmojiChange,
   onNotionUrlChange,
   onHillProgressChange,
@@ -175,25 +195,46 @@ export function ScopeMapView({
   // drilling), same source the rest of the page uses.
   const orgUsers = useOrganizationUsers()
   const isDone = pitch.stage === 'done'
+  // A timebox is optional; guard the tape/labels so an unset one doesn't render
+  // as 'Invalid Date' / NaN. The timebox is also the pitch's appetite, so it
+  // decides Kanban MODE.
+  const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
+  // Kanban MODE (derived — see ADR 0018): a pitch with no timebox/appetite is
+  // board-only — no needle, hill, scope map, or view switcher. A pitch WITH a
+  // timebox is a Shape-Up pitch that can optionally be *viewed* as a board via
+  // the `view` toggle. `showKanban` = render the board, either way.
+  const isKanbanMode = !hasTimebox
+  const showKanban = isKanbanMode || pitch.view === 'kanban'
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
   // shimmer that invites the final update during the `color` phase.
-  const celebration = pageCelebration(
-    pitch.needle?.progress ?? null,
-    areAllScopesDone(scopeGridItems)
-  )
+  // In Kanban view there's no needle/scopes — the gold parade fires when every
+  // card is done (a celebration only, never a stage change; see ADR 0018).
+  // Kanban-MODE pitches (no needle) celebrate when every card is done;
+  // Shape-Up pitches keep the needle/scope celebration even when viewed as a
+  // board (the needle/hill still show — see ADR 0018).
+  const celebration = isKanbanMode
+    ? areAllCardsDone([
+        ...scopeGridItems.flatMap((s) => s.tasks),
+        ...unscopedTasks,
+      ])
+      ? 'gold'
+      : 'none'
+    : pageCelebration(
+        pitch.needle?.progress ?? null,
+        areAllScopesDone(scopeGridItems)
+      )
   usePageCelebration(celebration)
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
   )
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
   const [addScopeOpen, setAddScopeOpen] = useState(false)
+  const [addTaskOpen, setAddTaskOpen] = useState(false)
+  const [editingTriageId, setEditingTriageId] = useState<string | null>(null)
   const [openScopeId, setOpenScopeId] = useState<string | null>(null)
   const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
-  // A timebox is optional; guard the tape and labels so an unset one doesn't
-  // render as 'Invalid Date' / NaN.
-  const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
 
   // The drawer reads live from scopeGridItems so edits and task toggles reflect
   // instantly; it closes itself if the open scope is deleted.
@@ -232,6 +273,10 @@ export function ScopeMapView({
         onDeleteSquad={onDeleteSquad}
       />
 
+      {/* Needle + hill show for any Shape-Up pitch (has a timebox), including
+          when it's viewed as a board. A Kanban-MODE pitch (no timebox) has
+          neither — see ADR 0018. */}
+      {hasTimebox && (
       <section className="grid grid-cols-1 gap-5 mc-row">
         <div>
           {isDone ? (
@@ -304,7 +349,33 @@ export function ScopeMapView({
           />
         </div>
       </section>
+      )}
 
+      {showKanban && (
+        <section>
+          <KanbanBoard
+            scopes={scopeGridItems}
+            unscopedTasks={unscopedTasks}
+            orgUsers={orgUsers}
+            view={pitch.view ?? 'kanban'}
+            onViewChange={hasTimebox ? onViewChange : undefined}
+            onCardStatusChange={isDone ? undefined : onTaskStatusChange}
+            onCardEdit={
+              !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined
+            }
+            onCardAssign={
+              !isDone && onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined
+            }
+            onCardDelete={
+              !isDone && onTaskDelete ? (id) => onTaskDelete('', id) : undefined
+            }
+            onCardScope={isDone ? undefined : onTaskScopeChange}
+            onAddCard={isDone ? undefined : onAddCard}
+          />
+        </section>
+      )}
+
+      {!showKanban && (
       <section>
         {onToggleCoreScope &&
           shouldShowCoreScopePrompt(scopeGridItems) && (
@@ -319,23 +390,53 @@ export function ScopeMapView({
             </div>
           )}
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-sm font-semibold tracking-tight">Scopes</h2>
+          {onViewChange ? (
+            <ViewToggle view="scope_map" onChange={onViewChange} />
+          ) : (
+            <h2 className="text-sm font-semibold tracking-tight">Scopes</h2>
+          )}
           {!isDone && (
             <span className="text-xs text-muted-foreground/50 font-mono">
               drag to reorder
             </span>
           )}
-          {!isDone && onAddScope && (
-            <button
-              type="button"
-              onClick={() => setAddScopeOpen(true)}
-              className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-auto"
-            >
-              <Plus className="w-3 h-3" />
-              add scope
-            </button>
+          {!isDone && (onAddCard || onAddScope) && (
+            <div className="ml-auto flex items-center gap-2">
+              {onAddScope && (
+                <button
+                  type="button"
+                  onClick={() => setAddScopeOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add scope
+                </button>
+              )}
+              {onAddCard && (
+                <button
+                  type="button"
+                  onClick={() => setAddTaskOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background hover:opacity-90 transition-opacity"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add task
+                </button>
+              )}
+            </div>
           )}
         </div>
+        {/* Unscoped (triage) cards — under the filter/switcher row, above the
+            scope grid; self-hides when empty (see ADR 0018). */}
+        {onTaskScopeChange && (
+          <div className="mb-4">
+            <TriageTray
+              tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
+              scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+              onAssignScope={onTaskScopeChange}
+              onOpen={isDone ? undefined : setEditingTriageId}
+            />
+          </div>
+        )}
         <ScopeGrid
           scopes={scopeGridItems}
           orgUsers={orgUsers}
@@ -410,6 +511,35 @@ export function ScopeMapView({
           />
         )}
       </section>
+      )}
+
+      {onAddCard && addTaskOpen && (
+        <CreateCardDialog
+          defaultStatus="todo"
+          orgUsers={orgUsers}
+          scopeOptions={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+          onCreate={onAddCard}
+          onClose={() => setAddTaskOpen(false)}
+        />
+      )}
+
+      {(() => {
+        const card = unscopedTasks.find((t) => t.id === editingTriageId)
+        if (!card) return null
+        return (
+          <EditCardDialog
+            card={card}
+            orgUsers={orgUsers}
+            scopeOptions={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+            onClose={() => setEditingTriageId(null)}
+            onEdit={onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined}
+            onDelete={onTaskDelete ? (id) => onTaskDelete('', id) : undefined}
+            onAssign={onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined}
+            onStatusChange={onTaskStatusChange}
+            onScopeChange={onTaskScopeChange}
+          />
+        )
+      })()}
 
       <section>
         <ParkingLot
@@ -419,11 +549,15 @@ export function ScopeMapView({
         />
       </section>
 
-      <UpdatesTimeline
-        cards={timelineCards}
-        onRetrySlack={onRetrySlack}
-        onDeleteUpdate={isDone ? undefined : onDeleteUpdate}
-      />
+      {/* Updates belong to Shape-Up pitches (they have a needle/timebox). A
+          Kanban-mode pitch (no timebox) is board-only — no updates. */}
+      {hasTimebox && (
+        <UpdatesTimeline
+          cards={timelineCards}
+          onRetrySlack={onRetrySlack}
+          onDeleteUpdate={isDone ? undefined : onDeleteUpdate}
+        />
+      )}
     </main>
   )
 }

@@ -6,6 +6,14 @@ export type Stage = 'framing' | 'shaping' | 'building' | 'done'
 
 export type Tier = 'must' | 'should' | 'could'
 
+// A card's column in Kanban view (see ADR 0018). Optional on a stored task —
+// legacy tasks predate it and derive their column from `done` via cardStatus.
+export type CardStatus = 'todo' | 'doing' | 'done'
+
+// How a pitch is rendered (see ADR 0018). A pure view toggle over the same
+// data — switching never creates, deletes, or moves anything.
+export type PitchView = 'scope_map' | 'kanban'
+
 export type Needle = {
   progress: number
   zone: Zone
@@ -47,6 +55,9 @@ export type CyclePitch = {
   // Pointer to this pitch's Core Scope (see ADR 0012). Undefined = no core set;
   // a pointer to a since-deleted scope resolves to "no core" (dangling = unset).
   core_scope_id?: string
+  // How this pitch is rendered (see ADR 0018). Undefined = 'scope_map' (legacy
+  // pitches predate the field); switching is non-destructive.
+  view?: PitchView
 }
 
 export type CycleScope = {
@@ -61,9 +72,20 @@ export type CycleScope = {
 
 export type ScopeTask = {
   id: string
-  scopeId: string
+  // The scope this card belongs to. Optional (see ADR 0018): a task with no
+  // scopeId is an Unscoped task ("awaiting triage"), parented only to the pitch.
+  scopeId?: string
+  // The pitch this card belongs to. Set on new tasks; legacy tasks predate it
+  // and derive their pitch from their scope. Undefined only on un-migrated data.
+  pitchId?: string
   title: string
+  // Legacy binary completion. Card status is the source of truth in Kanban view;
+  // `done` is kept in sync (done === status 'done') so existing counts/snapshots
+  // keep working. Derive a column with cardStatus, never read `done` for columns.
   done: boolean
+  // The card's Kanban column (see ADR 0018). Optional: legacy tasks lack it and
+  // derive their column from `done`.
+  status?: CardStatus
   // The single person responsible for this task (Clerk userId). Undefined =
   // Unassigned; a dangling id (member left the org) resolves to "Former member"
   // via resolveTaskAssignee. At most one assignee per task (see ADR 0017).

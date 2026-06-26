@@ -29,7 +29,7 @@ import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask, PitchView, CardStatus } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
 import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -146,6 +146,43 @@ function ScopeMapWired({
     ({ storage }, newStage: Stage) => {
       const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
       p?.set('stage', newStage)
+    },
+    [pitchId]
+  )
+
+  const onViewChange = useCycleMutation(
+    ({ storage }, view: PitchView) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('view', view)
+    },
+    [pitchId]
+  )
+
+  // Move a card between Kanban columns. `done` is kept in sync with status so
+  // existing done-counts/snapshots stay correct (status is the source of truth;
+  // see ADR 0018).
+  const onTaskStatusChange = useCycleMutation(
+    ({ storage }, taskId: string, status: CardStatus) => {
+      const t = storage.get('tasks').find((x) => x.get('id') === taskId)
+      if (!t) return
+      t.set('status', status)
+      t.set('done', status === 'done')
+    },
+    []
+  )
+
+  // Move a card to a different scope, or to Unscoped (triage). Clearing the
+  // scope re-parents the card to the pitch so it still surfaces (ADR 0018).
+  const onTaskScopeChange = useCycleMutation(
+    ({ storage }, taskId: string, scopeId: string | null) => {
+      const t = storage.get('tasks').find((x) => x.get('id') === taskId)
+      if (!t) return
+      if (scopeId === null) {
+        t.set('pitchId', pitchId)
+        t.delete('scopeId')
+      } else {
+        t.set('scopeId', scopeId)
+      }
     },
     [pitchId]
   )
@@ -308,6 +345,30 @@ function ScopeMapWired({
       storage.get('tasks').push(new LiveObject(task))
     },
     []
+  )
+
+  // Create a card from the Kanban board's add modal. Scoped to a chosen scope
+  // or Unscoped (parented to the pitch); optional assignee (see ADR 0018).
+  const onAddCard = useCycleMutation(
+    (
+      { storage },
+      title: string,
+      status: CardStatus,
+      scopeId: string | null,
+      assigneeId: string | null
+    ) => {
+      const task: ScopeTask = {
+        id: nanoid(),
+        title,
+        done: status === 'done',
+        status,
+        ...(scopeId ? { scopeId } : { pitchId }),
+        ...(assigneeId ? { assigneeId } : {}),
+      }
+      // Insert at the front so a new card shows at the top of its column.
+      storage.get('tasks').insert(new LiveObject(task), 0)
+    },
+    [pitchId]
   )
 
   const onAddScope = useCycleMutation(
@@ -545,6 +606,17 @@ function ScopeMapWired({
     pitchId,
     pitch?.core_scope_id
   )
+  // Unscoped (triage) cards: parented to the pitch, no scope. Surfaced on the
+  // Kanban board untagged (see ADR 0018).
+  const unscopedTasks = allTasks
+    .filter((t) => t.pitchId === pitchId && !t.scopeId)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      done: t.done,
+      status: t.status,
+      assigneeId: t.assigneeId,
+    }))
   const hillScopes = deriveHillScopes(allScopes, pitchId, pitch?.core_scope_id)
   const parkingLotItems = deriveParkingLotItems(allParkingItems, pitchId)
   const pitchUpdates = allUpdates.filter((u) => u.pitchId === pitchId)
@@ -730,6 +802,11 @@ function ScopeMapWired({
       ghost={ghost}
       today={today}
       onStageChange={onStageChange}
+      onViewChange={onViewChange}
+      onTaskStatusChange={onTaskStatusChange}
+      onTaskScopeChange={onTaskScopeChange}
+      unscopedTasks={unscopedTasks}
+      onAddCard={onAddCard}
       onEmojiChange={onEmojiChange}
       onNotionUrlChange={onNotionUrlChange}
       onHillProgressChange={onHillProgressChange}
