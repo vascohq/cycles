@@ -448,27 +448,23 @@ function KanbanCard({
     disabled: !draggable,
   })
   const done = cardStatus(card) === 'done'
+  // Stop the assignee picker from starting a drag / opening the editor.
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation()
 
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg border border-border bg-card p-3 flex flex-col gap-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] transition-shadow ${
-        isDragging ? 'opacity-30' : ''
-      }`}
+      {...attributes}
+      {...listeners}
+      onClick={() => onOpen?.(card)}
+      className={`rounded-lg border border-border bg-card p-2.5 flex flex-col gap-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] transition-shadow ${
+        draggable ? 'cursor-grab active:cursor-grabbing' : onOpen ? 'cursor-pointer' : ''
+      } ${isDragging ? 'opacity-30' : ''}`}
     >
-      {/* Body is the drag handle + click-to-edit; the footer picker is excluded
-          so assigning doesn't start a drag. */}
-      <div
-        {...attributes}
-        {...listeners}
-        onClick={() => onOpen?.(card)}
-        className={`flex flex-col gap-2.5 ${
-          draggable ? 'cursor-grab active:cursor-grabbing' : onOpen ? 'cursor-pointer' : ''
-        }`}
-      >
+      <div className="flex items-center gap-2">
         {card.scopeTitle && (
           <span
-            className="self-start text-[11px] font-medium rounded px-2 py-0.5"
+            className="min-w-0 truncate text-[11px] font-medium rounded px-2 py-0.5"
             style={{
               backgroundColor: card.scopeColor,
               color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
@@ -477,19 +473,19 @@ function KanbanCard({
             {card.scopeTitle}
           </span>
         )}
-        <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
-          {card.title}
-        </p>
+        <span className="ml-auto shrink-0" onPointerDown={stop} onClick={stop}>
+          <AssigneePicker
+            orgUsers={orgUsers}
+            assigneeId={card.assigneeId}
+            onAssign={(userId) => onAssign?.(card.id, userId)}
+            onClear={() => onAssign?.(card.id, null)}
+            readOnly={!onAssign}
+          />
+        </span>
       </div>
-      <div className="flex items-center justify-end border-t pt-2">
-        <AssigneePicker
-          orgUsers={orgUsers}
-          assigneeId={card.assigneeId}
-          onAssign={(userId) => onAssign?.(card.id, userId)}
-          onClear={() => onAssign?.(card.id, null)}
-          readOnly={!onAssign}
-        />
-      </div>
+      <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
+        {card.title}
+      </p>
     </div>
   )
 }
@@ -497,7 +493,7 @@ function KanbanCard({
 // Presentational card — the drag ghost.
 function CardFace({
   card,
-  orgUsers: _orgUsers,
+  orgUsers,
   dragging = false,
 }: {
   card: BoardCard
@@ -505,23 +501,31 @@ function CardFace({
   dragging?: boolean
 }) {
   const done = cardStatus(card) === 'done'
+  const assignee = resolveTaskAssignee(card.assigneeId, orgUsers)
   return (
     <div
-      className={`rounded-lg border border-border bg-card p-3 flex flex-col gap-2.5 ${
+      className={`rounded-lg border border-border bg-card p-2.5 flex flex-col gap-1.5 ${
         dragging ? 'shadow-[0_8px_24px_rgba(0,0,0,0.16)] rotate-2 cursor-grabbing' : ''
       }`}
     >
-      {card.scopeTitle && (
-        <span
-          className="self-start text-[11px] font-medium rounded px-2 py-0.5"
-          style={{
-            backgroundColor: card.scopeColor,
-            color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
-          }}
-        >
-          {card.scopeTitle}
-        </span>
-      )}
+      <div className="flex items-center gap-2">
+        {card.scopeTitle && (
+          <span
+            className="min-w-0 truncate text-[11px] font-medium rounded px-2 py-0.5"
+            style={{
+              backgroundColor: card.scopeColor,
+              color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
+            }}
+          >
+            {card.scopeTitle}
+          </span>
+        )}
+        {assignee.kind === 'assigned' && (
+          <span className="ml-auto shrink-0">
+            <UserAvatar user={assignee.user} />
+          </span>
+        )}
+      </div>
       <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
         {card.title}
       </p>
