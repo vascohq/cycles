@@ -61,11 +61,15 @@ Five business days. "Week X of Y" derives from `ceil(businessDays / 5)`, so a 6-
 The single canonical clock — `America/Montreal` — used to decide what "today" is everywhere in the app. "Days left" is a property of the **cycle**, not the viewer, so it is the same number for everyone (including remote teammates) and freezes unambiguously into update snapshots. Not per-user. See ADR 0013.
 _Avoid_: Local time, user timezone, UTC (UTC midnight rolls over at 8pm Montreal)
 
-### Pitch view
+### Kanban mode vs Kanban view
+
+**Kanban mode**:
+A property of the **Pitch**, **derived from its Timebox**: a pitch with **no timebox** (= no appetite) is in Kanban mode. A Kanban-mode pitch is **board-only** — it never shows a needle, hill, or scope map, and shows **no view switcher** (there's nothing else to render). This is the "pure kanban pitch": flow work with no fixed clock or finish line (see ADR 0018). Give it a timebox and it becomes a Shape-Up pitch.
+_Avoid_: Kanban project, board pitch, continuous pitch
 
 **Pitch view**:
-How a pitch is rendered — a stored, switchable `view` field on the pitch: `scope_map` or `kanban`. It is a **pure view toggle over the same data**: switching never creates, deletes, or moves anything. **Scope Map view** draws the classic surface (scopes, hill, needle). **Kanban view** draws a board of cards in status columns and **hides** the needle and hill. Stored team-wide (not per-viewer, unlike the ephemeral **Scope Drawer** filters); switchable by anyone; defaults to `scope_map`, set at creation. Needle, hill, and scopes are **data that may or may not exist**, independent of the view — a pitch built in `kanban` view simply never accrues scopes or a needle. Replaces the earlier "mode" framing: there is no separate kanban *entity*, only a kanban *view*.
-_Avoid_: Pitch mode, project type, board type
+For a **Shape-Up pitch** (one that *has* a timebox), how it's currently rendered — a stored, switchable `view` field: `scope_map` or `kanban`. A **pure view toggle over the same data**: switching never creates, deletes, or moves anything. **Scope Map view** draws the classic surface (scopes, hill, needle); **Kanban view** draws the board and hides the needle/hill. The **switcher only appears on Shape-Up pitches** — a Kanban-*mode* pitch has nothing to switch to. Stored team-wide (not per-viewer, unlike the ephemeral **Scope Drawer** filters); defaults to `scope_map`. So Kanban is reachable two ways: a **mode** (no timebox → always board) and a **view** (a Shape-Up pitch *also* shown as a board).
+_Avoid_: Conflating mode and view; project type, board type
 
 **Kanban view**:
 The board rendering of a pitch: its cards (**Tasks**) shown in fixed status columns (`todo` / `doing` / `done`) instead of under scopes. A card's **scope shows as a colored tag** (reusing **Scope Color**) when it has one; an **Unscoped task** shows untagged. Cards from all scopes intermix within a column — scope is a *tag*, **not** a swimlane (a scopes-as-swimlanes × status grid is a deferred, larger layout). The needle and hill are hidden; the **Timebox** is still optional and the **Cycle window** still bounds the pitch. A "pure kanban" pitch is just one created in this view that never gets scopes or a needle. Deliberately diverges from Vasco's Kanban methodology doc: (1) the doc says Kanban flows *continuously across* cycle boundaries — here it is cycle-bound, to keep clean-slate; (2) the doc keeps hill charts for Kanban — here the hill is hidden. Often used for cooldown work and triage-style flow.

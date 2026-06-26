@@ -16,6 +16,15 @@ accepted
 - **An embedded kanban section inside the Scope Map** (e.g. a QA board below the scopes) — rejected. The whole-pitch view toggle serves the same need without maintaining a second layout; flip the pitch to Kanban view and tag cards by scope.
 - **Keeping `scopeId` required, with one hidden implicit scope per kanban pitch** — rejected once "report a task awaiting triage" surfaced as a real need. Unscoped tasks are a genuine concept, not plumbing, so `scopeId` is honestly optional.
 
+## Mode vs view
+
+Two distinct ways a pitch is Kanban, settled after the first build:
+
+- **Kanban mode** is **derived from the timebox** (= appetite): no timebox ⇒ board-only, with no needle/hill/scope-map and **no view switcher**. This is the pure kanban pitch — flow work with no fixed clock. Not a stored flag; it falls out of `hasTimebox`, so it needs no new field and no creation-time choice.
+- **Kanban view** is the stored `view` toggle (`scope_map` | `kanban`) — but it only applies to **Shape-Up pitches** (those *with* a timebox), letting them *also* be shown as a board. The switcher renders only there.
+
+So `showKanban = !hasTimebox || view === 'kanban'`. Trade-off accepted: a Shape-Up pitch that hasn't been given a timebox yet reads as Kanban mode until dates are set — benign, and consistent with "no appetite ⇒ not yet shaped."
+
 ## Consequences
 
 - **Schema change to Task.** `pitchId` added (always set), `scopeId` optional, `status` enum added. Legacy binary `done` is **derived** (`status === 'done'`) so existing done-counts and snapshots keep working. `doing` exists only as a board column — the Scope Drawer still renders a task as a plain done/not-done line.

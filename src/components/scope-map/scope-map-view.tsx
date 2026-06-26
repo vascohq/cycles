@@ -182,15 +182,22 @@ export function ScopeMapView({
   // drilling), same source the rest of the page uses.
   const orgUsers = useOrganizationUsers()
   const isDone = pitch.stage === 'done'
-  // Kanban view hides the needle/hill/scopes surface and shows a card board
-  // instead (see ADR 0018). Pure view toggle — no data changes.
-  const isKanban = pitch.view === 'kanban'
+  // A timebox is optional; guard the tape/labels so an unset one doesn't render
+  // as 'Invalid Date' / NaN. The timebox is also the pitch's appetite, so it
+  // decides Kanban MODE.
+  const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
+  // Kanban MODE (derived — see ADR 0018): a pitch with no timebox/appetite is
+  // board-only — no needle, hill, scope map, or view switcher. A pitch WITH a
+  // timebox is a Shape-Up pitch that can optionally be *viewed* as a board via
+  // the `view` toggle. `showKanban` = render the board, either way.
+  const isKanbanMode = !hasTimebox
+  const showKanban = isKanbanMode || pitch.view === 'kanban'
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
   // shimmer that invites the final update during the `color` phase.
   // In Kanban view there's no needle/scopes — the gold parade fires when every
   // card is done (a celebration only, never a stage change; see ADR 0018).
-  const celebration = isKanban
+  const celebration = showKanban
     ? areAllCardsDone(scopeGridItems.flatMap((s) => s.tasks))
       ? 'gold'
       : 'none'
@@ -207,9 +214,6 @@ export function ScopeMapView({
   const [openScopeId, setOpenScopeId] = useState<string | null>(null)
   const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
-  // A timebox is optional; guard the tape and labels so an unset one doesn't
-  // render as 'Invalid Date' / NaN.
-  const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
 
   // The drawer reads live from scopeGridItems so edits and task toggles reflect
   // instantly; it closes itself if the open scope is deleted.
@@ -248,13 +252,15 @@ export function ScopeMapView({
         onDeleteSquad={onDeleteSquad}
       />
 
-      {isKanban && (
+      {showKanban && (
         <section>
-          <div className="flex items-center gap-3 mb-4">
-            {onViewChange && (
+          {/* Switcher only on Shape-Up pitches (have a timebox); a Kanban-MODE
+              pitch is board-only with nothing to switch to. */}
+          {onViewChange && hasTimebox && (
+            <div className="flex items-center gap-3 mb-4">
               <ViewToggle view="kanban" onChange={onViewChange} />
-            )}
-          </div>
+            </div>
+          )}
           <KanbanBoard
             scopes={scopeGridItems}
             orgUsers={orgUsers}
@@ -263,7 +269,7 @@ export function ScopeMapView({
         </section>
       )}
 
-      {!isKanban && (<>
+      {!showKanban && (<>
       <section className="grid grid-cols-1 gap-5 mc-row">
         <div>
           {isDone ? (
