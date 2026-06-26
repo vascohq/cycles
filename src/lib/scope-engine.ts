@@ -17,7 +17,7 @@ export function reorderScopes<T extends OrderedItem>(
 }
 
 export function taskCounts(
-  tasks: { scopeId: string; done: boolean }[],
+  tasks: { scopeId?: string; done: boolean }[],
   scopeId: string
 ): { done: number; total: number } {
   const scopeTasks = tasks.filter((t) => t.scopeId === scopeId)

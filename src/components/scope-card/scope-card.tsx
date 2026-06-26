@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef } from 'react'
-import type { Tier } from '@/cycle-liveblocks.config'
+import type { Tier, CardStatus } from '@/cycle-liveblocks.config'
 import type { OrganizationUser } from '@/lib/users'
 import { deriveAssigneeCluster } from '@/lib/task-engine'
 import { UserAvatar } from './assignee-picker'
@@ -19,6 +19,8 @@ export type ScopeCardTask = {
   id: string
   title: string
   done: boolean
+  /** Kanban column (see ADR 0018); absent on legacy tasks — derive with cardStatus. */
+  status?: CardStatus
   /** Clerk userId of the assignee, or undefined when Unassigned (see ADR 0017). */
   assigneeId?: string
 }

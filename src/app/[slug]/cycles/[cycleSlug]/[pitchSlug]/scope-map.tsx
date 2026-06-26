@@ -29,7 +29,7 @@ import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask, PitchView } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
 import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -146,6 +146,14 @@ function ScopeMapWired({
     ({ storage }, newStage: Stage) => {
       const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
       p?.set('stage', newStage)
+    },
+    [pitchId]
+  )
+
+  const onViewChange = useCycleMutation(
+    ({ storage }, view: PitchView) => {
+      const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
+      p?.set('view', view)
     },
     [pitchId]
   )
@@ -730,6 +738,7 @@ function ScopeMapWired({
       ghost={ghost}
       today={today}
       onStageChange={onStageChange}
+      onViewChange={onViewChange}
       onEmojiChange={onEmojiChange}
       onNotionUrlChange={onNotionUrlChange}
       onHillProgressChange={onHillProgressChange}

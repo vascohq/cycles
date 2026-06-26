@@ -68,7 +68,7 @@ export function deriveScopeGridItems(
     isCore: s.id === coreId,
     tasks: tasks
       .filter((t) => t.scopeId === s.id)
-      .map((t) => ({ id: t.id, title: t.title, done: t.done, assigneeId: t.assigneeId })),
+      .map((t) => ({ id: t.id, title: t.title, done: t.done, status: t.status, assigneeId: t.assigneeId })),
     done: isHillProgressDone(s.hill_progress),
   }))
 }
@@ -200,7 +200,9 @@ export function deriveTotalTaskProgress(
   const pitchScopeIds = new Set(
     scopes.filter((s) => s.pitchId === pitchId).map((s) => s.id)
   )
-  const pitchTasks = tasks.filter((t) => pitchScopeIds.has(t.scopeId))
+  const pitchTasks = tasks.filter(
+    (t) => t.scopeId !== undefined && pitchScopeIds.has(t.scopeId)
+  )
   return {
     done: pitchTasks.filter((t) => t.done).length,
     total: pitchTasks.length,

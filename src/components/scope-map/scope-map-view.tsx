@@ -30,7 +30,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
-import type { Stage, Zone, Needle, NeedleSnapshot } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, Needle, NeedleSnapshot, PitchView } from '@/cycle-liveblocks.config'
+import { KanbanBoard } from '@/components/scope-map/kanban-board'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
 import { CoreScopePrompt } from '@/components/scope-map/core-scope-prompt'
@@ -72,6 +73,7 @@ export type ScopeMapViewProps = {
     emoji: string
     notion_url: string
     squadId?: string
+    view?: PitchView
   }
   squads?: SquadLike[]
   currentSquadId?: string
@@ -89,6 +91,7 @@ export type ScopeMapViewProps = {
   ghost: NeedleSnapshot | null
   today: string
   onStageChange?: (stage: Stage) => void
+  onViewChange?: (view: PitchView) => void
   onEmojiChange?: (emoji: string) => void
   onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
@@ -145,6 +148,7 @@ export function ScopeMapView({
   ghost,
   today,
   onStageChange,
+  onViewChange,
   onEmojiChange,
   onNotionUrlChange,
   onHillProgressChange,
@@ -175,6 +179,9 @@ export function ScopeMapView({
   // drilling), same source the rest of the page uses.
   const orgUsers = useOrganizationUsers()
   const isDone = pitch.stage === 'done'
+  // Kanban view hides the needle/hill/scopes surface and shows a card board
+  // instead (see ADR 0018). Pure view toggle — no data changes.
+  const isKanban = pitch.view === 'kanban'
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
   // shimmer that invites the final update during the `color` phase.
@@ -232,6 +239,18 @@ export function ScopeMapView({
         onDeleteSquad={onDeleteSquad}
       />
 
+      {onViewChange && (
+        <ViewToggle view={pitch.view ?? 'scope_map'} onChange={onViewChange} />
+      )}
+
+      {isKanban && (
+        <section>
+          <h2 className="text-sm font-semibold tracking-tight mb-4">Board</h2>
+          <KanbanBoard scopes={scopeGridItems} />
+        </section>
+      )}
+
+      {!isKanban && (<>
       <section className="grid grid-cols-1 gap-5 mc-row">
         <div>
           {isDone ? (
@@ -410,6 +429,7 @@ export function ScopeMapView({
           />
         )}
       </section>
+      </>)}
 
       <section>
         <ParkingLot
@@ -667,6 +687,40 @@ function FramingList({ text }: { text: string }) {
   )
 }
 
+
+// Segmented control to flip a pitch between its Scope Map and Kanban views.
+// Stored team-wide and non-destructive (see ADR 0018).
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: PitchView
+  onChange: (view: PitchView) => void
+}) {
+  const options: { value: PitchView; label: string }[] = [
+    { value: 'scope_map', label: 'Scope Map' },
+    { value: 'kanban', label: 'Kanban' },
+  ]
+  return (
+    <div className="inline-flex self-start rounded-lg border bg-muted/30 p-0.5 text-xs">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={view === o.value}
+          className={`px-3 py-1 rounded-md font-medium transition-colors ${
+            view === o.value
+              ? 'bg-card shadow-[0_1px_2px_rgba(0,0,0,0.06)] text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 
