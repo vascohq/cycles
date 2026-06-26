@@ -171,6 +171,22 @@ function ScopeMapWired({
     []
   )
 
+  // Move a card to a different scope, or to Unscoped (triage). Clearing the
+  // scope re-parents the card to the pitch so it still surfaces (ADR 0018).
+  const onTaskScopeChange = useCycleMutation(
+    ({ storage }, taskId: string, scopeId: string | null) => {
+      const t = storage.get('tasks').find((x) => x.get('id') === taskId)
+      if (!t) return
+      if (scopeId === null) {
+        t.set('pitchId', pitchId)
+        t.delete('scopeId')
+      } else {
+        t.set('scopeId', scopeId)
+      }
+    },
+    [pitchId]
+  )
+
   const onEmojiChange = useCycleMutation(
     ({ storage }, emoji: string) => {
       const p = storage.get('pitches').find((x) => x.get('id') === pitchId)
@@ -780,6 +796,7 @@ function ScopeMapWired({
       onStageChange={onStageChange}
       onViewChange={onViewChange}
       onTaskStatusChange={onTaskStatusChange}
+      onTaskScopeChange={onTaskScopeChange}
       unscopedTasks={unscopedTasks}
       onAddCard={onAddCard}
       onEmojiChange={onEmojiChange}

@@ -94,6 +94,7 @@ export type ScopeMapViewProps = {
   onStageChange?: (stage: Stage) => void
   onViewChange?: (view: PitchView) => void
   onTaskStatusChange?: (taskId: string, status: CardStatus) => void
+  onTaskScopeChange?: (taskId: string, scopeId: string | null) => void
   /** Unscoped (triage) cards — shown untagged on the Kanban board. */
   unscopedTasks?: BoardTask[]
   onAddCard?: (title: string, status: CardStatus) => void
@@ -155,6 +156,7 @@ export function ScopeMapView({
   onStageChange,
   onViewChange,
   onTaskStatusChange,
+  onTaskScopeChange,
   unscopedTasks = [],
   onAddCard,
   onEmojiChange,
@@ -359,6 +361,7 @@ export function ScopeMapView({
             onCardDelete={
               !isDone && onTaskDelete ? (id) => onTaskDelete('', id) : undefined
             }
+            onCardScope={isDone ? undefined : onTaskScopeChange}
             onAddCard={isDone ? undefined : onAddCard}
           />
         </section>

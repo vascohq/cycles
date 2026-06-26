@@ -81,6 +81,7 @@ export function KanbanBoard({
   onCardEdit,
   onCardAssign,
   onCardDelete,
+  onCardScope,
   onAddCard,
 }: {
   scopes: ScopeGridDerived[]
@@ -93,6 +94,7 @@ export function KanbanBoard({
   onCardEdit?: (taskId: string, title: string) => void
   onCardAssign?: (taskId: string, assigneeId: string | null) => void
   onCardDelete?: (taskId: string) => void
+  onCardScope?: (taskId: string, scopeId: string | null) => void
   onAddCard?: (title: string, status: CardStatus) => void
 }) {
   const allCards = toCards(scopes, unscopedTasks)
@@ -237,11 +239,13 @@ export function KanbanBoard({
         <EditCardDialog
           card={editing}
           orgUsers={orgUsers}
+          scopeOptions={scopeOptions}
           onClose={() => setEditing(null)}
           onEdit={onCardEdit}
           onDelete={onCardDelete}
           onAssign={onCardAssign}
           onStatusChange={onCardStatusChange}
+          onScopeChange={onCardScope}
         />
       )}
     </div>
@@ -556,24 +560,31 @@ function Pill({
 function EditCardDialog({
   card,
   orgUsers,
+  scopeOptions,
   onClose,
   onEdit,
   onDelete,
   onAssign,
   onStatusChange,
+  onScopeChange,
 }: {
   card: BoardCard
   orgUsers: OrganizationUser[]
+  scopeOptions: { id: string; title: string; color: string }[]
   onClose: () => void
   onEdit?: (taskId: string, title: string) => void
   onDelete?: (taskId: string) => void
   onAssign?: (taskId: string, assigneeId: string | null) => void
   onStatusChange?: (taskId: string, status: CardStatus) => void
+  onScopeChange?: (taskId: string, scopeId: string | null) => void
 }) {
   const [title, setTitle] = useState(card.title)
   const status = cardStatus(card)
   const col = COLUMNS.find((c) => c.key === status)!
   const assignee = resolveTaskAssignee(card.assigneeId, orgUsers)
+  const currentScope = card.scopeId
+    ? scopeOptions.find((s) => s.id === card.scopeId) ?? null
+    : null
 
   function save() {
     const t = title.trim()
@@ -583,18 +594,7 @@ function EditCardDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && save()}>
-      <DialogContent className="max-w-md gap-4">
-        {card.scopeTitle && (
-          <span
-            className="self-start text-[11px] font-medium rounded px-2 py-0.5"
-            style={{
-              backgroundColor: card.scopeColor,
-              color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
-            }}
-          >
-            {card.scopeTitle}
-          </span>
-        )}
+      <DialogContent className="max-w-lg gap-3 p-5">
         {/* Borderless title, like Linear's new-issue field. */}
         <textarea
           autoFocus
@@ -612,7 +612,7 @@ function EditCardDialog({
           className="w-full bg-transparent text-lg font-medium leading-snug resize-none focus:outline-none placeholder:text-muted-foreground/40"
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Status */}
           {onStatusChange ? (
             <DropdownMenu>
@@ -683,6 +683,48 @@ function EditCardDialog({
                 {assignee.user.name}
               </Pill>
             )
+          )}
+
+          {/* Scope */}
+          {onScopeChange && scopeOptions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="outline-none">
+                  <Pill trigger>
+                    {currentScope ? (
+                      <>
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: currentScope.color }}
+                        />
+                        {currentScope.title}
+                      </>
+                    ) : (
+                      <>
+                        <span className="h-2 w-2 rounded-full border border-dashed border-muted-foreground/50" />
+                        No scope
+                      </>
+                    )}
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </Pill>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                <DropdownMenuItem onClick={() => onScopeChange(card.id, null)}>
+                  <span className="mr-2 h-2 w-2 rounded-full border border-dashed border-muted-foreground/50" />
+                  No scope
+                </DropdownMenuItem>
+                {scopeOptions.map((s) => (
+                  <DropdownMenuItem key={s.id} onClick={() => onScopeChange(card.id, s.id)}>
+                    <span
+                      className="mr-2 h-2 w-2 rounded-full"
+                      style={{ backgroundColor: s.color }}
+                    />
+                    {s.title}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 
