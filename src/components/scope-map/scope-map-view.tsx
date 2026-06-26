@@ -400,25 +400,25 @@ export function ScopeMapView({
             </span>
           )}
           {!isDone && (onAddCard || onAddScope) && (
-            <div className="ml-auto flex items-center gap-3">
-              {onAddCard && (
-                <button
-                  type="button"
-                  onClick={() => setAddTaskOpen(true)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  add task
-                </button>
-              )}
+            <div className="ml-auto flex items-center gap-2">
               {onAddScope && (
                 <button
                   type="button"
                   onClick={() => setAddScopeOpen(true)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 >
-                  <Plus className="w-3 h-3" />
-                  add scope
+                  <Plus className="h-3.5 w-3.5" />
+                  Add scope
+                </button>
+              )}
+              {onAddCard && (
+                <button
+                  type="button"
+                  onClick={() => setAddTaskOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background hover:opacity-90 transition-opacity"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add task
                 </button>
               )}
             </div>
