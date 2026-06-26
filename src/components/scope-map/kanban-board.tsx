@@ -6,8 +6,10 @@
 // card's scope shows as a colored tag (reusing Scope Color); needle and hill
 // are hidden.
 
+import { useState } from 'react'
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
@@ -15,6 +17,7 @@ import {
   useDroppable,
   pointerWithin,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import type { CardStatus } from '@/cycle-liveblocks.config'
 import type { OrganizationUser } from '@/lib/users'
@@ -75,11 +78,18 @@ export function KanbanBoard({
 }) {
   const cards = toCards(scopes)
   const columns = groupCardsByStatus(cards)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const activeCard = activeId ? cards.find((c) => c.id === activeId) ?? null : null
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id))
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
     const { active, over } = event
     if (!over || !onCardStatusChange) return
     const target = over.id as CardStatus
@@ -119,9 +129,17 @@ export function KanbanBoard({
     <DndContext
       sensors={sensors}
       collisionDetection={pointerWithin}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
     >
       {grid}
+      {/* The ghost: a lifted copy of the card that tracks the pointer. */}
+      <DragOverlay dropAnimation={null}>
+        {activeCard ? (
+          <CardFace card={activeCard} orgUsers={orgUsers} dragging />
+        ) : null}
+      </DragOverlay>
     </DndContext>
   )
 }
@@ -170,6 +188,8 @@ function Column({
   )
 }
 
+// The draggable card in a column. The source dims while a ghost copy (rendered
+// in the DragOverlay) tracks the pointer.
 function KanbanCard({
   card,
   orgUsers,
@@ -179,8 +199,6 @@ function KanbanCard({
   orgUsers: OrganizationUser[]
   draggable: boolean
 }) {
-  const done = cardStatus(card) === 'done'
-  const assignee = resolveTaskAssignee(card.assigneeId, orgUsers)
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: !draggable,
@@ -191,9 +209,35 @@ function KanbanCard({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`rounded-lg border bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.07)] transition-shadow flex flex-col gap-2.5 ${
-        draggable ? 'cursor-grab active:cursor-grabbing' : ''
-      } ${isDragging ? 'opacity-40' : ''}`}
+      className={`${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${
+        isDragging ? 'opacity-30' : ''
+      }`}
+    >
+      <CardFace card={card} orgUsers={orgUsers} />
+    </div>
+  )
+}
+
+// Presentational card — shared by the in-column card and the drag ghost.
+function CardFace({
+  card,
+  orgUsers,
+  dragging = false,
+}: {
+  card: BoardCard
+  orgUsers: OrganizationUser[]
+  dragging?: boolean
+}) {
+  const done = cardStatus(card) === 'done'
+  const assignee = resolveTaskAssignee(card.assigneeId, orgUsers)
+
+  return (
+    <div
+      className={`rounded-lg border bg-card p-3 flex flex-col gap-2.5 transition-shadow ${
+        dragging
+          ? 'shadow-[0_8px_24px_rgba(0,0,0,0.16)] rotate-2 cursor-grabbing'
+          : 'shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.07)]'
+      }`}
     >
       <span
         className="self-start text-[11px] font-medium rounded-md px-2 py-0.5"
