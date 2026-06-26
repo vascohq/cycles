@@ -497,7 +497,7 @@ describe('upsertTask', () => {
     const result = await upsertTask(ROOM, { pitchId: 'p1', title: 'Triage me' })
 
     expect(result.created).toBe(true)
-    const task = storage.tasks.toArray()[0]
+    const task = [...storage.tasks][0]
     expect(task.get('pitchId')).toBe('p1')
     expect(task.get('scopeId')).toBeUndefined()
     expect(task.get('title')).toBe('Triage me')
