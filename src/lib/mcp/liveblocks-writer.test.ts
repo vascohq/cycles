@@ -984,4 +984,29 @@ describe('upsertPitch squad assignment', () => {
 
     expect(pitch.get('squadId')).toBe('sq1')
   })
+
+  // Rooms created before squads existed have no `squads` list in root storage;
+  // the writer must lazily create one instead of crashing on `.toArray()`.
+  it('backfills a missing squads list on an old room', async () => {
+    const pitches = makeMockList([])
+    const root: Record<string, unknown> = { pitches }
+    const mock = {
+      get: (k: string) => root[k],
+      // Mirror Liveblocks attaching an inserted LiveList: store a working list
+      // (the writer reads it back via root.get and calls .toArray/.push on it).
+      set: (k: string, _v: unknown) => {
+        root[k] = makeMockList([])
+      },
+    }
+    mockMutateStorage.mockImplementation(async (_roomId, callback) => {
+      await callback({ root: mock } as any)
+    })
+
+    await upsertPitch(ROOM, { ...pitchParams, squad: 'Platform' })
+
+    const squads = (root.squads as ReturnType<typeof makeMockList>).toArray()
+    expect(squads).toHaveLength(1)
+    expect(squads[0].name).toBe('Platform')
+    expect(pitches.toArray()[0].squadId).toBe(squads[0].id)
+  })
 })
