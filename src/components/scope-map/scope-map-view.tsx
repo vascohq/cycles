@@ -248,13 +248,13 @@ export function ScopeMapView({
         onDeleteSquad={onDeleteSquad}
       />
 
-      {onViewChange && (
-        <ViewToggle view={pitch.view ?? 'scope_map'} onChange={onViewChange} />
-      )}
-
       {isKanban && (
         <section>
-          <h2 className="text-sm font-semibold tracking-tight mb-4">Board</h2>
+          <div className="flex items-center gap-3 mb-4">
+            {onViewChange && (
+              <ViewToggle view="kanban" onChange={onViewChange} />
+            )}
+          </div>
           <KanbanBoard
             scopes={scopeGridItems}
             orgUsers={orgUsers}
@@ -351,7 +351,11 @@ export function ScopeMapView({
             </div>
           )}
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-sm font-semibold tracking-tight">Scopes</h2>
+          {onViewChange ? (
+            <ViewToggle view="scope_map" onChange={onViewChange} />
+          ) : (
+            <h2 className="text-sm font-semibold tracking-tight">Scopes</h2>
+          )}
           {!isDone && (
             <span className="text-xs text-muted-foreground/50 font-mono">
               drag to reorder

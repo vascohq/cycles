@@ -161,7 +161,7 @@ function Column({
     <div
       ref={setNodeRef}
       className={`flex flex-col gap-3 rounded-xl p-3 transition-colors ${
-        isOver ? 'bg-muted/60 ring-1 ring-border' : 'bg-muted/30'
+        isOver ? 'bg-muted ring-1 ring-border' : 'bg-muted/70'
       }`}
     >
       <div className="flex items-center gap-2 px-1">
@@ -233,10 +233,10 @@ function CardFace({
 
   return (
     <div
-      className={`rounded-lg border bg-card p-3 flex flex-col gap-2.5 transition-shadow ${
+      className={`rounded-lg border border-border bg-card p-3 flex flex-col gap-2.5 transition-shadow ${
         dragging
           ? 'shadow-[0_8px_24px_rgba(0,0,0,0.16)] rotate-2 cursor-grabbing'
-          : 'shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.07)]'
+          : 'shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)]'
       }`}
     >
       <span
