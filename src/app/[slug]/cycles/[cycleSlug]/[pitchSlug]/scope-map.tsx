@@ -365,7 +365,8 @@ function ScopeMapWired({
         ...(scopeId ? { scopeId } : { pitchId }),
         ...(assigneeId ? { assigneeId } : {}),
       }
-      storage.get('tasks').push(new LiveObject(task))
+      // Insert at the front so a new card shows at the top of its column.
+      storage.get('tasks').insert(new LiveObject(task), 0)
     },
     [pitchId]
   )

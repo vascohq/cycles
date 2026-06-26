@@ -68,7 +68,9 @@ function toCards(scopes: ScopeGridDerived[], unscoped: BoardTask[]): BoardCard[]
       scopeColor: s.color,
     }))
   )
-  return [...scoped, ...unscoped.map((t) => ({ ...t }))]
+  // Unscoped (newly-created/triage) cards first, so a new card lands at the top
+  // of its column rather than below the scoped cards.
+  return [...unscoped.map((t) => ({ ...t })), ...scoped]
 }
 
 export function KanbanBoard({
