@@ -256,6 +256,18 @@ describe('updateCycle', () => {
 describe('upsertPitch', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('sets the view when provided, and leaves it unchanged when omitted', async () => {
+    const existing = makeMockItem({ id: 'p1', title: 'P', stage: 'building' })
+    setupStorage({ pitches: [existing] })
+
+    await upsertPitch(ROOM, { id: 'p1', title: 'P', stage: 'building', view: 'kanban' })
+    expect(existing.get('view')).toBe('kanban')
+
+    // Omitting view leaves it unchanged (partial update; ADR 0011).
+    await upsertPitch(ROOM, { id: 'p1', title: 'P2', stage: 'building' })
+    expect(existing.get('view')).toBe('kanban')
+  })
+
   it('creates a new pitch when no id provided', async () => {
     const storage = setupStorage()
 
@@ -462,6 +474,31 @@ describe('upsertScope core flag', () => {
 
 describe('upsertTask', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('sets status and keeps done in sync', async () => {
+    const t = makeMockItem({ id: 't1', scopeId: 's1', title: 'T', done: false })
+    setupStorage({ scopes: [makeMockItem({ id: 's1' })], tasks: [t] })
+
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'T', status: 'done' })
+    expect(t.get('status')).toBe('done')
+    expect(t.get('done')).toBe(true)
+
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'T', status: 'doing' })
+    expect(t.get('status')).toBe('doing')
+    expect(t.get('done')).toBe(false)
+  })
+
+  it('creates an unscoped (triage) task parented to a pitch', async () => {
+    const storage = setupStorage({ pitches: [makeMockItem({ id: 'p1' })] })
+
+    const result = await upsertTask(ROOM, { pitchId: 'p1', title: 'Triage me' })
+
+    expect(result.created).toBe(true)
+    const task = storage.tasks.toArray()[0]
+    expect(task.get('pitchId')).toBe('p1')
+    expect(task.get('scopeId')).toBeUndefined()
+    expect(task.get('title')).toBe('Triage me')
+  })
 
   it('creates a new task under an existing scope', async () => {
     const scope = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI' })

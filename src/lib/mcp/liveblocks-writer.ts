@@ -176,6 +176,8 @@ export async function upsertPitch(
     // Squad NAME (not id). Resolved case-insensitively, auto-created on miss.
     // Empty/whitespace clears the assignment; undefined leaves it unchanged.
     squad?: string
+    // Pitch view (see ADR 0018). undefined = leave unchanged / default on create.
+    view?: 'scope_map' | 'kanban'
   }
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
@@ -208,6 +210,7 @@ export async function upsertPitch(
         emoji: params.emoji ?? '',
         notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
+        ...(params.view ? { view: params.view } : {}),
       }
       pitches.push(new LiveObject(pitch))
     } else {
@@ -227,6 +230,7 @@ export async function upsertPitch(
       if (params.timebox_end !== undefined) existing.set('timebox_end', params.timebox_end)
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
+      if (params.view !== undefined) existing.set('view', params.view)
       // squadId: null = clear (remove key), string = assign, undefined = leave.
       if (squadId === null) existing.delete('squadId')
       else if (squadId !== undefined) existing.set('squadId', squadId)
@@ -402,12 +406,18 @@ export async function upsertTask(
   roomId: string,
   params: {
     id?: string
-    scopeId: string
+    // A card belongs to a scope OR (when unscoped/triage) directly to a pitch
+    // (see ADR 0018). On create, pass exactly one. Both optional on update.
+    scopeId?: string
+    pitchId?: string
     title: string
     // Partial-update field: undefined = leave unchanged (on update) / false on
     // create. Must NOT be coerced to false before this point — that would silently
     // un-complete a task on a title-only update.
     done?: boolean
+    // Kanban column (see ADR 0018). undefined = leave unchanged. Setting it keeps
+    // `done` in sync (done === status 'done').
+    status?: 'todo' | 'doing' | 'done'
     // Resolved Clerk userId to assign. Partial-update like done:
     //   undefined = leave unchanged, '' = unassign (delete the key),
     //   a userId = assign. Caller resolves email/userId → userId first.
@@ -418,24 +428,36 @@ export async function upsertTask(
   const created = !params.id
   let notFound = false
   let scopeMissing = false
+  let pitchMissing = false
+  let badParent = false
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const scopes = root.get('scopes')
+    const pitches = root.get('pitches')
     const tasks = root.get('tasks')
 
     if (created) {
-      const scopeExists = scopes.find(
-        (s: any) => getField(s, 'id') === params.scopeId
-      )
-      if (!scopeExists) {
-        scopeMissing = true
+      if (!params.scopeId === !params.pitchId) {
+        // need exactly one of scopeId / pitchId
+        badParent = true
         return
       }
+      if (params.scopeId) {
+        if (!scopes.find((s: any) => getField(s, 'id') === params.scopeId)) {
+          scopeMissing = true
+          return
+        }
+      } else if (!pitches.find((p: any) => getField(p, 'id') === params.pitchId)) {
+        pitchMissing = true
+        return
+      }
+      const status = params.status
       const task: ScopeTask = {
         id,
-        scopeId: params.scopeId,
         title: params.title,
-        done: params.done ?? false,
+        done: status ? status === 'done' : params.done ?? false,
+        ...(params.scopeId ? { scopeId: params.scopeId } : { pitchId: params.pitchId }),
+        ...(status ? { status } : {}),
       }
       if (params.assigneeId) task.assigneeId = params.assigneeId
       tasks.push(new LiveObject(task))
@@ -446,7 +468,13 @@ export async function upsertTask(
         return
       }
       existing.set('title', params.title)
-      if (params.done !== undefined) existing.set('done', params.done)
+      // Status is the source of truth in Kanban view; keep done in sync.
+      if (params.status !== undefined) {
+        existing.set('status', params.status)
+        existing.set('done', params.status === 'done')
+      } else if (params.done !== undefined) {
+        existing.set('done', params.done)
+      }
       if (params.assigneeId !== undefined) {
         // '' clears to Unassigned — DELETE the key (set(undefined) would leave
         // the old value resolving, same trap as core_scope_id).
@@ -456,7 +484,10 @@ export async function upsertTask(
     }
   })
 
+  if (badParent)
+    throw new Error('Pass exactly one of "scopeId" or "pitchId" when creating a task')
   if (scopeMissing) throw new Error(`Scope not found: "${params.scopeId}"`)
+  if (pitchMissing) throw new Error(`Pitch not found: "${params.pitchId}"`)
   if (notFound) throw new Error(`Task not found: "${id}"`)
   return { created, id }
 }

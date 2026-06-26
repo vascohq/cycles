@@ -790,6 +790,12 @@ export function registerCyclesTools(server: any): void {
         .describe(
           'Squad NAME (not id) that owns this pitch. Matched case-insensitively and auto-created if it does not exist. Pass "" to clear the assignment; omit to leave it unchanged.'
         ),
+      view: z
+        .enum(['scope_map', 'kanban'])
+        .optional()
+        .describe(
+          'How the pitch is rendered (see ADR 0018): "scope_map" (scopes/hill/needle) or "kanban" (card board). Omit to leave unchanged; defaults to scope_map on create.'
+        ),
     },
     {
       title: 'Create or update pitch',
@@ -799,7 +805,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -872,16 +878,23 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_task',
-    'Create or update a task under a scope. Omit id to create. Updates are PARTIAL: omit done/assignee to leave them unchanged — passing only a new title will NOT un-complete or un-assign the task.',
+    'Create or update a task/card. Omit id to create. When creating, pass exactly one parent: scopeId (a normal task under a scope) OR pitchId (an Unscoped "triage" card, see ADR 0018). Updates are PARTIAL: omit done/status/assignee to leave them unchanged — passing only a new title will NOT un-complete or un-assign the task.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().optional(),
-      scopeId: z.string().describe('Parent scope id'),
+      scopeId: z.string().optional().describe('Parent scope id (a scoped task). On create, pass this OR pitchId.'),
+      pitchId: z.string().optional().describe('Parent pitch id for an Unscoped/triage card (no scope). On create, pass this OR scopeId.'),
       title: z.string(),
       // Optional (not .default) so a title-only update leaves done unchanged
       // rather than resetting it to false. Defaults to false on create.
       done: z.boolean().optional(),
+      // Kanban column (see ADR 0018). Omit to leave unchanged; setting it keeps
+      // `done` in sync. This is how a card is moved between columns over MCP.
+      status: z
+        .enum(['todo', 'doing', 'done'])
+        .optional()
+        .describe('Kanban column: todo | doing | done. Setting it keeps done in sync. Omit to leave unchanged.'),
       // The assignee, as an email or a Clerk userId (see list_members). Omit to
       // leave unchanged; pass "" to unassign. Resolved server-side; an unknown
       // ref is rejected. Display names are not accepted (ambiguous).
@@ -898,7 +911,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, assignee, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId: string; title: string; done?: boolean; assignee?: string },
+      { org, cycle_slug, assignee, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId?: string; pitchId?: string; title: string; done?: boolean; status?: 'todo' | 'doing' | 'done'; assignee?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
