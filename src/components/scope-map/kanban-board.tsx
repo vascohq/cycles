@@ -404,9 +404,9 @@ function AddCard({
       <button
         type="button"
         onClick={() => setAdding(true)}
-        className="flex items-center gap-1 px-1 py-1 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+        className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-2 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:bg-background hover:text-foreground transition-colors"
       >
-        <Plus className="h-3 w-3" />
+        <Plus className="h-3.5 w-3.5" />
         Add card
       </button>
     )

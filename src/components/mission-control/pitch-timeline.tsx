@@ -146,15 +146,11 @@ export function PitchTimeline({
                       className="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-full bg-foreground/70"
                       style={{ left: `${todayFrac * 100}%` }}
                     />
-                    {has ? (
+                    {has && (
                       <span
                         className="absolute top-[1px] bottom-[1px] rounded-full"
                         style={{ left: `${left * 100}%`, width: `${width * 100}%`, backgroundColor: color }}
                       />
-                    ) : (
-                      <span className="absolute inset-y-0 left-2 flex items-center text-[10px] text-muted-foreground">
-                        no timebox
-                      </span>
                     )}
                   </div>
                 </Link>
