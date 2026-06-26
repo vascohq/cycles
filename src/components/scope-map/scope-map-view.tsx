@@ -97,7 +97,12 @@ export type ScopeMapViewProps = {
   onTaskScopeChange?: (taskId: string, scopeId: string | null) => void
   /** Unscoped (triage) cards — shown untagged on the Kanban board. */
   unscopedTasks?: BoardTask[]
-  onAddCard?: (title: string, status: CardStatus) => void
+  onAddCard?: (
+    title: string,
+    status: CardStatus,
+    scopeId: string | null,
+    assigneeId: string | null
+  ) => void
   onEmojiChange?: (emoji: string) => void
   onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void

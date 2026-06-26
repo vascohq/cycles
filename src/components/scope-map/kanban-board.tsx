@@ -95,13 +95,19 @@ export function KanbanBoard({
   onCardAssign?: (taskId: string, assigneeId: string | null) => void
   onCardDelete?: (taskId: string) => void
   onCardScope?: (taskId: string, scopeId: string | null) => void
-  onAddCard?: (title: string, status: CardStatus) => void
+  onAddCard?: (
+    title: string,
+    status: CardStatus,
+    scopeId: string | null,
+    assigneeId: string | null
+  ) => void
 }) {
   const allCards = toCards(scopes, unscopedTasks)
   const [scopeFilter, setScopeFilter] = useState<string | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [editing, setEditing] = useState<BoardCard | null>(null)
+  const [creating, setCreating] = useState<CardStatus | null>(null)
 
   // Filter options self-hide when there's no choice to make.
   const scopeOptions = scopes.map((s) => ({ id: s.id, title: s.title, color: s.color }))
@@ -160,7 +166,7 @@ export function KanbanBoard({
           draggable={draggable}
           onOpen={onCardEdit || onCardDelete ? setEditing : undefined}
           onAssign={onCardAssign}
-          onAddCard={onAddCard}
+          onAdd={onAddCard ? () => setCreating(col.key) : undefined}
         />
       ))}
     </div>
@@ -168,7 +174,7 @@ export function KanbanBoard({
 
   return (
     <div className="flex flex-col gap-3">
-      {(onViewChange || showScopeFilter || showAssigneeFilter) && (
+      {(onViewChange || showScopeFilter || showAssigneeFilter || onAddCard) && (
         <div className="flex items-center gap-2 flex-wrap">
           {onViewChange && view && (
             <ViewToggle view={view} onChange={onViewChange} />
@@ -215,6 +221,16 @@ export function KanbanBoard({
               ))}
             </FilterDropdown>
           )}
+          {onAddCard && (
+            <button
+              type="button"
+              onClick={() => setCreating('todo')}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background hover:opacity-90 transition-opacity"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add task
+            </button>
+          )}
         </div>
       )}
 
@@ -246,6 +262,16 @@ export function KanbanBoard({
           onAssign={onCardAssign}
           onStatusChange={onCardStatusChange}
           onScopeChange={onCardScope}
+        />
+      )}
+
+      {creating && onAddCard && (
+        <CreateCardDialog
+          defaultStatus={creating}
+          orgUsers={orgUsers}
+          scopeOptions={scopeOptions}
+          onCreate={onAddCard}
+          onClose={() => setCreating(null)}
         />
       )}
     </div>
@@ -339,7 +365,7 @@ function Column({
   draggable,
   onOpen,
   onAssign,
-  onAddCard,
+  onAdd,
 }: {
   col: { key: CardStatus; label: string; dot: string }
   cards: CardColumns<BoardCard>[CardStatus]
@@ -347,7 +373,7 @@ function Column({
   draggable: boolean
   onOpen?: (card: BoardCard) => void
   onAssign?: (taskId: string, assigneeId: string | null) => void
-  onAddCard?: (title: string, status: CardStatus) => void
+  onAdd?: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key })
 
@@ -377,60 +403,17 @@ function Column({
           />
         ))}
       </div>
-      {onAddCard && <AddCard status={col.key} onAdd={onAddCard} />}
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-2 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:bg-background hover:text-foreground transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add card
+        </button>
+      )}
     </div>
-  )
-}
-
-function AddCard({
-  status,
-  onAdd,
-}: {
-  status: CardStatus
-  onAdd: (title: string, status: CardStatus) => void
-}) {
-  const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-
-  function submit() {
-    const t = title.trim()
-    if (t) onAdd(t, status)
-    setTitle('')
-    setAdding(false)
-  }
-
-  if (!adding) {
-    return (
-      <button
-        type="button"
-        onClick={() => setAdding(true)}
-        className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-2 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:bg-background hover:text-foreground transition-colors"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Add card
-      </button>
-    )
-  }
-
-  return (
-    <textarea
-      autoFocus
-      value={title}
-      onChange={(e) => setTitle(e.target.value)}
-      onBlur={submit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault()
-          submit()
-        } else if (e.key === 'Escape') {
-          setTitle('')
-          setAdding(false)
-        }
-      }}
-      placeholder="Card title…"
-      rows={2}
-      className="w-full rounded-lg border bg-card p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
-    />
   )
 }
 
@@ -465,6 +448,9 @@ function KanbanCard({
         draggable ? 'cursor-grab active:cursor-grabbing' : onOpen ? 'cursor-pointer' : ''
       } ${isDragging ? 'opacity-30' : ''}`}
     >
+      <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
+        {card.title}
+      </p>
       <div className="flex items-center gap-2">
         {card.scopeTitle && (
           <span
@@ -487,9 +473,6 @@ function KanbanCard({
           />
         </span>
       </div>
-      <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
-        {card.title}
-      </p>
     </div>
   )
 }
@@ -512,6 +495,9 @@ function CardFace({
         dragging ? 'shadow-[0_8px_24px_rgba(0,0,0,0.16)] rotate-2 cursor-grabbing' : ''
       }`}
     >
+      <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
+        {card.title}
+      </p>
       <div className="flex items-center gap-2">
         {card.scopeTitle && (
           <span
@@ -530,30 +516,149 @@ function CardFace({
           </span>
         )}
       </div>
-      <p className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted-foreground' : ''}`}>
-        {card.title}
-      </p>
     </div>
   )
 }
 
 // A small pill button used for the dialog's inline controls (Linear-style).
-function Pill({
+const PILL_CLS =
+  'inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none'
+
+// A pill that's either a static label or a dropdown trigger. `items` drives the
+// menu; when omitted the pill is read-only.
+function PillSelect({
   children,
-  onClick,
-  trigger = false,
+  items,
 }: {
   children: React.ReactNode
-  onClick?: () => void
-  trigger?: boolean
+  items?: React.ReactNode
 }) {
-  const cls =
-    'inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none'
-  if (trigger) return <span className={cls}>{children}</span>
+  if (!items) return <span className={PILL_CLS}>{children}</span>
   return (
-    <button type="button" onClick={onClick} className={cls}>
-      {children}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={PILL_CLS}>
+          {children}
+          <ChevronDown className="h-3 w-3 opacity-50" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+        {items}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function StatusPill({
+  status,
+  onChange,
+}: {
+  status: CardStatus
+  onChange?: (status: CardStatus) => void
+}) {
+  const col = COLUMNS.find((c) => c.key === status)!
+  return (
+    <PillSelect
+      items={
+        onChange &&
+        COLUMNS.map((c) => (
+          <DropdownMenuItem key={c.key} onClick={() => onChange(c.key)}>
+            <span className={`mr-2 h-2 w-2 rounded-full ${c.dot}`} />
+            {c.label}
+          </DropdownMenuItem>
+        ))
+      }
+    >
+      <span className={`h-2 w-2 rounded-full ${col.dot}`} />
+      {col.label}
+    </PillSelect>
+  )
+}
+
+function AssigneePill({
+  assigneeId,
+  orgUsers,
+  onChange,
+}: {
+  assigneeId?: string
+  orgUsers: OrganizationUser[]
+  onChange?: (assigneeId: string | null) => void
+}) {
+  const a = resolveTaskAssignee(assigneeId, orgUsers)
+  const label =
+    a.kind === 'assigned' ? (
+      <>
+        <UserAvatar user={a.user} className="h-4 w-4" />
+        {a.user.name}
+      </>
+    ) : a.kind === 'former_member' ? (
+      'Former member'
+    ) : (
+      'Unassigned'
+    )
+  return (
+    <PillSelect
+      items={
+        onChange && (
+          <>
+            <DropdownMenuItem onClick={() => onChange(null)}>Unassigned</DropdownMenuItem>
+            {orgUsers.map((u) => (
+              <DropdownMenuItem key={u.userId} onClick={() => onChange(u.userId)}>
+                <UserAvatar user={u} className="mr-2 h-4 w-4" />
+                {u.name}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )
+      }
+    >
+      {label}
+    </PillSelect>
+  )
+}
+
+function ScopePill({
+  scopeId,
+  scopeOptions,
+  onChange,
+}: {
+  scopeId?: string
+  scopeOptions: { id: string; title: string; color: string }[]
+  onChange?: (scopeId: string | null) => void
+}) {
+  if (scopeOptions.length === 0 && !scopeId) return null
+  const current = scopeId ? scopeOptions.find((s) => s.id === scopeId) ?? null : null
+  return (
+    <PillSelect
+      items={
+        onChange && (
+          <>
+            <DropdownMenuItem onClick={() => onChange(null)}>
+              <span className="mr-2 h-2 w-2 rounded-full border border-dashed border-muted-foreground/50" />
+              No scope
+            </DropdownMenuItem>
+            {scopeOptions.map((s) => (
+              <DropdownMenuItem key={s.id} onClick={() => onChange(s.id)}>
+                <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                {s.title}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )
+      }
+    >
+      {current ? (
+        <>
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: current.color }} />
+          {current.title}
+        </>
+      ) : (
+        <>
+          <span className="h-2 w-2 rounded-full border border-dashed border-muted-foreground/50" />
+          No scope
+        </>
+      )}
+    </PillSelect>
   )
 }
 
@@ -580,11 +685,6 @@ function EditCardDialog({
 }) {
   const [title, setTitle] = useState(card.title)
   const status = cardStatus(card)
-  const col = COLUMNS.find((c) => c.key === status)!
-  const assignee = resolveTaskAssignee(card.assigneeId, orgUsers)
-  const currentScope = card.scopeId
-    ? scopeOptions.find((s) => s.id === card.scopeId) ?? null
-    : null
 
   function save() {
     const t = title.trim()
@@ -613,119 +713,20 @@ function EditCardDialog({
         />
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Status */}
-          {onStatusChange ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="outline-none">
-                  <Pill trigger>
-                    <span className={`h-2 w-2 rounded-full ${col.dot}`} />
-                    {col.label}
-                    <ChevronDown className="h-3 w-3 opacity-50" />
-                  </Pill>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {COLUMNS.map((c) => (
-                  <DropdownMenuItem
-                    key={c.key}
-                    onClick={() => onStatusChange(card.id, c.key)}
-                  >
-                    <span className={`mr-2 h-2 w-2 rounded-full ${c.dot}`} />
-                    {c.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Pill trigger>
-              <span className={`h-2 w-2 rounded-full ${col.dot}`} />
-              {col.label}
-            </Pill>
-          )}
-
-          {/* Assignee */}
-          {onAssign ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="outline-none">
-                  <Pill trigger>
-                    {assignee.kind === 'assigned' ? (
-                      <>
-                        <UserAvatar user={assignee.user} className="h-4 w-4" />
-                        {assignee.user.name}
-                      </>
-                    ) : assignee.kind === 'former_member' ? (
-                      'Former member'
-                    ) : (
-                      'Unassigned'
-                    )}
-                    <ChevronDown className="h-3 w-3 opacity-50" />
-                  </Pill>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-                <DropdownMenuItem onClick={() => onAssign(card.id, null)}>
-                  Unassigned
-                </DropdownMenuItem>
-                {orgUsers.map((u) => (
-                  <DropdownMenuItem key={u.userId} onClick={() => onAssign(card.id, u.userId)}>
-                    <UserAvatar user={u} className="mr-2 h-4 w-4" />
-                    {u.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            assignee.kind === 'assigned' && (
-              <Pill trigger>
-                <UserAvatar user={assignee.user} className="h-4 w-4" />
-                {assignee.user.name}
-              </Pill>
-            )
-          )}
-
-          {/* Scope */}
-          {onScopeChange && scopeOptions.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="outline-none">
-                  <Pill trigger>
-                    {currentScope ? (
-                      <>
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: currentScope.color }}
-                        />
-                        {currentScope.title}
-                      </>
-                    ) : (
-                      <>
-                        <span className="h-2 w-2 rounded-full border border-dashed border-muted-foreground/50" />
-                        No scope
-                      </>
-                    )}
-                    <ChevronDown className="h-3 w-3 opacity-50" />
-                  </Pill>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-                <DropdownMenuItem onClick={() => onScopeChange(card.id, null)}>
-                  <span className="mr-2 h-2 w-2 rounded-full border border-dashed border-muted-foreground/50" />
-                  No scope
-                </DropdownMenuItem>
-                {scopeOptions.map((s) => (
-                  <DropdownMenuItem key={s.id} onClick={() => onScopeChange(card.id, s.id)}>
-                    <span
-                      className="mr-2 h-2 w-2 rounded-full"
-                      style={{ backgroundColor: s.color }}
-                    />
-                    {s.title}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <StatusPill
+            status={status}
+            onChange={onStatusChange ? (s) => onStatusChange(card.id, s) : undefined}
+          />
+          <AssigneePill
+            assigneeId={card.assigneeId}
+            orgUsers={orgUsers}
+            onChange={onAssign ? (a) => onAssign(card.id, a) : undefined}
+          />
+          <ScopePill
+            scopeId={card.scopeId}
+            scopeOptions={scopeOptions}
+            onChange={onScopeChange ? (s) => onScopeChange(card.id, s) : undefined}
+          />
         </div>
 
         <DialogFooter className="justify-between gap-2 border-t border-border pt-3 sm:justify-between">
@@ -749,6 +750,82 @@ function EditCardDialog({
             className="px-3.5 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
           >
             Done
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// The same Linear-style modal, but for creating a new card — collects title,
+// status, scope, and assignee, then creates in one shot.
+function CreateCardDialog({
+  defaultStatus,
+  orgUsers,
+  scopeOptions,
+  onCreate,
+  onClose,
+}: {
+  defaultStatus: CardStatus
+  orgUsers: OrganizationUser[]
+  scopeOptions: { id: string; title: string; color: string }[]
+  onCreate: (
+    title: string,
+    status: CardStatus,
+    scopeId: string | null,
+    assigneeId: string | null
+  ) => void
+  onClose: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [status, setStatus] = useState<CardStatus>(defaultStatus)
+  const [scopeId, setScopeId] = useState<string | null>(null)
+  const [assigneeId, setAssigneeId] = useState<string | null>(null)
+
+  function create() {
+    const t = title.trim()
+    if (!t) return
+    onCreate(t, status, scopeId, assigneeId)
+    onClose()
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg gap-3 p-5">
+        <textarea
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              create()
+            }
+          }}
+          rows={2}
+          placeholder="New card title…"
+          className="w-full bg-transparent text-lg font-medium leading-snug resize-none focus:outline-none placeholder:text-muted-foreground/40"
+        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusPill status={status} onChange={setStatus} />
+          <AssigneePill
+            assigneeId={assigneeId ?? undefined}
+            orgUsers={orgUsers}
+            onChange={setAssigneeId}
+          />
+          <ScopePill
+            scopeId={scopeId ?? undefined}
+            scopeOptions={scopeOptions}
+            onChange={setScopeId}
+          />
+        </div>
+        <DialogFooter className="border-t border-border pt-3">
+          <button
+            onClick={create}
+            disabled={!title.trim()}
+            className="px-3.5 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
+          >
+            Create card
           </button>
         </DialogFooter>
       </DialogContent>

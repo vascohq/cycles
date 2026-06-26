@@ -347,16 +347,23 @@ function ScopeMapWired({
     []
   )
 
-  // Create a card directly on the Kanban board: an Unscoped task (no scopeId,
-  // parented to the pitch) in the given column (see ADR 0018).
+  // Create a card from the Kanban board's add modal. Scoped to a chosen scope
+  // or Unscoped (parented to the pitch); optional assignee (see ADR 0018).
   const onAddCard = useCycleMutation(
-    ({ storage }, title: string, status: CardStatus) => {
+    (
+      { storage },
+      title: string,
+      status: CardStatus,
+      scopeId: string | null,
+      assigneeId: string | null
+    ) => {
       const task: ScopeTask = {
         id: nanoid(),
-        pitchId,
         title,
         done: status === 'done',
         status,
+        ...(scopeId ? { scopeId } : { pitchId }),
+        ...(assigneeId ? { assigneeId } : {}),
       }
       storage.get('tasks').push(new LiveObject(task))
     },
