@@ -15,6 +15,9 @@ type ParkingLotProps = {
 }
 
 export function ParkingLot({ items, onToggleResolved, readOnly }: ParkingLotProps) {
+  // Hide the whole section when there's nothing parked — no empty state.
+  if (items.length === 0) return null
+
   return (
     <div className="rounded-lg border-[1.5px] border-dashed border-foreground/20 p-5">
       <div className="flex items-center gap-2 mb-4">
@@ -29,13 +32,8 @@ export function ParkingLot({ items, onToggleResolved, readOnly }: ParkingLotProp
         </div>
       </div>
 
-      {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground/40 italic">
-          No open decisions
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {items.map((item) => {
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {items.map((item) => {
             const Tag = readOnly ? 'div' : 'button'
             return (
               <Tag
@@ -60,8 +58,7 @@ export function ParkingLot({ items, onToggleResolved, readOnly }: ParkingLotProp
               </Tag>
             )
           })}
-        </div>
-      )}
+      </div>
     </div>
   )
 }

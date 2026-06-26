@@ -25,7 +25,7 @@ export default async function OrgLayout({
         <div className="mx-auto flex h-full max-w-screen-xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href={`/${slug}/cycles`}
               className="flex items-center gap-2 font-display text-lg transition-colors hover:text-foreground/70"
             >
               {/* Theme-aware logo: dark-on-light in light mode, light-on-dark in

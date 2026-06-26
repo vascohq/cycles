@@ -2,32 +2,22 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * Loading state for Mission Control. Hand-built to mirror the real layout (see
- * mission-control-view.tsx / pitch-timeline.tsx): breadcrumb + cycle stepper,
- * title row, the aligned Cycle window strip, then squad groups of two-line
- * pitch-timeline rows (header + timebox bar).
+ * mission-control-view.tsx / pitch-timeline.tsx): the title row (cycle name +
+ * cycle stepper, then actions), the aligned Cycle window strip, then squad
+ * groups of two-line pitch-timeline rows (header + timebox bar).
  */
 export function MissionControlSkeleton() {
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        {/* breadcrumb + cycle stepper */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-3 w-3 rounded-full" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <div className="flex items-center gap-1">
-            <Skeleton className="h-7 w-7 rounded-lg" />
-            <Skeleton className="h-7 w-7 rounded-lg" />
-          </div>
-        </div>
-
-        {/* title + actions */}
+        {/* cycle name, then cycle stepper + actions */}
         <div className="flex items-end justify-between gap-3">
           <Skeleton className="h-9 w-52" />
           <div className="flex items-center gap-3">
-            <Skeleton className="h-7 w-20 rounded-lg" />
+            <div className="flex items-center gap-1">
+              <Skeleton className="h-7 w-7 rounded-lg" />
+              <Skeleton className="h-7 w-7 rounded-lg" />
+            </div>
             <Skeleton className="h-7 w-7 rounded" />
           </div>
         </div>
@@ -49,11 +39,12 @@ export function MissionControlSkeleton() {
         </div>
       </header>
 
-      {/* squad filter chips */}
+      {/* squad filter chips + Add pitch */}
       <div className="flex flex-wrap items-center gap-2">
         {[16, 20, 14].map((w, i) => (
           <Skeleton key={i} className="h-7 rounded-full" style={{ width: `${w * 4}px` }} />
         ))}
+        <Skeleton className="ml-auto h-7 w-20 rounded-lg" />
       </div>
 
       {/* squad-grouped timeline */}

@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { ChevronRight, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { TimeboxTape, CalendarOverlayRow } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { positionBands, observeHolidays } from '@/lib/calendar/overlay-positioning'
@@ -23,6 +22,8 @@ export type MissionControlViewProps = {
   slug: string
   cycleSlug: string
   cycleTitle: string
+  /** A cooldown cycle gets an ice-cube marker on the head. */
+  cycleType?: 'build' | 'cooldown'
   today: string
   sections: SquadSection[]
   onCreatePitch?: (title: string) => void
@@ -41,6 +42,7 @@ export function MissionControlView({
   slug,
   cycleSlug,
   cycleTitle,
+  cycleType,
   today,
   sections,
   onCreatePitch,
@@ -60,33 +62,13 @@ export function MissionControlView({
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <nav className="-mb-1 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Link
-              href={`/${slug}/cycles`}
-              className="hover:text-foreground transition-colors"
-            >
-              Cycles
-            </Link>
-            <ChevronRight className="w-3 h-3 shrink-0" />
-            <span className="text-foreground font-medium truncate">{cycleTitle}</span>
-          </div>
-          {cycleNav}
-        </nav>
         <div className="flex items-end justify-between gap-3">
-          <h1 className="text-3xl font-display">
-            Mission Control
+          <h1 className="flex min-w-0 items-center gap-2 truncate text-3xl font-display">
+            {cycleType === 'cooldown' && <span aria-hidden>🧊</span>}
+            {cycleTitle}
           </h1>
           <div className="flex items-center gap-3">
-            {onCreatePitch && (
-              <button
-                onClick={() => setCreateOpen(true)}
-                className="flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                Add pitch
-              </button>
-            )}
+            {cycleNav}
             {headerActions}
           </div>
         </div>
@@ -100,13 +82,24 @@ export function MissionControlView({
         )}
       </header>
 
-      {showFilter && (
-        <div className="-my-4">
-          <SquadFilterBar
-            sections={sections}
-            active={activeFilter}
-            onChange={setActiveFilter}
-          />
+      {(showFilter || onCreatePitch) && (
+        <div className="-my-4 flex flex-wrap items-center gap-3">
+          {showFilter && (
+            <SquadFilterBar
+              sections={sections}
+              active={activeFilter}
+              onChange={setActiveFilter}
+            />
+          )}
+          {onCreatePitch && (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="ml-auto flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              Add pitch
+            </button>
+          )}
         </div>
       )}
 
