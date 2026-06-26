@@ -31,7 +31,8 @@ import {
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
-import { KanbanBoard, ViewToggle, type BoardTask } from '@/components/scope-map/kanban-board'
+import { KanbanBoard, ViewToggle, CreateCardDialog, type BoardTask } from '@/components/scope-map/kanban-board'
+import { TriageTray } from '@/components/scope-map/triage-tray'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
 import { CoreScopePrompt } from '@/components/scope-map/core-scope-prompt'
@@ -229,6 +230,7 @@ export function ScopeMapView({
   )
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
   const [addScopeOpen, setAddScopeOpen] = useState(false)
+  const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [openScopeId, setOpenScopeId] = useState<string | null>(null)
   const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
@@ -397,15 +399,29 @@ export function ScopeMapView({
               drag to reorder
             </span>
           )}
-          {!isDone && onAddScope && (
-            <button
-              type="button"
-              onClick={() => setAddScopeOpen(true)}
-              className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-auto"
-            >
-              <Plus className="w-3 h-3" />
-              add scope
-            </button>
+          {!isDone && (onAddCard || onAddScope) && (
+            <div className="ml-auto flex items-center gap-3">
+              {onAddCard && (
+                <button
+                  type="button"
+                  onClick={() => setAddTaskOpen(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  add task
+                </button>
+              )}
+              {onAddScope && (
+                <button
+                  type="button"
+                  onClick={() => setAddScopeOpen(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  add scope
+                </button>
+              )}
+            </div>
           )}
         </div>
         <ScopeGrid
@@ -481,7 +497,28 @@ export function ScopeMapView({
             onConfirm={() => { onDeleteScope(deletingScopeId!); setDeletingScopeId(null) }}
           />
         )}
+        {/* Unscoped (triage) cards surface here in Scope Map view; self-hides
+            when empty (see ADR 0018). */}
+        {onTaskScopeChange && (
+          <div className="mt-4">
+            <TriageTray
+              tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
+              scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+              onAssignScope={onTaskScopeChange}
+            />
+          </div>
+        )}
       </section>
+      )}
+
+      {onAddCard && addTaskOpen && (
+        <CreateCardDialog
+          defaultStatus="todo"
+          orgUsers={orgUsers}
+          scopeOptions={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+          onCreate={onAddCard}
+          onClose={() => setAddTaskOpen(false)}
+        />
       )}
 
       <section>

@@ -745,8 +745,9 @@ function EditCardDialog({
 }
 
 // The same Linear-style modal, but for creating a new card — collects title,
-// status, scope, and assignee, then creates in one shot.
-function CreateCardDialog({
+// status, scope, and assignee, then creates in one shot. Reused by the Scope
+// Map view's "Add task" button (an unscoped card lands in the Triage tray).
+export function CreateCardDialog({
   defaultStatus,
   orgUsers,
   scopeOptions,
