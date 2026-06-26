@@ -141,10 +141,10 @@ function getField(item: any, key: string): any {
 
 
 // Rooms created before squads existed have no `squads` list in root storage,
-// so root.get('squads') is undefined and .toArray() throws. Lazily backfill it.
+// so root.get('squads') is undefined and reads on it throw. Lazily backfill it.
 function getSquadList(root: any): any {
   if (!root.get('squads')) root.set('squads', new LiveList([]))
-  // Read back so we return the attached instance (the one with .toArray/.push),
+  // Read back so we return the attached instance (the one with .map/.push),
   // not the detached LiveList we just constructed.
   return root.get('squads')
 }
@@ -152,7 +152,7 @@ function getSquadList(root: any): any {
 // Resolve a squad name to an id within the cycle's squad list, creating the
 // squad (with an auto-assigned color) when no case-insensitive match exists.
 function resolveOrCreateSquadId(squads: any, name: string): string {
-  const arr = squads.toArray().map((s: any) => ({
+  const arr = squads.map((s: any) => ({
     id: getField(s, 'id'),
     name: getField(s, 'name'),
     color: getField(s, 'color'),
@@ -266,7 +266,7 @@ export async function upsertSquad(
 
     // Enforce the "names are unique within a cycle" invariant on both paths,
     // using the same guard as the Scope Map rename UI (see squad-engine).
-    const arr = squads.toArray().map((s: any) => ({
+    const arr = squads.map((s: any) => ({
       id: getField(s, 'id'),
       name: getField(s, 'name'),
       color: getField(s, 'color'),
