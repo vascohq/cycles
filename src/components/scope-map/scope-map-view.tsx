@@ -719,16 +719,16 @@ function ViewToggle({
     { value: 'kanban', label: 'Kanban' },
   ]
   return (
-    <div className="inline-flex self-start rounded-lg border bg-muted/30 p-0.5 text-xs">
+    <div className="inline-flex self-start rounded-sm border border-border bg-muted p-0.5 text-xs">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           aria-pressed={view === o.value}
-          className={`px-3 py-1 rounded-md font-medium transition-colors ${
+          className={`px-3 py-1 rounded-[3px] font-medium transition-colors ${
             view === o.value
-              ? 'bg-card shadow-[0_1px_2px_rgba(0,0,0,0.06)] text-foreground'
+              ? 'bg-background shadow-sm text-foreground'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
