@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
-import { KanbanBoard, type BoardTask } from '@/components/scope-map/kanban-board'
+import { KanbanBoard, ViewToggle, type BoardTask } from '@/components/scope-map/kanban-board'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
 import { CoreScopePrompt } from '@/components/scope-map/core-scope-prompt'
@@ -343,17 +343,12 @@ export function ScopeMapView({
 
       {showKanban && (
         <section>
-          {/* Switcher only on Shape-Up pitches (have a timebox); a Kanban-MODE
-              pitch is board-only with nothing to switch to. */}
-          {onViewChange && hasTimebox && (
-            <div className="flex items-center gap-3 mb-4">
-              <ViewToggle view="kanban" onChange={onViewChange} />
-            </div>
-          )}
           <KanbanBoard
             scopes={scopeGridItems}
             unscopedTasks={unscopedTasks}
             orgUsers={orgUsers}
+            view={pitch.view ?? 'kanban'}
+            onViewChange={hasTimebox ? onViewChange : undefined}
             onCardStatusChange={isDone ? undefined : onTaskStatusChange}
             onCardEdit={
               !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined
@@ -737,40 +732,6 @@ function FramingList({ text }: { text: string }) {
   )
 }
 
-
-// Segmented control to flip a pitch between its Scope Map and Kanban views.
-// Stored team-wide and non-destructive (see ADR 0018).
-function ViewToggle({
-  view,
-  onChange,
-}: {
-  view: PitchView
-  onChange: (view: PitchView) => void
-}) {
-  const options: { value: PitchView; label: string }[] = [
-    { value: 'scope_map', label: 'Scope Map' },
-    { value: 'kanban', label: 'Kanban' },
-  ]
-  return (
-    <div className="inline-flex self-start rounded border border-border bg-muted p-0.5 text-xs">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          aria-pressed={view === o.value}
-          className={`px-3 py-1 rounded-[3px] font-medium transition-colors ${
-            view === o.value
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 const TIERS: Tier[] = ['must', 'should', 'could']
 

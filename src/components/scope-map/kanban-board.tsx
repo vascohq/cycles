@@ -19,22 +19,16 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { Plus, X, Trash2 } from 'lucide-react'
-import type { CardStatus } from '@/cycle-liveblocks.config'
+import { Plus, X, Trash2, ChevronDown } from 'lucide-react'
+import type { CardStatus, PitchView } from '@/cycle-liveblocks.config'
 import type { OrganizationUser } from '@/lib/users'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { cardStatus, groupCardsByStatus, becameDone, type CardColumns } from '@/lib/card-engine'
-import { assigneeFilterOptions } from '@/lib/task-engine'
+import { assigneeFilterOptions, resolveTaskAssignee } from '@/lib/task-engine'
 import { readableTextColor } from '@/lib/color-engine'
 import { fireTaskDoneConfetti } from '@/lib/confetti'
-import { AssigneePicker } from '@/components/scope-card/assignee-picker'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+import { AssigneePicker, UserAvatar } from '@/components/scope-card/assignee-picker'
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -81,6 +75,8 @@ export function KanbanBoard({
   scopes,
   unscopedTasks = [],
   orgUsers,
+  view,
+  onViewChange,
   onCardStatusChange,
   onCardEdit,
   onCardAssign,
@@ -90,6 +86,9 @@ export function KanbanBoard({
   scopes: ScopeGridDerived[]
   unscopedTasks?: BoardTask[]
   orgUsers: OrganizationUser[]
+  /** When set with onViewChange, the view switcher sits inline with filters. */
+  view?: PitchView
+  onViewChange?: (view: PitchView) => void
   onCardStatusChange?: (taskId: string, status: CardStatus) => void
   onCardEdit?: (taskId: string, title: string) => void
   onCardAssign?: (taskId: string, assigneeId: string | null) => void
@@ -105,8 +104,8 @@ export function KanbanBoard({
   // Filter options self-hide when there's no choice to make.
   const scopeOptions = scopes.map((s) => ({ id: s.id, title: s.title, color: s.color }))
   const assigneeOptions = assigneeFilterOptions(allCards, orgUsers)
-  const showScopeFilter = scopeOptions.length > 1 || (scopeOptions.length >= 1 && unscopedTasks.length > 0)
-  const showAssigneeFilter = assigneeOptions.length > 1
+  const showScopeFilter = scopeOptions.length >= 1
+  const showAssigneeFilter = assigneeOptions.length >= 1
 
   const cards = allCards.filter((c) => {
     if (scopeFilter === UNSCOPED && c.scopeId) return false
@@ -167,8 +166,11 @@ export function KanbanBoard({
 
   return (
     <div className="flex flex-col gap-3">
-      {(showScopeFilter || showAssigneeFilter) && (
-        <div className="flex items-center gap-2">
+      {(onViewChange || showScopeFilter || showAssigneeFilter) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {onViewChange && view && (
+            <ViewToggle view={view} onChange={onViewChange} />
+          )}
           {showScopeFilter && (
             <FilterDropdown
               label="Scope"
@@ -232,11 +234,48 @@ export function KanbanBoard({
       {editing && (
         <EditCardDialog
           card={editing}
+          orgUsers={orgUsers}
           onClose={() => setEditing(null)}
           onEdit={onCardEdit}
           onDelete={onCardDelete}
+          onAssign={onCardAssign}
+          onStatusChange={onCardStatusChange}
         />
       )}
+    </div>
+  )
+}
+
+// Segmented Scope Map / Kanban switcher. Lives here so it can sit inline with
+// the board filters; also imported by the Scope Map header.
+export function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: PitchView
+  onChange: (view: PitchView) => void
+}) {
+  const options: { value: PitchView; label: string }[] = [
+    { value: 'scope_map', label: 'Scope Map' },
+    { value: 'kanban', label: 'Kanban' },
+  ]
+  return (
+    <div className="inline-flex self-start rounded border border-border bg-muted p-0.5 text-xs">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={view === o.value}
+          className={`px-3 py-1 rounded-sm font-medium transition-colors ${
+            view === o.value
+              ? 'bg-background shadow-sm text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -478,18 +517,47 @@ function CardFace({
   )
 }
 
+// A small pill button used for the dialog's inline controls (Linear-style).
+function Pill({
+  children,
+  onClick,
+  trigger = false,
+}: {
+  children: React.ReactNode
+  onClick?: () => void
+  trigger?: boolean
+}) {
+  const cls =
+    'inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors outline-none'
+  if (trigger) return <span className={cls}>{children}</span>
+  return (
+    <button type="button" onClick={onClick} className={cls}>
+      {children}
+    </button>
+  )
+}
+
 function EditCardDialog({
   card,
+  orgUsers,
   onClose,
   onEdit,
   onDelete,
+  onAssign,
+  onStatusChange,
 }: {
   card: BoardCard
+  orgUsers: OrganizationUser[]
   onClose: () => void
   onEdit?: (taskId: string, title: string) => void
   onDelete?: (taskId: string) => void
+  onAssign?: (taskId: string, assigneeId: string | null) => void
+  onStatusChange?: (taskId: string, status: CardStatus) => void
 }) {
   const [title, setTitle] = useState(card.title)
+  const status = cardStatus(card)
+  const col = COLUMNS.find((c) => c.key === status)!
+  const assignee = resolveTaskAssignee(card.assigneeId, orgUsers)
 
   function save() {
     const t = title.trim()
@@ -499,10 +567,19 @@ function EditCardDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && save()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="text-base font-semibold tracking-tight">Edit card</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-md gap-4">
+        {card.scopeTitle && (
+          <span
+            className="self-start text-[11px] font-medium rounded px-2 py-0.5"
+            style={{
+              backgroundColor: card.scopeColor,
+              color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
+            }}
+          >
+            {card.scopeTitle}
+          </span>
+        )}
+        {/* Borderless title, like Linear's new-issue field. */}
         <textarea
           autoFocus
           value={title}
@@ -514,9 +591,85 @@ function EditCardDialog({
             }
           }}
           readOnly={!onEdit}
-          rows={3}
-          className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+          rows={2}
+          placeholder="Card title…"
+          className="w-full bg-transparent text-lg font-medium leading-snug resize-none focus:outline-none placeholder:text-muted-foreground/40"
         />
+
+        <div className="flex items-center gap-2">
+          {/* Status */}
+          {onStatusChange ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="outline-none">
+                  <Pill trigger>
+                    <span className={`h-2 w-2 rounded-full ${col.dot}`} />
+                    {col.label}
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </Pill>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {COLUMNS.map((c) => (
+                  <DropdownMenuItem
+                    key={c.key}
+                    onClick={() => onStatusChange(card.id, c.key)}
+                  >
+                    <span className={`mr-2 h-2 w-2 rounded-full ${c.dot}`} />
+                    {c.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Pill trigger>
+              <span className={`h-2 w-2 rounded-full ${col.dot}`} />
+              {col.label}
+            </Pill>
+          )}
+
+          {/* Assignee */}
+          {onAssign ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="outline-none">
+                  <Pill trigger>
+                    {assignee.kind === 'assigned' ? (
+                      <>
+                        <UserAvatar user={assignee.user} className="h-4 w-4" />
+                        {assignee.user.name}
+                      </>
+                    ) : assignee.kind === 'former_member' ? (
+                      'Former member'
+                    ) : (
+                      'Unassigned'
+                    )}
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </Pill>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                <DropdownMenuItem onClick={() => onAssign(card.id, null)}>
+                  Unassigned
+                </DropdownMenuItem>
+                {orgUsers.map((u) => (
+                  <DropdownMenuItem key={u.userId} onClick={() => onAssign(card.id, u.userId)}>
+                    <UserAvatar user={u} className="mr-2 h-4 w-4" />
+                    {u.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            assignee.kind === 'assigned' && (
+              <Pill trigger>
+                <UserAvatar user={assignee.user} className="h-4 w-4" />
+                {assignee.user.name}
+              </Pill>
+            )
+          )}
+        </div>
+
         <DialogFooter className="justify-between gap-2 sm:justify-between">
           {onDelete ? (
             <button
@@ -525,7 +678,7 @@ function EditCardDialog({
                 onDelete(card.id)
                 onClose()
               }}
-              className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 text-sm rounded text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
@@ -535,7 +688,7 @@ function EditCardDialog({
           )}
           <button
             onClick={save}
-            className="px-4 py-2 text-sm rounded-lg bg-foreground text-background font-medium"
+            className="px-4 py-1.5 text-sm rounded bg-foreground text-background font-medium"
           >
             Done
           </button>
