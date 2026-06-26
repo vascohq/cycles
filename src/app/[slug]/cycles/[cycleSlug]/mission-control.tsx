@@ -156,6 +156,7 @@ function MissionControlWired({
       slug={slug}
       cycleSlug={cycleSlug}
       cycleTitle={cycleTitle}
+      cycleType={cycle.type}
       today={today}
       sections={sections}
       onCreatePitch={onCreatePitch}
