@@ -492,11 +492,15 @@ export function ScopeMapView({
         />
       </section>
 
-      <UpdatesTimeline
-        cards={timelineCards}
-        onRetrySlack={onRetrySlack}
-        onDeleteUpdate={isDone ? undefined : onDeleteUpdate}
-      />
+      {/* Updates belong to Shape-Up pitches (they have a needle/timebox). A
+          Kanban-mode pitch (no timebox) is board-only — no updates. */}
+      {hasTimebox && (
+        <UpdatesTimeline
+          cards={timelineCards}
+          onRetrySlack={onRetrySlack}
+          onDeleteUpdate={isDone ? undefined : onDeleteUpdate}
+        />
+      )}
     </main>
   )
 }

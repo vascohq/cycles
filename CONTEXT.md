@@ -165,8 +165,8 @@ _Avoid_: Backlog, blockers, open questions list
 An immutable record of a needle move. Contains the zone, needle progress, narrative text, and snapshots of all hill positions and task counts at post time. Posted to a shared Slack channel. Updates are always appended, never edited. They can be **deleted** only as a misfire undo — and only the latest update on a pitch — never as general history rewriting (see Delete Update).
 _Avoid_: Check-in, standup note, status report
 
-**Kanban update**:
-An **Update** posted from a **Kanban pitch**. Has no needle and no hill (those snapshots are optional / null on `PitchUpdate`); instead it freezes a **card snapshot** — every card's `status` and `title` at post time. The feed renders the **diff vs. the previous card snapshot**, showing the cards **completed since the last update** ("what got done") — the card analogue of the **Hill Trail** (see ADR 0005). Narrative is **optional** (the diff carries the story). Still posts to the cycle's Slack channel like any update. v1 diff is completed-only; column-moves and newly-added cards are deferred.
+**Updates (Kanban mode)**:
+A **Kanban-mode** pitch (no timebox) has **no Updates** at all — no feed, no posting. Updates are the heartbeat of a Shape-Up pitch (a needle move over a timebox); with no timebox there is nothing to update against, and the **board itself is the status**. So "no timebox ⇒ no updates" (decided after an earlier card-diff exploration was dropped). A Shape-Up pitch *viewed* as Kanban still keeps its needle and Updates.
 _Avoid_: Needle update (a kanban pitch has no needle), card log
 
 **Delete Update**:

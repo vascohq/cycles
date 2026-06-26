@@ -4,7 +4,6 @@ import {
   groupCardsByStatus,
   becameDone,
   areAllCardsDone,
-  completedSince,
 } from './card-engine'
 
 describe('cardStatus', () => {
@@ -69,32 +68,5 @@ describe('areAllCardsDone', () => {
 
   it('is false for an empty board', () => {
     expect(areAllCardsDone([])).toBe(false)
-  })
-})
-
-describe('completedSince', () => {
-  const a = { taskId: 'a', status: 'done' as const, title: 'A' }
-  const b = { taskId: 'b', status: 'doing' as const, title: 'B' }
-
-  it('counts all done cards on the first update (no prior snapshot)', () => {
-    expect(completedSince(undefined, [a, b]).map((c) => c.taskId)).toEqual(['a'])
-  })
-
-  it('counts only cards newly done since the prior snapshot', () => {
-    const prev = [
-      { taskId: 'a', status: 'done' as const, title: 'A' }, // already done
-      { taskId: 'b', status: 'todo' as const, title: 'B' }, // will move to done
-    ]
-    const curr = [
-      { taskId: 'a', status: 'done' as const, title: 'A' },
-      { taskId: 'b', status: 'done' as const, title: 'B' },
-    ]
-    expect(completedSince(prev, curr).map((c) => c.taskId)).toEqual(['b'])
-  })
-
-  it('ignores a card that regressed out of done', () => {
-    const prev = [{ taskId: 'a', status: 'done' as const, title: 'A' }]
-    const curr = [{ taskId: 'a', status: 'todo' as const, title: 'A' }]
-    expect(completedSince(prev, curr)).toEqual([])
   })
 })

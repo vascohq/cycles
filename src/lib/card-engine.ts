@@ -30,24 +30,6 @@ export function areAllCardsDone(
   return cards.length > 0 && cards.every((c) => cardStatus(c) === 'done')
 }
 
-// A card's status + title frozen into a Kanban Update, so a since-deleted card
-// can still render in the diff (mirrors HillSnapshot freezing title; ADR 0018).
-export type CardSnapshotEntry = { taskId: string; status: CardStatus; title: string }
-
-// Cards that reached done since the previous Kanban Update — "what got done".
-// The card analogue of the Hill Trail (ADR 0005). On the first update (no prior
-// snapshot) every currently-done card counts. A card already done in the prior
-// snapshot, or one that regressed out of done, is not included.
-export function completedSince(
-  previous: CardSnapshotEntry[] | undefined,
-  current: CardSnapshotEntry[]
-): CardSnapshotEntry[] {
-  const wasDone = new Set(
-    (previous ?? []).filter((c) => c.status === 'done').map((c) => c.taskId)
-  )
-  return current.filter((c) => c.status === 'done' && !wasDone.has(c.taskId))
-}
-
 export type CardColumns<T> = { todo: T[]; doing: T[]; done: T[] }
 
 // Split a pitch's cards into the three Kanban columns, preserving input order
