@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { LiveObject } from '@liveblocks/node'
+import { LiveObject, LiveList } from '@liveblocks/node'
 import { liveblocks } from '@/lib/liveblocks'
 import type {
   CyclePitch,
@@ -140,6 +140,15 @@ function getField(item: any, key: string): any {
 }
 
 
+// Rooms created before squads existed have no `squads` list in root storage,
+// so root.get('squads') is undefined and .toArray() throws. Lazily backfill it.
+function getSquadList(root: any): any {
+  if (!root.get('squads')) root.set('squads', new LiveList([]))
+  // Read back so we return the attached instance (the one with .toArray/.push),
+  // not the detached LiveList we just constructed.
+  return root.get('squads')
+}
+
 // Resolve a squad name to an id within the cycle's squad list, creating the
 // squad (with an auto-assigned color) when no case-insensitive match exists.
 function resolveOrCreateSquadId(squads: any, name: string): string {
@@ -184,7 +193,7 @@ export async function upsertPitch(
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
     const pitches = root.get('pitches')
-    const squads = root.get('squads')
+    const squads = getSquadList(root)
 
     // null = clear, string = assign, undefined = leave unchanged.
     let squadId: string | undefined | null
@@ -253,7 +262,7 @@ export async function upsertSquad(
   let nameTaken = false
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
-    const squads = root.get('squads')
+    const squads = getSquadList(root)
 
     // Enforce the "names are unique within a cycle" invariant on both paths,
     // using the same guard as the Scope Map rename UI (see squad-engine).
@@ -295,7 +304,7 @@ export async function deleteSquad(roomId: string, id: string): Promise<void> {
   let notFound = false
 
   await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
-    const squads = root.get('squads')
+    const squads = getSquadList(root)
     const idx = squads.findIndex((s: any) => getField(s, 'id') === id)
     if (idx === -1) {
       notFound = true

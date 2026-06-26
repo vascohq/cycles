@@ -189,6 +189,7 @@ describe('createCycleRoom', () => {
           tasks: { liveblocksType: 'LiveList', data: [] },
           updates: { liveblocksType: 'LiveList', data: [] },
           parkingItems: { liveblocksType: 'LiveList', data: [] },
+          squads: { liveblocksType: 'LiveList', data: [] },
         },
       }
     )
