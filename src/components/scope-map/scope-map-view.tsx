@@ -376,6 +376,17 @@ export function ScopeMapView({
 
       {!showKanban && (
       <section>
+        {/* Unscoped (triage) cards surface above the scope grid in Scope Map
+            view; self-hides when empty (see ADR 0018). */}
+        {onTaskScopeChange && (
+          <div className="mb-4">
+            <TriageTray
+              tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
+              scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+              onAssignScope={onTaskScopeChange}
+            />
+          </div>
+        )}
         {onToggleCoreScope &&
           shouldShowCoreScopePrompt(scopeGridItems) && (
             <div className="mb-4">
@@ -496,17 +507,6 @@ export function ScopeMapView({
             taskCount={deletingScope.tasks.length}
             onConfirm={() => { onDeleteScope(deletingScopeId!); setDeletingScopeId(null) }}
           />
-        )}
-        {/* Unscoped (triage) cards surface here in Scope Map view; self-hides
-            when empty (see ADR 0018). */}
-        {onTaskScopeChange && (
-          <div className="mt-4">
-            <TriageTray
-              tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
-              scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
-              onAssignScope={onTaskScopeChange}
-            />
-          </div>
         )}
       </section>
       )}
