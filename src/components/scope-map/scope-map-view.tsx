@@ -376,17 +376,6 @@ export function ScopeMapView({
 
       {!showKanban && (
       <section>
-        {/* Unscoped (triage) cards surface above the scope grid in Scope Map
-            view; self-hides when empty (see ADR 0018). */}
-        {onTaskScopeChange && (
-          <div className="mb-4">
-            <TriageTray
-              tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
-              scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
-              onAssignScope={onTaskScopeChange}
-            />
-          </div>
-        )}
         {onToggleCoreScope &&
           shouldShowCoreScopePrompt(scopeGridItems) && (
             <div className="mb-4">
@@ -435,6 +424,17 @@ export function ScopeMapView({
             </div>
           )}
         </div>
+        {/* Unscoped (triage) cards — under the filter/switcher row, above the
+            scope grid; self-hides when empty (see ADR 0018). */}
+        {onTaskScopeChange && (
+          <div className="mb-4">
+            <TriageTray
+              tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
+              scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+              onAssignScope={onTaskScopeChange}
+            />
+          </div>
+        )}
         <ScopeGrid
           scopes={scopeGridItems}
           orgUsers={orgUsers}
