@@ -166,7 +166,6 @@ export function KanbanBoard({
           draggable={draggable}
           onOpen={onCardEdit || onCardDelete ? setEditing : undefined}
           onAssign={onCardAssign}
-          onAdd={onAddCard ? () => setCreating(col.key) : undefined}
         />
       ))}
     </div>
@@ -365,7 +364,6 @@ function Column({
   draggable,
   onOpen,
   onAssign,
-  onAdd,
 }: {
   col: { key: CardStatus; label: string; dot: string }
   cards: CardColumns<BoardCard>[CardStatus]
@@ -373,7 +371,6 @@ function Column({
   draggable: boolean
   onOpen?: (card: BoardCard) => void
   onAssign?: (taskId: string, assigneeId: string | null) => void
-  onAdd?: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key })
 
@@ -403,16 +400,6 @@ function Column({
           />
         ))}
       </div>
-      {onAdd && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-2 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:bg-background hover:text-foreground transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add card
-        </button>
-      )}
     </div>
   )
 }
