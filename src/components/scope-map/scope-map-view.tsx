@@ -202,8 +202,14 @@ export function ScopeMapView({
   // shimmer that invites the final update during the `color` phase.
   // In Kanban view there's no needle/scopes — the gold parade fires when every
   // card is done (a celebration only, never a stage change; see ADR 0018).
-  const celebration = showKanban
-    ? areAllCardsDone(scopeGridItems.flatMap((s) => s.tasks))
+  // Kanban-MODE pitches (no needle) celebrate when every card is done;
+  // Shape-Up pitches keep the needle/scope celebration even when viewed as a
+  // board (the needle/hill still show — see ADR 0018).
+  const celebration = isKanbanMode
+    ? areAllCardsDone([
+        ...scopeGridItems.flatMap((s) => s.tasks),
+        ...unscopedTasks,
+      ])
       ? 'gold'
       : 'none'
     : pageCelebration(
@@ -257,35 +263,10 @@ export function ScopeMapView({
         onDeleteSquad={onDeleteSquad}
       />
 
-      {showKanban && (
-        <section>
-          {/* Switcher only on Shape-Up pitches (have a timebox); a Kanban-MODE
-              pitch is board-only with nothing to switch to. */}
-          {onViewChange && hasTimebox && (
-            <div className="flex items-center gap-3 mb-4">
-              <ViewToggle view="kanban" onChange={onViewChange} />
-            </div>
-          )}
-          <KanbanBoard
-            scopes={scopeGridItems}
-            unscopedTasks={unscopedTasks}
-            orgUsers={orgUsers}
-            onCardStatusChange={isDone ? undefined : onTaskStatusChange}
-            onCardEdit={
-              !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined
-            }
-            onCardAssign={
-              !isDone && onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined
-            }
-            onCardDelete={
-              !isDone && onTaskDelete ? (id) => onTaskDelete('', id) : undefined
-            }
-            onAddCard={isDone ? undefined : onAddCard}
-          />
-        </section>
-      )}
-
-      {!showKanban && (<>
+      {/* Needle + hill show for any Shape-Up pitch (has a timebox), including
+          when it's viewed as a board. A Kanban-MODE pitch (no timebox) has
+          neither — see ADR 0018. */}
+      {hasTimebox && (
       <section className="grid grid-cols-1 gap-5 mc-row">
         <div>
           {isDone ? (
@@ -358,7 +339,37 @@ export function ScopeMapView({
           />
         </div>
       </section>
+      )}
 
+      {showKanban && (
+        <section>
+          {/* Switcher only on Shape-Up pitches (have a timebox); a Kanban-MODE
+              pitch is board-only with nothing to switch to. */}
+          {onViewChange && hasTimebox && (
+            <div className="flex items-center gap-3 mb-4">
+              <ViewToggle view="kanban" onChange={onViewChange} />
+            </div>
+          )}
+          <KanbanBoard
+            scopes={scopeGridItems}
+            unscopedTasks={unscopedTasks}
+            orgUsers={orgUsers}
+            onCardStatusChange={isDone ? undefined : onTaskStatusChange}
+            onCardEdit={
+              !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined
+            }
+            onCardAssign={
+              !isDone && onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined
+            }
+            onCardDelete={
+              !isDone && onTaskDelete ? (id) => onTaskDelete('', id) : undefined
+            }
+            onAddCard={isDone ? undefined : onAddCard}
+          />
+        </section>
+      )}
+
+      {!showKanban && (
       <section>
         {onToggleCoreScope &&
           shouldShowCoreScopePrompt(scopeGridItems) && (
@@ -468,7 +479,7 @@ export function ScopeMapView({
           />
         )}
       </section>
-      </>)}
+      )}
 
       <section>
         <ParkingLot
@@ -741,7 +752,7 @@ function ViewToggle({
     { value: 'kanban', label: 'Kanban' },
   ]
   return (
-    <div className="inline-flex self-start rounded-sm border border-border bg-muted p-0.5 text-xs">
+    <div className="inline-flex self-start rounded border border-border bg-muted p-0.5 text-xs">
       {options.map((o) => (
         <button
           key={o.value}

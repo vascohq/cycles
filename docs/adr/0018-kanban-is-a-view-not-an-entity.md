@@ -21,9 +21,9 @@ accepted
 Two distinct ways a pitch is Kanban, settled after the first build:
 
 - **Kanban mode** is **derived from the timebox** (= appetite): no timebox ⇒ board-only, with no needle/hill/scope-map and **no view switcher**. This is the pure kanban pitch — flow work with no fixed clock. Not a stored flag; it falls out of `hasTimebox`, so it needs no new field and no creation-time choice.
-- **Kanban view** is the stored `view` toggle (`scope_map` | `kanban`) — but it only applies to **Shape-Up pitches** (those *with* a timebox), letting them *also* be shown as a board. The switcher renders only there.
+- **Kanban view** is the stored `view` toggle (`scope_map` | `kanban`) — but it only applies to **Shape-Up pitches** (those *with* a timebox), letting them *also* be shown as a board. The switcher renders only there. Crucially, the view **keeps the needle/hill** — it only swaps the surface *below* them (scope grid ↔ board). Hiding the needle/hill is a property of *mode*, not *view*.
 
-So `showKanban = !hasTimebox || view === 'kanban'`. Trade-off accepted: a Shape-Up pitch that hasn't been given a timebox yet reads as Kanban mode until dates are set — benign, and consistent with "no appetite ⇒ not yet shaped."
+So the needle/hill section renders when `hasTimebox`; the board renders when `showKanban = !hasTimebox || view === 'kanban'`; the scope grid when `!showKanban`. Trade-off accepted: a Shape-Up pitch that hasn't been given a timebox yet reads as Kanban mode until dates are set — benign, and consistent with "no appetite ⇒ not yet shaped."
 
 ## Consequences
 

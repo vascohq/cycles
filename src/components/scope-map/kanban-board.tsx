@@ -253,7 +253,7 @@ function FilterDropdown({
   children: React.ReactNode
 }) {
   return (
-    <div className="inline-flex items-center rounded-sm border border-border bg-muted text-xs">
+    <div className="inline-flex items-center rounded border border-border bg-muted text-xs">
       <DropdownMenu>
         <DropdownMenuTrigger className="px-2.5 py-1 font-medium text-muted-foreground hover:text-foreground outline-none">
           {label}
@@ -299,7 +299,7 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col gap-3 rounded-xl p-3 transition-colors ${
+      className={`flex flex-col gap-3 rounded-lg p-3 transition-colors ${
         isOver ? 'bg-muted ring-1 ring-border' : 'bg-muted/70'
       }`}
     >
@@ -417,7 +417,7 @@ function KanbanCard({
       >
         {card.scopeTitle && (
           <span
-            className="self-start text-[11px] font-medium rounded-md px-2 py-0.5"
+            className="self-start text-[11px] font-medium rounded px-2 py-0.5"
             style={{
               backgroundColor: card.scopeColor,
               color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
@@ -462,7 +462,7 @@ function CardFace({
     >
       {card.scopeTitle && (
         <span
-          className="self-start text-[11px] font-medium rounded-md px-2 py-0.5"
+          className="self-start text-[11px] font-medium rounded px-2 py-0.5"
           style={{
             backgroundColor: card.scopeColor,
             color: card.scopeColor ? readableTextColor(card.scopeColor) : undefined,
