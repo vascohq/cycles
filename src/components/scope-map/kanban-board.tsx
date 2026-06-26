@@ -19,7 +19,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { Plus, X, Trash2, ChevronDown } from 'lucide-react'
+import { Plus, X, Trash2, ChevronDown, Layers, CircleUser } from 'lucide-react'
 import type { CardStatus, PitchView } from '@/cycle-liveblocks.config'
 import type { OrganizationUser } from '@/lib/users'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
@@ -174,6 +174,7 @@ export function KanbanBoard({
           {showScopeFilter && (
             <FilterDropdown
               label="Scope"
+              icon={<Layers className="h-3.5 w-3.5" />}
               value={
                 scopeFilter === UNSCOPED
                   ? 'Unscoped'
@@ -201,6 +202,7 @@ export function KanbanBoard({
           {showAssigneeFilter && (
             <FilterDropdown
               label="Assignee"
+              icon={<CircleUser className="h-3.5 w-3.5" />}
               value={assigneeOptions.find((u) => u.userId === assigneeFilter)?.name ?? null}
               onClear={() => setAssigneeFilter(null)}
             >
@@ -260,14 +262,14 @@ export function ViewToggle({
     { value: 'kanban', label: 'Kanban' },
   ]
   return (
-    <div className="inline-flex self-start rounded border border-border bg-muted p-0.5 text-xs">
+    <div className="inline-flex self-start rounded-full border border-border bg-muted/60 p-0.5 text-xs">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           aria-pressed={view === o.value}
-          className={`px-3 py-1 rounded-sm font-medium transition-colors ${
+          className={`px-3 py-1 rounded-full font-medium transition-colors ${
             view === o.value
               ? 'bg-background shadow-sm text-foreground'
               : 'text-muted-foreground hover:text-foreground'
@@ -282,21 +284,31 @@ export function ViewToggle({
 
 function FilterDropdown({
   label,
+  icon,
   value,
   onClear,
   children,
 }: {
   label: string
+  icon?: React.ReactNode
   value: string | null
   onClear: () => void
   children: React.ReactNode
 }) {
   return (
-    <div className="inline-flex items-center rounded border border-border bg-muted text-xs">
+    <div
+      className={`inline-flex items-center rounded-full border text-xs transition-colors ${
+        value ? 'border-border bg-muted/60' : 'border-border bg-background'
+      }`}
+    >
       <DropdownMenu>
-        <DropdownMenuTrigger className="px-2.5 py-1 font-medium text-muted-foreground hover:text-foreground outline-none">
-          {label}
-          {value ? <span className="text-foreground">: {value}</span> : ''}
+        <DropdownMenuTrigger
+          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium outline-none transition-colors hover:bg-muted ${
+            value ? 'text-foreground pr-2' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {icon}
+          {value ?? label}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           {children}
@@ -307,7 +319,7 @@ function FilterDropdown({
           type="button"
           onClick={onClear}
           aria-label={`Clear ${label} filter`}
-          className="pr-1.5 pl-0.5 text-muted-foreground hover:text-foreground"
+          className="flex h-full items-center pr-2 pl-0.5 text-muted-foreground hover:text-foreground"
         >
           <X className="h-3 w-3" />
         </button>
@@ -528,7 +540,7 @@ function Pill({
   trigger?: boolean
 }) {
   const cls =
-    'inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors outline-none'
+    'inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none'
   if (trigger) return <span className={cls}>{children}</span>
   return (
     <button type="button" onClick={onClick} className={cls}>
@@ -670,7 +682,7 @@ function EditCardDialog({
           )}
         </div>
 
-        <DialogFooter className="justify-between gap-2 sm:justify-between">
+        <DialogFooter className="justify-between gap-2 border-t border-border pt-3 sm:justify-between">
           {onDelete ? (
             <button
               type="button"
@@ -678,7 +690,7 @@ function EditCardDialog({
                 onDelete(card.id)
                 onClose()
               }}
-              className="flex items-center gap-1 px-2 py-1.5 text-sm rounded text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
@@ -688,7 +700,7 @@ function EditCardDialog({
           )}
           <button
             onClick={save}
-            className="px-4 py-1.5 text-sm rounded bg-foreground text-background font-medium"
+            className="px-3.5 py-1.5 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
           >
             Done
           </button>
