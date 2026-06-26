@@ -44,6 +44,24 @@ function StageBadge({ stage }: { stage: Stage }) {
   )
 }
 
+// A pitch is in Kanban mode when it has no timebox/appetite (see ADR 0018);
+// otherwise it's a Shape-Up pitch. Shown so you can tell the two apart at a
+// glance on Mission Control.
+function ModeBadge({ kanban }: { kanban: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+        kanban
+          ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+          : 'border text-muted-foreground'
+      )}
+    >
+      {kanban ? 'Kanban' : 'Shape Up'}
+    </span>
+  )
+}
+
 /**
  * The Mission Control pitch list as a timeline: pitches grouped by squad, each a
  * row whose timebox is a bar on a shared cycle-window scale (business days, ADR
@@ -119,6 +137,7 @@ export function PitchTimeline({
                       {card.emoji && <span className="mr-1">{card.emoji}</span>}
                       {card.title}
                     </span>
+                    <ModeBadge kanban={!has} />
                     <StageBadge stage={card.stage} />
                   </div>
                   <div className="relative h-2 rounded-full bg-muted/60">
