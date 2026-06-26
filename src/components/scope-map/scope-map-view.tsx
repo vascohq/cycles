@@ -41,6 +41,7 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import { SquadPicker } from '@/components/scope-map/squad-picker'
 import { usePageCelebration } from '@/components/scope-map/use-page-celebration'
 import { areAllScopesDone, pageCelebration } from '@/lib/scope-map-helpers'
+import { areAllCardsDone } from '@/lib/card-engine'
 import type { SquadLike } from '@/lib/squad-engine'
 import { usePitchDocumentTitle } from './use-pitch-document-title'
 import { STAGES } from '@/lib/stage-engine'
@@ -187,10 +188,16 @@ export function ScopeMapView({
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
   // shimmer that invites the final update during the `color` phase.
-  const celebration = pageCelebration(
-    pitch.needle?.progress ?? null,
-    areAllScopesDone(scopeGridItems)
-  )
+  // In Kanban view there's no needle/scopes — the gold parade fires when every
+  // card is done (a celebration only, never a stage change; see ADR 0018).
+  const celebration = isKanban
+    ? areAllCardsDone(scopeGridItems.flatMap((s) => s.tasks))
+      ? 'gold'
+      : 'none'
+    : pageCelebration(
+        pitch.needle?.progress ?? null,
+        areAllScopesDone(scopeGridItems)
+      )
   usePageCelebration(celebration)
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null

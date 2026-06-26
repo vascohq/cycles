@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cardStatus, groupCardsByStatus, becameDone } from './card-engine'
+import { cardStatus, groupCardsByStatus, becameDone, areAllCardsDone } from './card-engine'
 
 describe('cardStatus', () => {
   it('returns the explicit status when present', () => {
@@ -49,5 +49,19 @@ describe('becameDone', () => {
     expect(becameDone('done', 'done')).toBe(false)
     expect(becameDone('todo', 'doing')).toBe(false)
     expect(becameDone('done', 'todo')).toBe(false)
+  })
+})
+
+describe('areAllCardsDone', () => {
+  it('is true only when there is at least one card and all are done', () => {
+    expect(areAllCardsDone([{ status: 'done' }, { done: true }])).toBe(true)
+  })
+
+  it('is false when any card is not done', () => {
+    expect(areAllCardsDone([{ status: 'done' }, { status: 'doing' }])).toBe(false)
+  })
+
+  it('is false for an empty board', () => {
+    expect(areAllCardsDone([])).toBe(false)
   })
 })

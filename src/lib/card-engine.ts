@@ -21,6 +21,15 @@ export function becameDone(prev: CardStatus, next: CardStatus): boolean {
   return next === 'done' && prev !== 'done'
 }
 
+// Whether every card on a board is done — the trigger for the gold parade
+// (#174). False for an empty board (nothing to celebrate). A celebration only,
+// never a stage change.
+export function areAllCardsDone(
+  cards: { status?: CardStatus; done?: boolean }[]
+): boolean {
+  return cards.length > 0 && cards.every((c) => cardStatus(c) === 'done')
+}
+
 export type CardColumns<T> = { todo: T[]; doing: T[]; done: T[] }
 
 // Split a pitch's cards into the three Kanban columns, preserving input order
