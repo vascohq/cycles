@@ -30,7 +30,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
-import type { Stage, Zone, Needle, NeedleSnapshot, PitchView } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
 import { KanbanBoard } from '@/components/scope-map/kanban-board'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
@@ -92,6 +92,7 @@ export type ScopeMapViewProps = {
   today: string
   onStageChange?: (stage: Stage) => void
   onViewChange?: (view: PitchView) => void
+  onTaskStatusChange?: (taskId: string, status: CardStatus) => void
   onEmojiChange?: (emoji: string) => void
   onNotionUrlChange?: (url: string) => void
   onHillProgressChange?: (scopeId: string, progress: number) => void
@@ -149,6 +150,7 @@ export function ScopeMapView({
   today,
   onStageChange,
   onViewChange,
+  onTaskStatusChange,
   onEmojiChange,
   onNotionUrlChange,
   onHillProgressChange,
@@ -246,7 +248,11 @@ export function ScopeMapView({
       {isKanban && (
         <section>
           <h2 className="text-sm font-semibold tracking-tight mb-4">Board</h2>
-          <KanbanBoard scopes={scopeGridItems} orgUsers={orgUsers} />
+          <KanbanBoard
+            scopes={scopeGridItems}
+            orgUsers={orgUsers}
+            onCardStatusChange={isDone ? undefined : onTaskStatusChange}
+          />
         </section>
       )}
 

@@ -29,7 +29,7 @@ import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask, PitchView } from '@/cycle-liveblocks.config'
+import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask, PitchView, CardStatus } from '@/cycle-liveblocks.config'
 import { LiveObject } from '@liveblocks/client'
 import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -156,6 +156,19 @@ function ScopeMapWired({
       p?.set('view', view)
     },
     [pitchId]
+  )
+
+  // Move a card between Kanban columns. `done` is kept in sync with status so
+  // existing done-counts/snapshots stay correct (status is the source of truth;
+  // see ADR 0018).
+  const onTaskStatusChange = useCycleMutation(
+    ({ storage }, taskId: string, status: CardStatus) => {
+      const t = storage.get('tasks').find((x) => x.get('id') === taskId)
+      if (!t) return
+      t.set('status', status)
+      t.set('done', status === 'done')
+    },
+    []
   )
 
   const onEmojiChange = useCycleMutation(
@@ -739,6 +752,7 @@ function ScopeMapWired({
       today={today}
       onStageChange={onStageChange}
       onViewChange={onViewChange}
+      onTaskStatusChange={onTaskStatusChange}
       onEmojiChange={onEmojiChange}
       onNotionUrlChange={onNotionUrlChange}
       onHillProgressChange={onHillProgressChange}

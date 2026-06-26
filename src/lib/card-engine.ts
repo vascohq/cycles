@@ -14,6 +14,13 @@ export function cardStatus(task: { status?: CardStatus; done?: boolean }): CardS
   return task.done ? 'done' : 'todo'
 }
 
+// Whether a status change crosses a card into done — the trigger for the
+// per-card confetti pop (#173). True only on the entry edge, so re-dropping a
+// done card or moving it back out never celebrates.
+export function becameDone(prev: CardStatus, next: CardStatus): boolean {
+  return next === 'done' && prev !== 'done'
+}
+
 export type CardColumns<T> = { todo: T[]; doing: T[]; done: T[] }
 
 // Split a pitch's cards into the three Kanban columns, preserving input order

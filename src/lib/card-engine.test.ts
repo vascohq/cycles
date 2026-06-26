@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cardStatus, groupCardsByStatus } from './card-engine'
+import { cardStatus, groupCardsByStatus, becameDone } from './card-engine'
 
 describe('cardStatus', () => {
   it('returns the explicit status when present', () => {
@@ -36,5 +36,18 @@ describe('groupCardsByStatus', () => {
     expect(columns.done.map((c) => c.id)).toEqual(['old-done'])
     expect(columns.todo.map((c) => c.id)).toEqual(['old-open'])
     expect(columns.doing).toEqual([])
+  })
+})
+
+describe('becameDone', () => {
+  it('is true only when a card crosses into done', () => {
+    expect(becameDone('todo', 'done')).toBe(true)
+    expect(becameDone('doing', 'done')).toBe(true)
+  })
+
+  it('is false when it was already done or moved elsewhere', () => {
+    expect(becameDone('done', 'done')).toBe(false)
+    expect(becameDone('todo', 'doing')).toBe(false)
+    expect(becameDone('done', 'todo')).toBe(false)
   })
 })
