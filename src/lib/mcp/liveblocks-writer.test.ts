@@ -89,7 +89,10 @@ function makeMockList(items: MockItem[]) {
     push: (item: unknown) => items.push(toMockItem(item)),
     find: (fn: (item: MockItem) => boolean) => items.find(fn),
     filter: (fn: (item: MockItem) => boolean) => items.filter(fn),
-    toArray: () => items,
+    // @liveblocks/node's LiveList has NO toArray() — only map/filter/find/etc.
+    // Modeling that here is what catches writers that wrongly call .toArray()
+    // (the squad-upsert crash that .toArray() shipped to prod).
+    map: <T>(fn: (item: MockItem) => T) => items.map(fn),
     delete: (index: number) => items.splice(index, 1),
     findIndex: (fn: (item: MockItem) => boolean) => items.findIndex(fn),
     // Mirror Liveblocks LiveList.move: remove at `from`, reinsert at `to`.
@@ -284,8 +287,8 @@ describe('upsertPitch', () => {
 
     expect(result.created).toBe(true)
     expect(result.id).toBeDefined()
-    expect(storage.pitches.toArray()).toHaveLength(1)
-    const pitch = storage.pitches.toArray()[0]
+    expect([...storage.pitches]).toHaveLength(1)
+    const pitch = [...storage.pitches][0]
     expect(pitch.title).toBe('Mission Control')
     expect(pitch.needle).toBeNull()
   })
@@ -375,8 +378,8 @@ describe('upsertScope', () => {
 
     expect(result.created).toBe(true)
     expect(result.id).toBeDefined()
-    expect(storage.scopes.toArray()).toHaveLength(1)
-    const scope = storage.scopes.toArray()[0]
+    expect([...storage.scopes]).toHaveLength(1)
+    const scope = [...storage.scopes][0]
     expect(scope.title).toBe('UI Layer')
     expect(scope.pitchId).toBe('p1')
     expect(scope.tier).toBe('must')
@@ -467,7 +470,7 @@ describe('upsertScope core flag', () => {
 
     const result = await upsertScope(ROOM, { pitchId: 'p1', title: 'New', tier: 'must', core: true })
 
-    expect(storage.scopes.toArray()).toHaveLength(1)
+    expect([...storage.scopes]).toHaveLength(1)
     expect(pitch.get('core_scope_id')).toBe(result.id)
   })
 })
@@ -511,9 +514,9 @@ describe('upsertTask', () => {
     })
 
     expect(result.created).toBe(true)
-    expect(storage.tasks.toArray()).toHaveLength(1)
-    expect(storage.tasks.toArray()[0].title).toBe('Build gauge')
-    expect(storage.tasks.toArray()[0].scopeId).toBe('s1')
+    expect([...storage.tasks]).toHaveLength(1)
+    expect([...storage.tasks][0].title).toBe('Build gauge')
+    expect([...storage.tasks][0].scopeId).toBe('s1')
   })
 
   it('throws when scopeId does not exist', async () => {
@@ -572,7 +575,7 @@ describe('upsertTask', () => {
     const scope = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI' })
     const storage = setupStorage({ scopes: [scope] })
     await upsertTask(ROOM, { scopeId: 's1', title: 'New', done: false, assigneeId: 'u_marie' })
-    expect(storage.tasks.toArray()[0].get('assigneeId')).toBe('u_marie')
+    expect([...storage.tasks][0].get('assigneeId')).toBe('u_marie')
   })
 })
 
@@ -587,7 +590,7 @@ describe('moveTask', () => {
         makeMockItem({ id: 'c', scopeId: 's1', title: 'C', done: false }),
       ],
     })
-  const order = (s: ReturnType<typeof seed>) => s.tasks.toArray().map((t) => t.get('id'))
+  const order = (s: ReturnType<typeof seed>) => s.tasks.map((t) => t.get('id'))
 
   it('moves a task after a later sibling', async () => {
     const s = seed()
@@ -638,8 +641,8 @@ describe('upsertParkingItem', () => {
     })
 
     expect(result.created).toBe(true)
-    expect(storage.parkingItems.toArray()).toHaveLength(1)
-    expect(storage.parkingItems.toArray()[0].text).toBe('Check accessibility')
+    expect([...storage.parkingItems]).toHaveLength(1)
+    expect([...storage.parkingItems][0].text).toBe('Check accessibility')
   })
 
   it('leaves resolved untouched when omitted on update', async () => {
@@ -663,7 +666,7 @@ describe('deletePitch', () => {
 
     await deletePitch(ROOM, 'p1')
 
-    expect(storage.pitches.toArray()).toHaveLength(0)
+    expect([...storage.pitches]).toHaveLength(0)
   })
 
   it('throws when pitch not found', async () => {
@@ -687,9 +690,9 @@ describe('deleteScope', () => {
 
     await deleteScope(ROOM, 's1')
 
-    expect(storage.scopes.toArray()).toHaveLength(0)
-    expect(storage.tasks.toArray()).toHaveLength(1)
-    expect(storage.tasks.toArray()[0].get('id')).toBe('t3')
+    expect([...storage.scopes]).toHaveLength(0)
+    expect([...storage.tasks]).toHaveLength(1)
+    expect([...storage.tasks][0].get('id')).toBe('t3')
   })
 
   it('clears the pitch core_scope_id when the deleted scope was the core', async () => {
@@ -722,7 +725,7 @@ describe('deleteTask', () => {
 
     await deleteTask(ROOM, 't1')
 
-    expect(storage.tasks.toArray()).toHaveLength(0)
+    expect([...storage.tasks]).toHaveLength(0)
   })
 })
 
@@ -735,7 +738,7 @@ describe('deleteParkingItem', () => {
 
     await deleteParkingItem(ROOM, 'pk1')
 
-    expect(storage.parkingItems.toArray()).toHaveLength(0)
+    expect([...storage.parkingItems]).toHaveLength(0)
   })
 })
 
@@ -760,8 +763,8 @@ describe('deleteUpdate', () => {
 
     await deleteUpdate(ROOM, 'u2')
 
-    expect(storage.updates.toArray()).toHaveLength(1)
-    expect(storage.updates.toArray()[0].get('id')).toBe('u1')
+    expect([...storage.updates]).toHaveLength(1)
+    expect([...storage.updates][0].get('id')).toBe('u1')
     expect(pitch.get('needle')).toEqual({ progress: 0.3, zone: 'concerned' })
   })
 
@@ -775,7 +778,7 @@ describe('deleteUpdate', () => {
 
     await deleteUpdate(ROOM, 'u1')
 
-    expect(storage.updates.toArray()).toHaveLength(0)
+    expect([...storage.updates]).toHaveLength(0)
     expect(pitch.get('needle')).toBeNull()
   })
 
@@ -786,7 +789,7 @@ describe('deleteUpdate', () => {
     const storage = setupStorage({ pitches: [pitch], updates: [u1, u2] })
 
     await expect(deleteUpdate(ROOM, 'u1')).rejects.toThrow('latest update')
-    expect(storage.updates.toArray()).toHaveLength(2)
+    expect([...storage.updates]).toHaveLength(2)
     expect(pitch.get('needle')).toEqual({ progress: 0.7, zone: 'on_track' })
   })
 
@@ -800,7 +803,7 @@ describe('deleteUpdate', () => {
 
     await deleteUpdate(ROOM, 'u2')
 
-    expect(storage.updates.toArray().map((u) => u.get('id'))).toEqual(['u1', 'o1'])
+    expect([...storage.updates].map((u) => u.get('id'))).toEqual(['u1', 'o1'])
     expect(p1.get('needle')).toEqual({ progress: 0.2, zone: 'concerned' })
   })
 
@@ -832,8 +835,8 @@ describe('pushUpdate', () => {
 
     await pushUpdate(ROOM, mkBuilt())
 
-    expect(storage.updates.toArray()).toHaveLength(1)
-    expect(storage.updates.toArray()[0].get('id')).toBe('up_new')
+    expect([...storage.updates]).toHaveLength(1)
+    expect([...storage.updates][0].get('id')).toBe('up_new')
     expect(pitch.get('needle')).toEqual({ progress: 0.8, zone: 'on_track' })
   })
 
@@ -843,7 +846,7 @@ describe('pushUpdate', () => {
 
     await pushUpdate(ROOM, mkBuilt({ slack_attempted: true }))
 
-    expect(storage.updates.toArray()[0].get('slack_attempted')).toBe(true)
+    expect([...storage.updates][0].get('slack_attempted')).toBe(true)
   })
 })
 
@@ -870,7 +873,7 @@ describe('upsertSquad', () => {
 
     expect(result.created).toBe(true)
     expect(result.id).toBeDefined()
-    const squad = storage.squads.toArray()[0]
+    const squad = [...storage.squads][0]
     expect(squad.name).toBe('Platform')
     expect(SCOPE_PALETTE).toContain(squad.color)
   })
@@ -880,7 +883,7 @@ describe('upsertSquad', () => {
 
     await upsertSquad(ROOM, { name: 'Growth', color: '#123456' })
 
-    expect(storage.squads.toArray()[0].color).toBe('#123456')
+    expect([...storage.squads][0].color).toBe('#123456')
   })
 
   it('renames and recolors an existing squad by id', async () => {
@@ -897,7 +900,7 @@ describe('upsertSquad', () => {
     expect(result.id).toBe('sq1')
     expect(existing.get('name')).toBe('Platform Team')
     expect(existing.get('color')).toBe('#abcdef')
-    expect(storage.squads.toArray()).toHaveLength(1)
+    expect([...storage.squads]).toHaveLength(1)
   })
 
   it('throws when updating a squad with an unknown id', async () => {
@@ -936,7 +939,7 @@ describe('upsertSquad', () => {
     await expect(upsertSquad(ROOM, { name: 'platform' })).rejects.toThrow(
       /already/i
     )
-    expect(storage.squads.toArray()).toHaveLength(1)
+    expect([...storage.squads]).toHaveLength(1)
   })
 })
 
@@ -951,7 +954,7 @@ describe('deleteSquad', () => {
 
     await deleteSquad(ROOM, 'sq1')
 
-    expect(storage.squads.toArray()).toHaveLength(0)
+    expect([...storage.squads]).toHaveLength(0)
     expect(p1.get('squadId')).toBeUndefined()
     expect(p2.get('squadId')).toBe('sq2')
   })
@@ -982,12 +985,12 @@ describe('upsertPitch squad assignment', () => {
 
     await upsertPitch(ROOM, { ...pitchParams, squad: 'Platform' })
 
-    const squads = storage.squads.toArray()
+    const squads = [...storage.squads]
     expect(squads).toHaveLength(1)
     expect(squads[0].name).toBe('Platform')
     expect(SCOPE_PALETTE).toContain(squads[0].color)
 
-    const pitch = storage.pitches.toArray()[0]
+    const pitch = [...storage.pitches][0]
     expect(pitch.squadId).toBe(squads[0].id)
   })
 
@@ -997,8 +1000,8 @@ describe('upsertPitch squad assignment', () => {
 
     await upsertPitch(ROOM, { ...pitchParams, squad: '  platform ' })
 
-    expect(storage.squads.toArray()).toHaveLength(1)
-    expect(storage.pitches.toArray()[0].squadId).toBe('sq1')
+    expect([...storage.squads]).toHaveLength(1)
+    expect([...storage.pitches][0].squadId).toBe('sq1')
   })
 
   it('clears the assignment when squad is an empty string', async () => {
@@ -1020,5 +1023,30 @@ describe('upsertPitch squad assignment', () => {
     await upsertPitch(ROOM, { ...pitchParams, id: 'p1' })
 
     expect(pitch.get('squadId')).toBe('sq1')
+  })
+
+  // Rooms created before squads existed have no `squads` list in root storage;
+  // the writer must lazily create one instead of crashing on `.toArray()`.
+  it('backfills a missing squads list on an old room', async () => {
+    const pitches = makeMockList([])
+    const root: Record<string, unknown> = { pitches }
+    const mock = {
+      get: (k: string) => root[k],
+      // Mirror Liveblocks attaching an inserted LiveList: store a working list
+      // (the writer reads it back via root.get and calls .map/.push on it).
+      set: (k: string, _v: unknown) => {
+        root[k] = makeMockList([])
+      },
+    }
+    mockMutateStorage.mockImplementation(async (_roomId, callback) => {
+      await callback({ root: mock } as any)
+    })
+
+    await upsertPitch(ROOM, { ...pitchParams, squad: 'Platform' })
+
+    const squads = [...(root.squads as ReturnType<typeof makeMockList>)]
+    expect(squads).toHaveLength(1)
+    expect(squads[0].name).toBe('Platform')
+    expect([...pitches][0].squadId).toBe(squads[0].id)
   })
 })

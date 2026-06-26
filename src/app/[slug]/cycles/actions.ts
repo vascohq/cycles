@@ -95,6 +95,7 @@ export async function createCycleRoom(formData: FormData) {
         tasks: { liveblocksType: 'LiveList', data: [] },
         updates: { liveblocksType: 'LiveList', data: [] },
         parkingItems: { liveblocksType: 'LiveList', data: [] },
+        squads: { liveblocksType: 'LiveList', data: [] },
       },
     })
   }
