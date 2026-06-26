@@ -19,10 +19,12 @@ export function TriageTray({
   tasks,
   scopes,
   onAssignScope,
+  onOpen,
 }: {
   tasks: TriageTask[]
   scopes: { id: string; title: string; color: string }[]
   onAssignScope: (taskId: string, scopeId: string) => void
+  onOpen?: (taskId: string) => void
 }) {
   // Self-hide when there's nothing to triage.
   if (tasks.length === 0) return null
@@ -42,7 +44,17 @@ export function TriageTray({
             key={t.id}
             className="flex items-center gap-2 rounded-md border bg-background px-3 py-2"
           >
-            <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+            {onOpen ? (
+              <button
+                type="button"
+                onClick={() => onOpen(t.id)}
+                className="min-w-0 flex-1 truncate text-left text-sm hover:underline"
+              >
+                {t.title}
+              </button>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 disabled={scopes.length === 0}

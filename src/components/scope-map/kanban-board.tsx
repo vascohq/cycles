@@ -649,7 +649,7 @@ function ScopePill({
   )
 }
 
-function EditCardDialog({
+export function EditCardDialog({
   card,
   orgUsers,
   scopeOptions,

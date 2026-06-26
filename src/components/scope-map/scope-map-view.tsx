@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
-import { KanbanBoard, ViewToggle, CreateCardDialog, type BoardTask } from '@/components/scope-map/kanban-board'
+import { KanbanBoard, ViewToggle, CreateCardDialog, EditCardDialog, type BoardTask } from '@/components/scope-map/kanban-board'
 import { TriageTray } from '@/components/scope-map/triage-tray'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
@@ -231,6 +231,7 @@ export function ScopeMapView({
   const [moveNeedleOpen, setMoveNeedleOpen] = useState(false)
   const [addScopeOpen, setAddScopeOpen] = useState(false)
   const [addTaskOpen, setAddTaskOpen] = useState(false)
+  const [editingTriageId, setEditingTriageId] = useState<string | null>(null)
   const [openScopeId, setOpenScopeId] = useState<string | null>(null)
   const [deletingScopeId, setDeletingScopeId] = useState<string | null>(null)
   const timebox = computeTimebox(pitch.timebox_start, pitch.timebox_end, today)
@@ -432,6 +433,7 @@ export function ScopeMapView({
               tasks={unscopedTasks.map((t) => ({ id: t.id, title: t.title }))}
               scopes={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
               onAssignScope={onTaskScopeChange}
+              onOpen={isDone ? undefined : setEditingTriageId}
             />
           </div>
         )}
@@ -520,6 +522,24 @@ export function ScopeMapView({
           onClose={() => setAddTaskOpen(false)}
         />
       )}
+
+      {(() => {
+        const card = unscopedTasks.find((t) => t.id === editingTriageId)
+        if (!card) return null
+        return (
+          <EditCardDialog
+            card={card}
+            orgUsers={orgUsers}
+            scopeOptions={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
+            onClose={() => setEditingTriageId(null)}
+            onEdit={onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined}
+            onDelete={onTaskDelete ? (id) => onTaskDelete('', id) : undefined}
+            onAssign={onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined}
+            onStatusChange={onTaskStatusChange}
+            onScopeChange={onTaskScopeChange}
+          />
+        )
+      })()}
 
       <section>
         <ParkingLot
