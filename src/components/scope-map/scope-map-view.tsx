@@ -246,7 +246,7 @@ export function ScopeMapView({
       {isKanban && (
         <section>
           <h2 className="text-sm font-semibold tracking-tight mb-4">Board</h2>
-          <KanbanBoard scopes={scopeGridItems} />
+          <KanbanBoard scopes={scopeGridItems} orgUsers={orgUsers} />
         </section>
       )}
 
