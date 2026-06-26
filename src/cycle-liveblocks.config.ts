@@ -100,6 +100,10 @@ export type PitchUpdate = {
   narrative: string
   needle_snapshot: NeedleSnapshot
   hill_snapshot: HillSnapshot[]
+  // Every card's status + title frozen at post time, for a Kanban update's
+  // "what got done" diff (completedSince — see ADR 0018). Additive/optional;
+  // needle & hill become optional when the Kanban posting flow is built.
+  card_snapshot?: { taskId: string; status: CardStatus; title: string }[]
   task_snapshot: { scopeId: string; done: number; total: number }[]
   timebox_snapshot: { daysLeft: number; currentWeek: number; totalWeeks: number }
   slack_attempted?: boolean
