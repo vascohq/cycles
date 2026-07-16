@@ -11,8 +11,12 @@ A time-boxed period of work containing pitches. Either a build cycle (6 weeks) o
 _Avoid_: Sprint, iteration, board
 
 **Cycle phase**:
-A cycle's lifecycle state — `upcoming`, `current`, or `past` — **derived purely from its dates** against today (the same `before`/`during`/`after` the cycle window already computes), never a stored field. There is no "active" flag and no "archive" action: a cycle becomes past by ending, not by a human toggling it. "Archiving" is only a _visual_ treatment (a past cycle folds/dims in the Cycles list), not a state change. Default landing resolves to the `current` cycle (see [ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)).
-_Avoid_: Archive, archived, active/inactive, status, closed
+A cycle's lifecycle state — `upcoming`, `current`, or `past` — **derived purely from its dates** against today (the same `before`/`during`/`after` the cycle window already computes), never a stored field. There is no "active" flag: a cycle becomes past by ending, not by a human toggling it. A past cycle simply _folds_ (collapses/dims) in the Cycles list — that folding is presentation, not state. Default landing resolves to the `current` cycle (see [ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). Distinct from **Archive**, which is an explicit stored override orthogonal to phase.
+_Avoid_: active/inactive, status, closed. Don't conflate `past` (date-derived) with **Archived** (a deliberate action).
+
+**Archive**:
+An explicit, **reversible** action that removes a cycle — and everything in it (pitches, scopes, tasks, updates, squads) — from the Cycles list and from default-landing resolution, **without deleting anything**. A stored flag independent of the date-derived **Cycle phase**: any cycle can be archived (mistake, experiment) or unarchived regardless of whether it's upcoming/current/past. Archived cycles collect in their own collapsed section and can be **unarchived** to return them to their date-derived group. A cycle is never permanently deleted — archiving is the only way to remove one (see ADR 0019). Contrast with the _visual folding_ of past cycles, which is not archiving.
+_Avoid_: Delete/remove (for cycles — archive is reversible, delete is not), hide (implies purely visual), trash
 
 **Cooldown**:
 A short cycle (typically 2 weeks) between build cycles for small fixes and exploration. Pitches in a cooldown skip to the building stage.
