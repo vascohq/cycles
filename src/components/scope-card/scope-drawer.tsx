@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useLayoutEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -305,6 +305,27 @@ function ScopeDrawerBody({
   )
 }
 
+// Inline editors commit on blur, but dismissing the drawer (backdrop click)
+// unmounts the input before its blur fires. Flush a pending, changed edit on
+// unmount too. A ref lets the cleanup read live values without re-subscribing.
+function useCommitOnUnmount(
+  editing: boolean,
+  draft: string,
+  original: string,
+  commit: (value: string) => void
+) {
+  const pending = useRef({ editing, draft, original, commit })
+  pending.current = { editing, draft, original, commit }
+  useEffect(
+    () => () => {
+      const p = pending.current
+      const trimmed = p.draft.trim()
+      if (p.editing && trimmed && trimmed !== p.original) p.commit(trimmed)
+    },
+    []
+  )
+}
+
 // Click-to-edit text. Enter saves (Shift+Enter for a newline when multiline),
 // blur saves, Esc reverts. Empty input reverts to the previous value.
 function EditableText({
@@ -336,6 +357,8 @@ function EditableText({
     if (trimmed && trimmed !== value) onSave?.(trimmed)
     setEditing(false)
   }
+
+  useCommitOnUnmount(editing, draft, value, (v) => onSave?.(v))
 
   if (editing && onSave) {
     const shared = {
@@ -627,6 +650,8 @@ function TaskRow({
     if (trimmed && trimmed !== task.title) onEdit?.(trimmed)
     setEditing(false)
   }
+
+  useCommitOnUnmount(editing, value, task.title, (v) => onEdit?.(v))
 
   return (
     <div
