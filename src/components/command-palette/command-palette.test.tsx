@@ -41,11 +41,13 @@ const CYCLES: PaletteCycleItem[] = [
     type: 'build',
     start_date: '2026-09-01',
     end_date: '2026-10-13',
+    archived: false,
   },
   {
     slug: 'cooldown-1',
     title: 'Summer Cooldown',
     type: 'cooldown',
+    archived: false,
     start_date: '',
     end_date: '',
   },

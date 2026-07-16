@@ -36,6 +36,8 @@ export type MissionControlViewProps = {
   headerActions?: React.ReactNode
   /** Controls rendered on the breadcrumb row (e.g. the cycle stepper). */
   cycleNav?: React.ReactNode
+  /** Optional banner rendered above the header (e.g. the archived notice). */
+  banner?: React.ReactNode
 }
 
 export function MissionControlView({
@@ -51,6 +53,7 @@ export function MissionControlView({
   cycleBands,
   headerActions,
   cycleNav,
+  banner,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
@@ -61,6 +64,7 @@ export function MissionControlView({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
+      {banner}
       <header className="flex flex-col gap-4">
         <div className="flex items-end justify-between gap-3">
           <h1 className="flex min-w-0 items-center gap-2 truncate text-3xl font-display">

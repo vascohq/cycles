@@ -12,8 +12,9 @@ import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MissionControlView } from '@/components/mission-control'
 import { EditCycleButton } from './edit-cycle-dialog'
+import { setCycleArchived } from '@/app/[slug]/cycles/actions'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { derivePitchCards, groupBySquad } from '@/lib/mission-control-helpers'
@@ -108,6 +109,7 @@ function MissionControlWired({
     type: root.cycle.type,
     start_date: root.cycle.start_date,
     end_date: root.cycle.end_date,
+    archived: root.cycle.archived ?? false,
   }))
 
   const onCreatePitch = useCycleMutation(
@@ -172,6 +174,7 @@ function MissionControlWired({
           nextTitle={nextCycleTitle}
         />
       }
+      banner={cycle.archived ? <ArchivedBanner cycleSlug={cycleSlug} /> : null}
       headerActions={
         <EditCycleButton
           cycleSlug={cycleSlug}
@@ -179,9 +182,28 @@ function MissionControlWired({
           type={cycle.type}
           start_date={cycle.start_date}
           end_date={cycle.end_date}
+          archived={cycle.archived}
         />
       }
     />
+  )
+}
+
+/** Shown when the open cycle is archived — it's reachable by URL but hidden
+ * from the list/landing (ADR 0019). Offers a one-click unarchive. */
+function ArchivedBanner({ cycleSlug }: { cycleSlug: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-dashed bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
+      <Archive className="h-4 w-4 shrink-0" />
+      <span>This cycle is archived — hidden from the Cycles list.</span>
+      <button
+        type="button"
+        onClick={() => setCycleArchived(cycleSlug, false)}
+        className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+      >
+        Unarchive
+      </button>
+    </div>
   )
 }
 

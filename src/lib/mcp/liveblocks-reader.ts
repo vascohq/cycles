@@ -16,6 +16,7 @@ export type CycleSummary = {
   type: string
   start_date: string
   end_date: string
+  archived: boolean
 }
 
 export type StorageJson = {
@@ -40,6 +41,7 @@ export async function listCycleRooms(orgId: string): Promise<CycleSummary[]> {
     type: String(room.metadata.type ?? ''),
     start_date: String(room.metadata.start_date ?? ''),
     end_date: String(room.metadata.end_date ?? ''),
+    archived: room.metadata.archived === 'true',
   }))
 }
 

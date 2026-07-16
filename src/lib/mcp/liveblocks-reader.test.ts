@@ -37,6 +37,7 @@ describe('listCycleRooms', () => {
             type: 'cooldown',
             start_date: '2026-05-16',
             end_date: '2026-05-30',
+            archived: 'true',
           },
         },
       ] as any,
@@ -49,9 +50,11 @@ describe('listCycleRooms', () => {
     expect(mockGetRooms).toHaveBeenCalledWith({
       query: 'roomId^"org_123:cycle:"',
     })
+    // archived defaults to false when the metadata key is absent, and parses
+    // === 'true' when present.
     expect(rooms).toEqual([
-      { slug: '2026-q2-build', name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15' },
-      { slug: 'cooldown-1', name: 'Cooldown 1', type: 'cooldown', start_date: '2026-05-16', end_date: '2026-05-30' },
+      { slug: '2026-q2-build', name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15', archived: false },
+      { slug: 'cooldown-1', name: 'Cooldown 1', type: 'cooldown', start_date: '2026-05-16', end_date: '2026-05-30', archived: true },
     ])
   })
 

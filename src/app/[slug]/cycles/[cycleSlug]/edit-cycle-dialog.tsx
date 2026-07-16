@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MoreHorizontal, Pencil } from 'lucide-react'
+import { MoreHorizontal, Pencil, Archive, ArchiveRestore } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
@@ -25,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { updateCycleRoom } from '@/app/[slug]/cycles/actions'
+import { updateCycleRoom, setCycleArchived } from '@/app/[slug]/cycles/actions'
 
 export type EditCycleButtonProps = {
   cycleSlug: string
@@ -33,6 +34,7 @@ export type EditCycleButtonProps = {
   type: 'build' | 'cooldown'
   start_date: string
   end_date: string
+  archived?: boolean
 }
 
 export function EditCycleButton({
@@ -41,8 +43,10 @@ export function EditCycleButton({
   type,
   start_date,
   end_date,
+  archived = false,
 }: EditCycleButtonProps) {
   const [open, setOpen] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(false)
 
   async function handleSubmit(formData: FormData) {
     await updateCycleRoom(cycleSlug, formData)
@@ -51,7 +55,7 @@ export function EditCycleButton({
 
   return (
     <>
-      {/* Same "..." overflow menu as the scope box, even with one action. */}
+      {/* Same "..." overflow menu as the scope box. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -67,8 +71,45 @@ export function EditCycleButton({
             <Pencil className="w-3.5 h-3.5 mr-2" />
             Edit cycle
           </DropdownMenuItem>
+          {archived ? (
+            <DropdownMenuItem onClick={() => setCycleArchived(cycleSlug, false)}>
+              <ArchiveRestore className="w-3.5 h-3.5 mr-2" />
+              Unarchive cycle
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => setConfirmArchive(true)}>
+              <Archive className="w-3.5 h-3.5 mr-2" />
+              Archive cycle
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Reversible, so a plain confirm — no destructive-red styling (ADR 0019). */}
+      <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive this cycle?</DialogTitle>
+            <DialogDescription>
+              It leaves the Cycles list and stops being a landing target. Nothing
+              is deleted — you can unarchive it anytime from the Cycles list.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmArchive(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                await setCycleArchived(cycleSlug, true)
+                setConfirmArchive(false)
+              }}
+            >
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
         <form className="flex flex-col gap-4" action={handleSubmit}>

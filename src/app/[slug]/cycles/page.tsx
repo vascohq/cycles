@@ -1,5 +1,6 @@
 import { CreateCycleDialog } from '@/app/[slug]/cycles/create-cycle-dialog'
 import { CreateCycleForm } from '@/app/[slug]/cycles/create-cycle-form'
+import { EditCycleButton } from '@/app/[slug]/cycles/[cycleSlug]/edit-cycle-dialog'
 import { TimeboxTape } from '@/components/timebox'
 import {
   groupCycles,
@@ -57,6 +58,7 @@ export default async function CyclesPage({
     type: room.metadata.type === 'cooldown' ? 'cooldown' : 'build',
     start_date: room.metadata.start_date ? String(room.metadata.start_date) : '',
     end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
+    archived: room.metadata.archived === 'true',
   }))
 
   const groups = groupCycles(summaries, today)
@@ -164,6 +166,25 @@ export default async function CyclesPage({
               </ul>
             </section>
           )}
+
+          {groups.archived.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer list-none text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors">
+                Show {groups.archived.length} archived{' '}
+                {groups.archived.length === 1 ? 'cycle' : 'cycles'}
+              </summary>
+              <ul className="mt-3 border rounded-lg divide-y opacity-60">
+                {groups.archived.map((c) => (
+                  <CycleRow
+                    key={c.slug}
+                    cycle={c}
+                    href={`/${urlSlug}/cycles/${c.slug}`}
+                    detail="Archived"
+                  />
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
     </main>
@@ -225,10 +246,10 @@ function CycleRow({
   detail: string
 }) {
   return (
-    <li>
+    <li className="flex items-center">
       <Link
         href={href}
-        className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
+        className="flex flex-1 items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
       >
         <span className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">{cycle.title}</span>
@@ -240,6 +261,25 @@ function CycleRow({
           {detail}
         </span>
       </Link>
+      {/* Actions sit outside the Link so clicking "…" never navigates. */}
+      <div className="pr-2">
+        <CycleActions cycle={cycle} />
+      </div>
     </li>
+  )
+}
+
+// The per-row/-card "…" menu: Edit + Archive/Unarchive. A thin wrapper over the
+// shared EditCycleButton so the list and the cycle page use one control.
+function CycleActions({ cycle }: { cycle: CycleSummary }) {
+  return (
+    <EditCycleButton
+      cycleSlug={cycle.slug}
+      name={cycle.title}
+      type={cycle.type}
+      start_date={cycle.start_date}
+      end_date={cycle.end_date}
+      archived={cycle.archived}
+    />
   )
 }

@@ -94,7 +94,7 @@ type CycleFields = {
 // metadata (read by list_cycles) — so we write both to keep them in sync.
 export async function updateCycle(
   roomId: string,
-  params: Partial<CycleFields>
+  params: Partial<CycleFields> & { archived?: boolean }
 ): Promise<{ updated: boolean; cycle: CycleFields }> {
   if (!(await roomExists(roomId))) {
     throw new Error(`Cycle not found: "${roomId}"`)
@@ -110,6 +110,9 @@ export async function updateCycle(
     if (params.type !== undefined) c.set('type', params.type)
     if (params.start_date !== undefined) c.set('start_date', params.start_date)
     if (params.end_date !== undefined) c.set('end_date', params.end_date)
+    // Archive is a stored boolean, orthogonal to the date-derived phase (ADR
+    // 0019). Guarded like every other field so omitting it leaves it unchanged.
+    if (params.archived !== undefined) c.set('archived', params.archived)
     cycle = {
       name: c.get('name'),
       type: c.get('type'),
@@ -125,6 +128,9 @@ export async function updateCycle(
   if (params.type !== undefined) metadata.type = params.type
   if (params.start_date !== undefined) metadata.start_date = params.start_date
   if (params.end_date !== undefined) metadata.end_date = params.end_date
+  // Metadata is string-valued (read cheaply by the list/landing without opening
+  // the room), so archived rides as 'true'/'false'; the reader parses === 'true'.
+  if (params.archived !== undefined) metadata.archived = String(params.archived)
   if (Object.keys(metadata).length > 0) {
     await liveblocks.updateRoom(roomId, { metadata })
   }

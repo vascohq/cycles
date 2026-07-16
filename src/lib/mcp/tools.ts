@@ -130,6 +130,22 @@ export async function handleUpdateCycle(
   }
 }
 
+// Reversible archive (ADR 0019): flips the stored `archived` flag via the same
+// cycle writer. Not a delete — nothing is destroyed, and it round-trips.
+export async function handleArchiveCycle(
+  orgId: string,
+  cycleSlug: string,
+  archived: boolean
+): Promise<ToolResult> {
+  const roomId = `${orgId}:cycle:${cycleSlug}`
+  try {
+    await updateCycle(roomId, { archived })
+    return jsonResult({ updated: true, slug: cycleSlug, archived })
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
 export async function handleListCycles(orgId: string): Promise<ToolResult> {
   const rooms = await listCycleRooms(orgId)
   return jsonResult(rooms)
@@ -439,6 +455,9 @@ const WRITE_TOOLS: Record<
   delete_task: (roomId, p) => deleteTask(roomId, p.id).then(() => undefined),
   delete_parking_item: (roomId, p) => deleteParkingItem(roomId, p.id).then(() => undefined),
   undo_update: (roomId, p) => deleteUpdate(roomId, p.id).then(() => undefined),
+  // Reversible removal (ADR 0019) — routed through the cycle writer, not a delete.
+  archive_cycle: (roomId) => updateCycle(roomId, { archived: true }).then(() => undefined),
+  unarchive_cycle: (roomId) => updateCycle(roomId, { archived: false }).then(() => undefined),
 }
 
 export async function handleBatch(
@@ -618,6 +637,54 @@ export function registerCyclesTools(server: any): void {
       if (!resolved.ok) return errorResult(resolved.error)
       const parsed = parseSlugPath(slug_path)
       return handleUpdateCycle(resolved.org.id, parsed.cycleSlug, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'archive_cycle',
+    'Archive a cycle, addressed by slug: remove it from the Cycles list and from default-landing resolution WITHOUT deleting anything. Reversible — call unarchive_cycle to restore it. Use this to get rid of a cycle created by mistake; there is deliberately no way to permanently delete a cycle (it would take all its pitches, scopes, tasks and updates with it). See ADR 0019.',
+    { ...orgArg, ...slugPathArg },
+    {
+      title: 'Archive cycle',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      return handleArchiveCycle(resolved.org.id, parsed.cycleSlug, true)
+    }
+  )
+
+  defineTool(
+    server,
+    'unarchive_cycle',
+    'Unarchive a cycle, addressed by slug: restore a previously archived cycle to the Cycles list and to landing/stepper resolution. Its date-derived phase (upcoming/current/past) is unchanged — it simply reappears where its dates place it. See ADR 0019.',
+    { ...orgArg, ...slugPathArg },
+    {
+      title: 'Unarchive cycle',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      return handleArchiveCycle(resolved.org.id, parsed.cycleSlug, false)
     }
   )
 
@@ -1255,7 +1322,7 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       operations: z.array(
         z.object({
-          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update'),
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update, archive_cycle, unarchive_cycle'),
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),
