@@ -846,13 +846,9 @@ function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
   const [active, setActive] = useState(false)
 
   function handleSubmit() {
-    // One task per non-empty line, so a paste of many lines adds many tasks.
-    const titles = value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-    if (titles.length === 0) return
-    titles.forEach((title) => onAddTask(title))
+    const trimmed = value.trim()
+    if (!trimmed) return
+    onAddTask(trimmed)
     setValue('')
   }
 
@@ -870,15 +866,11 @@ function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
   }
 
   return (
-    <textarea
+    <input
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
-        // Enter submits; Shift+Enter adds a newline (one task per line).
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault()
-          handleSubmit()
-        }
+        if (e.key === 'Enter') handleSubmit()
         if (e.key === 'Escape') {
           setValue('')
           setActive(false)
@@ -888,9 +880,8 @@ function AddTaskInput({ onAddTask }: { onAddTask: (title: string) => void }) {
         handleSubmit()
         setActive(false)
       }}
-      rows={1}
       placeholder="Task title…"
-      className="w-full resize-none text-sm bg-transparent border-b border-foreground/10 focus:border-foreground/30 py-1 outline-none placeholder:text-muted-foreground/40 mt-1"
+      className="w-full text-sm bg-transparent border-b border-foreground/10 focus:border-foreground/30 py-1 outline-none placeholder:text-muted-foreground/40 mt-1"
       autoFocus
     />
   )

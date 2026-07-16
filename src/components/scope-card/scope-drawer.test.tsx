@@ -135,30 +135,6 @@ describe('task management in the drawer', () => {
   })
 })
 
-describe('batch task creation', () => {
-  it('creates one task per non-empty line, in order, skipping blanks', () => {
-    const onAddTask = vi.fn()
-    renderDrawer({ onAddTask })
-    fireEvent.click(screen.getByRole('button', { name: /add task/i }))
-    const input = screen.getByPlaceholderText('Task title…')
-    fireEvent.change(input, {
-      target: { value: 'First task\n\n  Second task  \n' },
-    })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onAddTask.mock.calls).toEqual([['First task'], ['Second task']])
-  })
-
-  it('inserts a newline instead of submitting on Shift+Enter', () => {
-    const onAddTask = vi.fn()
-    renderDrawer({ onAddTask })
-    fireEvent.click(screen.getByRole('button', { name: /add task/i }))
-    const input = screen.getByPlaceholderText('Task title…')
-    fireEvent.change(input, { target: { value: 'First task' } })
-    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
-    expect(onAddTask).not.toHaveBeenCalled()
-  })
-})
-
 describe('readOnly drawer', () => {
   it('does not save edits or expose task controls', () => {
     const onEditScope = vi.fn()
