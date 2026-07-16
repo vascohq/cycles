@@ -27,6 +27,11 @@ vi.mock('./liveblocks-writer', () => ({
   markSlackDelivered: vi.fn(),
   upsertSquad: vi.fn(),
   deleteSquad: vi.fn(),
+  // Batch opens one mutateStorage and runs the callback with a shared root;
+  // the mock just invokes it with a dummy root so the ops (mocked above) run.
+  openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
+    await fn({})
+  }),
 }))
 
 vi.mock('@/lib/slack-delivery', () => ({
@@ -519,8 +524,9 @@ describe('handleBatch', () => {
     const data = JSON.parse(result.content[0].text) as any
     expect(data.results[0]).toMatchObject({ ok: true, tool: 'upsert_squad', id: 'sq1' })
     expect(data.results[1]).toMatchObject({ ok: true, tool: 'delete_squad' })
-    expect(mockUpsertSquad).toHaveBeenCalledWith('org_test:cycle:q2-build', { name: 'Platform' })
-    expect(mockDeleteSquad).toHaveBeenCalledWith('org_test:cycle:q2-build', 'sq2')
+    // Third arg is the shared batch root threaded by handleBatch.
+    expect(mockUpsertSquad).toHaveBeenCalledWith('org_test:cycle:q2-build', { name: 'Platform' }, expect.anything())
+    expect(mockDeleteSquad).toHaveBeenCalledWith('org_test:cycle:q2-build', 'sq2', expect.anything())
   })
 
   it('returns partial failure — successful ops persist, failed ones return errors', async () => {
@@ -571,7 +577,7 @@ describe('handleBatch', () => {
     ])
 
     const data = JSON.parse(result.content[0].text) as any
-    expect(mockDeleteUpdate).toHaveBeenNthCalledWith(1, `${ORG_ID}:cycle:q2-build`, 'u2')
+    expect(mockDeleteUpdate).toHaveBeenNthCalledWith(1, `${ORG_ID}:cycle:q2-build`, 'u2', expect.anything())
     expect(data.results[0].ok).toBe(true)
     expect(data.results[1].ok).toBe(false)
     expect(data.results[1].error).toContain('latest update')
