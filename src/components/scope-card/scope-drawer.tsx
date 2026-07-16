@@ -315,7 +315,9 @@ function useCommitOnUnmount(
   commit: (value: string) => void
 ) {
   const pending = useRef({ editing, draft, original, commit })
-  pending.current = { editing, draft, original, commit }
+  useEffect(() => {
+    pending.current = { editing, draft, original, commit }
+  })
   useEffect(
     () => () => {
       const p = pending.current
