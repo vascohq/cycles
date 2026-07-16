@@ -65,6 +65,16 @@ describe('scope field editing', () => {
     expect(onEditScope).not.toHaveBeenCalled()
   })
 
+  it('commits an in-progress scope rename when the drawer is dismissed without Enter', () => {
+    const onEditScope = vi.fn()
+    const { unmount } = renderDrawer({ onEditScope })
+    fireEvent.click(screen.getByText('Auth flow'))
+    const input = screen.getByDisplayValue('Auth flow')
+    fireEvent.change(input, { target: { value: 'Auth & SSO' } })
+    unmount()
+    expect(onEditScope).toHaveBeenCalledWith({ title: 'Auth & SSO' })
+  })
+
   it('changes tier immediately when a tier is picked', () => {
     const onEditScope = vi.fn()
     renderDrawer({ onEditScope })
@@ -100,6 +110,31 @@ describe('task management in the drawer', () => {
     fireEvent.change(input, { target: { value: 'Login screen' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onTaskEdit).toHaveBeenCalledWith('t1', 'Login screen')
+  })
+
+  it('commits an in-progress task rename when the drawer is dismissed without Enter', () => {
+    const onTaskEdit = vi.fn()
+    const { unmount } = renderDrawer({ onTaskEdit })
+    showAllTasks()
+    fireEvent.click(screen.getByText('Login page'))
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: 'Login screen' } })
+    // No Enter, no blur — clicking the backdrop dismisses the drawer, which
+    // unmounts the editor. The pending edit must still commit.
+    unmount()
+    expect(onTaskEdit).toHaveBeenCalledWith('t1', 'Login screen')
+  })
+
+  it('discards a task rename on Escape even if the drawer is then dismissed', () => {
+    const onTaskEdit = vi.fn()
+    const { unmount } = renderDrawer({ onTaskEdit })
+    showAllTasks()
+    fireEvent.click(screen.getByText('Login page'))
+    const input = screen.getByDisplayValue('Login page')
+    fireEvent.change(input, { target: { value: 'Login screen' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    unmount()
+    expect(onTaskEdit).not.toHaveBeenCalled()
   })
 
   it('inserts a newline instead of saving when Shift+Enter is pressed during a task rename', () => {
