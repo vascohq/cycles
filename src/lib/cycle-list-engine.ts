@@ -1,10 +1,12 @@
 // Pure, date-driven engine for the Cycles list and default landing. A cycle's
 // lifecycle phase is DERIVED from its dates against the team's "today" (ISO date
-// string, resolved in the team timezone — see team-time.ts), never stored. There
-// is no "archived" flag; a past cycle simply ends (ADR 0015). Phase is a plain
-// calendar-string compare — ISO YYYY-MM-DD sorts lexically — independent of the
-// business-day math in timebox-engine, so an undated cycle is caught explicitly
-// rather than masquerading as "upcoming".
+// string, resolved in the team timezone — see team-time.ts), never stored (ADR
+// 0015). Phase is a plain calendar-string compare — ISO YYYY-MM-DD sorts
+// lexically — independent of the business-day math in timebox-engine, so an
+// undated cycle is caught explicitly rather than masquerading as "upcoming".
+// Archiving is a separate, orthogonal axis: an explicit `archived` override
+// (ADR 0019) that removes a cycle from grouping/landing/stepping regardless of
+// its date-derived phase.
 
 export type CyclePhase = 'upcoming' | 'current' | 'past' | 'undated'
 
@@ -32,7 +34,9 @@ function isIsoDate(value: string): boolean {
 export function cyclePhase(cycle: CycleSummary, today: string): CyclePhase {
   if (!isIsoDate(cycle.start_date) || !isIsoDate(cycle.end_date)) return 'undated'
   if (today < cycle.start_date) return 'upcoming'
-  if (today >= cycle.end_date) return 'past'
+  // end_date is the inclusive last working day (ADR 0013), so a cycle is still
+  // current ON its end date — past only starts the day after.
+  if (today > cycle.end_date) return 'past'
   return 'current'
 }
 

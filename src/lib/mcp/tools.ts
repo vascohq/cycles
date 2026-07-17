@@ -31,6 +31,7 @@ import {
   markSlackDelivered,
   upsertSquad,
   deleteSquad,
+  openBatch,
 } from './liveblocks-writer'
 import { getOrganizationUsers, resolveAssigneeRef } from '@/lib/users'
 
@@ -440,24 +441,27 @@ export async function handlePostUpdate(
 type BatchOp = { tool: string; params: Record<string, unknown> }
 type BatchResult = { ok: true; tool: string; id?: string; created?: boolean } | { ok: false; tool: string; error: string }
 
+// Each handler takes the shared batch `root` (from openBatch's single
+// mutateStorage) as its last arg, so every op in a batch mutates one loaded
+// storage doc instead of opening its own load/flush.
 const WRITE_TOOLS: Record<
   string,
-  (roomId: string, params: any) => Promise<{ created: boolean; id: string } | void>
+  (roomId: string, params: any, root: any) => Promise<{ created: boolean; id: string } | void>
 > = {
   upsert_pitch: upsertPitch,
   upsert_scope: upsertScope,
   upsert_task: upsertTask,
   upsert_parking_item: upsertParkingItem,
   upsert_squad: upsertSquad,
-  delete_squad: (roomId, p) => deleteSquad(roomId, p.id).then(() => undefined),
-  delete_pitch: (roomId, p) => deletePitch(roomId, p.id).then(() => undefined),
-  delete_scope: (roomId, p) => deleteScope(roomId, p.id).then(() => undefined),
-  delete_task: (roomId, p) => deleteTask(roomId, p.id).then(() => undefined),
-  delete_parking_item: (roomId, p) => deleteParkingItem(roomId, p.id).then(() => undefined),
-  undo_update: (roomId, p) => deleteUpdate(roomId, p.id).then(() => undefined),
-  // Reversible removal (ADR 0019) — routed through the cycle writer, not a delete.
-  archive_cycle: (roomId) => updateCycle(roomId, { archived: true }).then(() => undefined),
-  unarchive_cycle: (roomId) => updateCycle(roomId, { archived: false }).then(() => undefined),
+  delete_squad: (roomId, p, root) => deleteSquad(roomId, p.id, root).then(() => undefined),
+  delete_pitch: (roomId, p, root) => deletePitch(roomId, p.id, root).then(() => undefined),
+  delete_scope: (roomId, p, root) => deleteScope(roomId, p.id, root).then(() => undefined),
+  delete_task: (roomId, p, root) => deleteTask(roomId, p.id, root).then(() => undefined),
+  delete_parking_item: (roomId, p, root) => deleteParkingItem(roomId, p.id, root).then(() => undefined),
+  undo_update: (roomId, p, root) => deleteUpdate(roomId, p.id, root).then(() => undefined),
+  // archive_cycle / unarchive_cycle are deliberately NOT here: archiving also
+  // writes room metadata (updateRoom), which can't ride the coalesced storage
+  // batch (ADR 0019). They're standalone tools only.
 }
 
 export async function handleBatch(
@@ -468,23 +472,28 @@ export async function handleBatch(
   const roomId = `${orgId}:cycle:${cycleSlug}`
   const results: BatchResult[] = []
 
-  for (const op of operations) {
-    const handler = WRITE_TOOLS[op.tool]
-    if (!handler) {
-      results.push({ ok: false, tool: op.tool, error: `Unknown tool: "${op.tool}"` })
-      continue
-    }
-    try {
-      const result = await handler(roomId, op.params)
-      if (result) {
-        results.push({ ok: true, tool: op.tool, id: result.id, created: result.created })
-      } else {
-        results.push({ ok: true, tool: op.tool })
+  // One mutateStorage for the whole batch: every op runs against the same loaded
+  // root, in order, so later ops see earlier ones (create scope → create task)
+  // and we pay a single load/flush instead of one per op.
+  await openBatch(roomId, async (root) => {
+    for (const op of operations) {
+      const handler = WRITE_TOOLS[op.tool]
+      if (!handler) {
+        results.push({ ok: false, tool: op.tool, error: `Unknown tool: "${op.tool}"` })
+        continue
       }
-    } catch (err) {
-      results.push({ ok: false, tool: op.tool, error: (err as Error).message })
+      try {
+        const result = await handler(roomId, op.params, root)
+        if (result) {
+          results.push({ ok: true, tool: op.tool, id: result.id, created: result.created })
+        } else {
+          results.push({ ok: true, tool: op.tool })
+        }
+      } catch (err) {
+        results.push({ ok: false, tool: op.tool, error: (err as Error).message })
+      }
     }
-  }
+  })
 
   return jsonResult({ results })
 }
@@ -1322,7 +1331,7 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       operations: z.array(
         z.object({
-          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update, archive_cycle, unarchive_cycle'),
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update'),
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),

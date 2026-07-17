@@ -18,6 +18,7 @@ import {
   upsertPitch,
   upsertScope,
   upsertTask,
+  openBatch,
   moveTask,
   upsertParkingItem,
   deletePitch,
@@ -609,6 +610,44 @@ describe('upsertTask', () => {
     const storage = setupStorage({ scopes: [scope] })
     await upsertTask(ROOM, { scopeId: 's1', title: 'New', done: false, assigneeId: 'u_marie' })
     expect([...storage.tasks][0].get('assigneeId')).toBe('u_marie')
+  })
+})
+
+describe('openBatch coalescing', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('applies many task creates under a single mutateStorage call', async () => {
+    const scope = makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI' })
+    const storage = setupStorage({ scopes: [scope] })
+
+    await openBatch(ROOM, async (root) => {
+      await upsertTask(ROOM, { scopeId: 's1', title: 'A' }, root)
+      await upsertTask(ROOM, { scopeId: 's1', title: 'B' }, root)
+      await upsertTask(ROOM, { scopeId: 's1', title: 'C' }, root)
+    })
+
+    expect([...storage.tasks].map((t) => t.get('title'))).toEqual(['A', 'B', 'C'])
+    // The perf property: one load/flush for the whole batch, not one per task.
+    expect(mockMutateStorage).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a later op see an earlier one within the same batch', async () => {
+    // Create a scope then a task under it, in one batch — the task must see the
+    // just-created scope without a separate round-trip.
+    const storage = setupStorage({ pitches: [makeMockItem({ id: 'p1' })] })
+
+    await openBatch(ROOM, async (root) => {
+      await upsertScope(
+        ROOM,
+        { pitchId: 'p1', title: 'New scope', tier: 'must', litmus_text: '', hill_progress: 0 },
+        root
+      )
+      const scopeId = [...storage.scopes][0].get('id') as string
+      await upsertTask(ROOM, { scopeId, title: 'child' }, root)
+    })
+
+    expect([...storage.tasks]).toHaveLength(1)
+    expect(mockMutateStorage).toHaveBeenCalledTimes(1)
   })
 })
 
