@@ -1,6 +1,8 @@
 import { CreateCycleDialog } from '@/app/[slug]/cycles/create-cycle-dialog'
 import { CreateCycleForm } from '@/app/[slug]/cycles/create-cycle-form'
 import { EditCycleButton } from '@/app/[slug]/cycles/[cycleSlug]/edit-cycle-dialog'
+import { OlderCycles, type OlderGroup } from '@/app/[slug]/cycles/older-cycles'
+import { Badge } from '@/components/ui/badge'
 import { TimeboxTape } from '@/components/timebox'
 import {
   groupCycles,
@@ -79,6 +81,44 @@ export default async function CyclesPage({
 
   const isEmpty = summaries.length === 0
 
+  // Past and archived cycles fold together behind one control (see OlderCycles).
+  const olderGroups: OlderGroup[] = []
+  if (groups.past.length > 0) {
+    olderGroups.push({
+      key: 'past',
+      label: 'past',
+      count: groups.past.length,
+      rows: groups.past.map((c) => (
+        <CycleRow
+          key={c.slug}
+          cycle={c}
+          href={`/${urlSlug}/cycles/${c.slug}`}
+          detail={`${formatDate(c.start_date)} → ${formatDate(c.end_date)}`}
+        />
+      )),
+    })
+  }
+  if (groups.archived.length > 0) {
+    olderGroups.push({
+      key: 'archived',
+      label: 'archived',
+      count: groups.archived.length,
+      rows: groups.archived.map((c) => (
+        <CycleRow
+          key={c.slug}
+          cycle={c}
+          href={`/${urlSlug}/cycles/${c.slug}`}
+          detail={
+            c.start_date && c.end_date
+              ? `${formatDate(c.start_date)} → ${formatDate(c.end_date)}`
+              : 'No dates set'
+          }
+          badge="Archived"
+        />
+      )),
+    })
+  }
+
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
       <div className="mb-6 flex justify-between items-center">
@@ -101,10 +141,10 @@ export default async function CyclesPage({
         </div>
       ) : (
         <div className="flex flex-col gap-8">
-          {groups.current.length > 0 && (
-            <section className="flex flex-col gap-3">
-              <SectionLabel>Current</SectionLabel>
-              {groups.current.map((c) => (
+          <section className="flex flex-col gap-3">
+            <SectionLabel>Current</SectionLabel>
+            {groups.current.length > 0 ? (
+              groups.current.map((c) => (
                 <CurrentCycleCard
                   key={c.slug}
                   cycle={c}
@@ -112,9 +152,18 @@ export default async function CyclesPage({
                   href={`/${urlSlug}/cycles/${c.slug}`}
                   pitchCount={pitchCounts.get(c.slug)}
                 />
-              ))}
-            </section>
-          )}
+              ))
+            ) : (
+              <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed px-5 py-8 text-center">
+                <p className="text-sm font-medium">No current cycle</p>
+                <p className="text-sm text-muted-foreground">
+                  {groups.upcoming.length > 0
+                    ? 'Your next cycle is coming up below.'
+                    : 'Start a cycle to open Mission Control.'}
+                </p>
+              </div>
+            )}
+          </section>
 
           {groups.upcoming.length > 0 && (
             <section className="flex flex-col gap-2">
@@ -130,25 +179,6 @@ export default async function CyclesPage({
                 ))}
               </ul>
             </section>
-          )}
-
-          {groups.past.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer list-none text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors">
-                Show {groups.past.length} past{' '}
-                {groups.past.length === 1 ? 'cycle' : 'cycles'}
-              </summary>
-              <ul className="mt-3 border rounded-lg divide-y opacity-60">
-                {groups.past.map((c) => (
-                  <CycleRow
-                    key={c.slug}
-                    cycle={c}
-                    href={`/${urlSlug}/cycles/${c.slug}`}
-                    detail={`${formatDate(c.start_date)} → ${formatDate(c.end_date)}`}
-                  />
-                ))}
-              </ul>
-            </details>
           )}
 
           {groups.undated.length > 0 && (
@@ -167,24 +197,7 @@ export default async function CyclesPage({
             </section>
           )}
 
-          {groups.archived.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer list-none text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors">
-                Show {groups.archived.length} archived{' '}
-                {groups.archived.length === 1 ? 'cycle' : 'cycles'}
-              </summary>
-              <ul className="mt-3 border rounded-lg divide-y opacity-60">
-                {groups.archived.map((c) => (
-                  <CycleRow
-                    key={c.slug}
-                    cycle={c}
-                    href={`/${urlSlug}/cycles/${c.slug}`}
-                    detail="Archived"
-                  />
-                ))}
-              </ul>
-            </details>
-          )}
+          <OlderCycles groups={olderGroups} />
         </div>
       )}
     </main>
@@ -240,19 +253,25 @@ function CycleRow({
   cycle,
   href,
   detail,
+  badge,
 }: {
   cycle: CycleSummary
   href: string
   detail: string
+  badge?: string
 }) {
   return (
-    <li className="flex items-center">
+    // Hover covers the whole row, including the "…" gutter, not just the link.
+    <li className="flex items-center hover:bg-muted/50 transition-colors">
       <Link
         href={href}
-        className="flex flex-1 items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
+        className="flex flex-1 items-center justify-between gap-3 px-4 py-3"
       >
         <span className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">{cycle.title}</span>
+          <span className="flex items-center gap-2 text-sm font-medium">
+            {cycle.title}
+            {badge && <Badge variant="outline">{badge}</Badge>}
+          </span>
           <span className="text-xs text-muted-foreground">
             {typeLabel(cycle.type)}
           </span>
