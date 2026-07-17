@@ -26,7 +26,9 @@ function isIsoDate(value: string): boolean {
 export function cyclePhase(cycle: CycleSummary, today: string): CyclePhase {
   if (!isIsoDate(cycle.start_date) || !isIsoDate(cycle.end_date)) return 'undated'
   if (today < cycle.start_date) return 'upcoming'
-  if (today >= cycle.end_date) return 'past'
+  // end_date is the inclusive last working day (ADR 0013), so a cycle is still
+  // current ON its end date — past only starts the day after.
+  if (today > cycle.end_date) return 'past'
   return 'current'
 }
 

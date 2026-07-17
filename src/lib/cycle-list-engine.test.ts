@@ -19,17 +19,18 @@ function cycle(overrides: Partial<CycleSummary> = {}): CycleSummary {
 }
 
 describe('cyclePhase', () => {
-  it('is current when today falls within the window', () => {
+  it('is current when today falls within the window, including the end date', () => {
     expect(cyclePhase(cycle(), '2026-06-15')).toBe('current')
+    expect(cyclePhase(cycle(), '2026-07-13')).toBe('current')
   })
 
   it('is upcoming when today is before the start', () => {
     expect(cyclePhase(cycle(), '2026-05-20')).toBe('upcoming')
   })
 
-  it('is past on or after the end date (end-exclusive)', () => {
+  it('is past only after the end date (end-inclusive)', () => {
+    expect(cyclePhase(cycle(), '2026-07-14')).toBe('past')
     expect(cyclePhase(cycle(), '2026-07-20')).toBe('past')
-    expect(cyclePhase(cycle(), '2026-07-13')).toBe('past')
   })
 
   it('is undated when either date is missing or invalid', () => {
