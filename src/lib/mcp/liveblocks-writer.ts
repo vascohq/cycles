@@ -19,6 +19,32 @@ import {
 
 type UpsertResult = { created: boolean; id: string }
 
+// Dual-mode storage seam. Standalone (injectedRoot omitted) each writer opens
+// its own mutateStorage — a full-doc load + flush. In batch mode the caller
+// (openBatch) already holds one mutateStorage open and passes its `root`, so the
+// writer mutates that directly and skips opening a second one. This is what lets
+// handleBatch coalesce N ops into a single load/flush instead of N.
+async function withRoot(
+  roomId: string,
+  injectedRoot: any,
+  fn: (root: any) => void
+): Promise<void> {
+  if (injectedRoot) {
+    fn(injectedRoot)
+    return
+  }
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => fn(root))
+}
+
+// Open one mutateStorage for a whole batch; `fn` runs every op against the
+// shared root (pass it as each writer's injectedRoot). One load, one flush.
+export async function openBatch(
+  roomId: string,
+  fn: (root: any) => Promise<void>
+): Promise<void> {
+  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => fn(root))
+}
+
 async function roomExists(roomId: string): Promise<boolean> {
   try {
     await liveblocks.getRoom(roomId)
@@ -187,13 +213,14 @@ export async function upsertPitch(
     squad?: string
     // Pitch view (see ADR 0018). undefined = leave unchanged / default on create.
     view?: 'scope_map' | 'kanban'
-  }
+  },
+  injectedRoot?: any
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const pitches = root.get('pitches')
     const squads = getSquadList(root)
 
@@ -258,14 +285,15 @@ export async function upsertSquad(
     id?: string
     name: string
     color?: string
-  }
+  },
+  injectedRoot?: any
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
   let nameTaken = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const squads = getSquadList(root)
 
     // Enforce the "names are unique within a cycle" invariant on both paths,
@@ -304,10 +332,14 @@ export async function upsertSquad(
   return { created, id }
 }
 
-export async function deleteSquad(roomId: string, id: string): Promise<void> {
+export async function deleteSquad(
+  roomId: string,
+  id: string,
+  injectedRoot?: any
+): Promise<void> {
   let notFound = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const squads = getSquadList(root)
     const idx = squads.findIndex((s: any) => getField(s, 'id') === id)
     if (idx === -1) {
@@ -344,14 +376,15 @@ export async function upsertScope(
     // true steals, false clears only if this scope is currently core, undefined
     // = leave unchanged. Translated into the parent pitch's core_scope_id below.
     core?: boolean
-  }
+  },
+  injectedRoot?: any
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
   let pitchMissing = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const pitches = root.get('pitches')
     const scopes = root.get('scopes')
     let parentPitchId: string | undefined
@@ -431,7 +464,8 @@ export async function upsertTask(
     //   undefined = leave unchanged, '' = unassign (delete the key),
     //   a userId = assign. Caller resolves email/userId → userId first.
     assigneeId?: string
-  }
+  },
+  injectedRoot?: any
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
   const created = !params.id
@@ -440,7 +474,7 @@ export async function upsertTask(
   let pitchMissing = false
   let badParent = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const scopes = root.get('scopes')
     const pitches = root.get('pitches')
     const tasks = root.get('tasks')
@@ -558,14 +592,15 @@ export async function upsertParkingItem(
     // create. Must NOT be coerced to false before this point — that would silently
     // un-resolve an item on a text-only update.
     resolved?: boolean
-  }
+  },
+  injectedRoot?: any
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
   let pitchMissing = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const pitches = root.get('pitches')
     const parkingItems = root.get('parkingItems')
 
@@ -641,10 +676,14 @@ export async function markSlackDelivered(
 
 // ── Deletes ──
 
-export async function deletePitch(roomId: string, pitchId: string): Promise<void> {
+export async function deletePitch(
+  roomId: string,
+  pitchId: string,
+  injectedRoot?: any
+): Promise<void> {
   let notFound = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const pitches = root.get('pitches')
     const idx = pitches.findIndex((p: any) => getField(p, 'id') === pitchId)
     if (idx === -1) {
@@ -657,10 +696,14 @@ export async function deletePitch(roomId: string, pitchId: string): Promise<void
   if (notFound) throw new Error(`Pitch not found: "${pitchId}"`)
 }
 
-export async function deleteScope(roomId: string, scopeId: string): Promise<void> {
+export async function deleteScope(
+  roomId: string,
+  scopeId: string,
+  injectedRoot?: any
+): Promise<void> {
   let notFound = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const scopes = root.get('scopes')
     const tasks = root.get('tasks')
     const pitches = root.get('pitches')
@@ -695,10 +738,14 @@ export async function deleteScope(roomId: string, scopeId: string): Promise<void
   if (notFound) throw new Error(`Scope not found: "${scopeId}"`)
 }
 
-export async function deleteTask(roomId: string, taskId: string): Promise<void> {
+export async function deleteTask(
+  roomId: string,
+  taskId: string,
+  injectedRoot?: any
+): Promise<void> {
   let notFound = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const tasks = root.get('tasks')
     const idx = tasks.findIndex((t: any) => getField(t, 'id') === taskId)
     if (idx === -1) {
@@ -717,11 +764,15 @@ export async function deleteTask(roomId: string, taskId: string): Promise<void> 
 // prior update's snapshot (or null if it was the only one); live scope hill
 // positions are left untouched, and the needle Ghost / Hill Trails rebase off
 // the now-latest update through pure derivation.
-export async function deleteUpdate(roomId: string, updateId: string): Promise<void> {
+export async function deleteUpdate(
+  roomId: string,
+  updateId: string,
+  injectedRoot?: any
+): Promise<void> {
   let notFound = false
   let notLatest = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const updates = root.get('updates')
     const idx = updates.findIndex((u: any) => getField(u, 'id') === updateId)
     if (idx === -1) {
@@ -770,11 +821,12 @@ export async function deleteUpdate(roomId: string, updateId: string): Promise<vo
 
 export async function deleteParkingItem(
   roomId: string,
-  itemId: string
+  itemId: string,
+  injectedRoot?: any
 ): Promise<void> {
   let notFound = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const parkingItems = root.get('parkingItems')
     const idx = parkingItems.findIndex((p: any) => getField(p, 'id') === itemId)
     if (idx === -1) {
