@@ -131,6 +131,22 @@ export async function handleUpdateCycle(
   }
 }
 
+// Reversible archive (ADR 0019): flips the stored `archived` flag via the same
+// cycle writer. Not a delete — nothing is destroyed, and it round-trips.
+export async function handleArchiveCycle(
+  orgId: string,
+  cycleSlug: string,
+  archived: boolean
+): Promise<ToolResult> {
+  const roomId = `${orgId}:cycle:${cycleSlug}`
+  try {
+    await updateCycle(roomId, { archived })
+    return jsonResult({ updated: true, slug: cycleSlug, archived })
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
 export async function handleListCycles(orgId: string): Promise<ToolResult> {
   const rooms = await listCycleRooms(orgId)
   return jsonResult(rooms)
@@ -443,6 +459,9 @@ const WRITE_TOOLS: Record<
   delete_task: (roomId, p, root) => deleteTask(roomId, p.id, root).then(() => undefined),
   delete_parking_item: (roomId, p, root) => deleteParkingItem(roomId, p.id, root).then(() => undefined),
   undo_update: (roomId, p, root) => deleteUpdate(roomId, p.id, root).then(() => undefined),
+  // archive_cycle / unarchive_cycle are deliberately NOT here: archiving also
+  // writes room metadata (updateRoom), which can't ride the coalesced storage
+  // batch (ADR 0019). They're standalone tools only.
 }
 
 export async function handleBatch(
@@ -627,6 +646,54 @@ export function registerCyclesTools(server: any): void {
       if (!resolved.ok) return errorResult(resolved.error)
       const parsed = parseSlugPath(slug_path)
       return handleUpdateCycle(resolved.org.id, parsed.cycleSlug, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'archive_cycle',
+    'Archive a cycle, addressed by slug: remove it from the Cycles list and from default-landing resolution WITHOUT deleting anything. Reversible — call unarchive_cycle to restore it. Use this to get rid of a cycle created by mistake; there is deliberately no way to permanently delete a cycle (it would take all its pitches, scopes, tasks and updates with it). See ADR 0019.',
+    { ...orgArg, ...slugPathArg },
+    {
+      title: 'Archive cycle',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      return handleArchiveCycle(resolved.org.id, parsed.cycleSlug, true)
+    }
+  )
+
+  defineTool(
+    server,
+    'unarchive_cycle',
+    'Unarchive a cycle, addressed by slug: restore a previously archived cycle to the Cycles list and to landing/stepper resolution. Its date-derived phase (upcoming/current/past) is unchanged — it simply reappears where its dates place it. See ADR 0019.',
+    { ...orgArg, ...slugPathArg },
+    {
+      title: 'Unarchive cycle',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, slug_path }: { org?: string; slug_path: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      const parsed = parseSlugPath(slug_path)
+      return handleArchiveCycle(resolved.org.id, parsed.cycleSlug, false)
     }
   )
 

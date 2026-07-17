@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, registerCyclesTools } from './tools'
+import { handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -46,7 +46,7 @@ vi.mock('@/lib/users', async (importOriginal) => ({
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -56,6 +56,7 @@ const mockListRooms = vi.mocked(listCycleRooms)
 const mockGetStorage = vi.mocked(getCycleStorage)
 const mockResolvePitch = vi.mocked(resolvePitch)
 const mockDeleteUpdate = vi.mocked(deleteUpdate)
+const mockUpdateCycle = vi.mocked(updateCycle)
 const mockPushUpdate = vi.mocked(pushUpdate)
 const mockMarkSlackDelivered = vi.mocked(markSlackDelivered)
 const mockDeliverSlack = vi.mocked(deliverSlackUpdate)
@@ -103,7 +104,7 @@ describe('handleListCycles', () => {
 
   it('returns cycle summaries as JSON text content', async () => {
     mockListRooms.mockResolvedValue([
-      { slug: '2026-q2-build', name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15' },
+      { slug: '2026-q2-build', name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15', archived: false },
     ])
 
     const result = await handleListCycles(ORG_ID)
@@ -592,6 +593,32 @@ describe('handleBatch', () => {
     expect(data.results[0].ok).toBe(false)
     expect(data.results[0].error).toContain('Unknown tool')
   })
+
+  it('does not accept archive_cycle in a batch (archiving also writes metadata, so it is standalone-only)', async () => {
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'archive_cycle', params: {} },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0].ok).toBe(false)
+    expect(data.results[0].error).toContain('Unknown tool')
+  })
+})
+
+describe('handleArchiveCycle', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('flips the archived flag via updateCycle (true to archive, false to unarchive)', async () => {
+    mockUpdateCycle.mockResolvedValue({ updated: true, cycle: {} as any })
+
+    const archived = await handleArchiveCycle(ORG_ID, 'q2-build', true)
+    const restored = await handleArchiveCycle(ORG_ID, 'q2-build', false)
+
+    expect(mockUpdateCycle).toHaveBeenNthCalledWith(1, `${ORG_ID}:cycle:q2-build`, { archived: true })
+    expect(mockUpdateCycle).toHaveBeenNthCalledWith(2, `${ORG_ID}:cycle:q2-build`, { archived: false })
+    expect(JSON.parse(archived.content[0].text)).toMatchObject({ updated: true, archived: true })
+    expect(JSON.parse(restored.content[0].text)).toMatchObject({ updated: true, archived: false })
+  })
 })
 
 // Locks in the requirement that every MCP tool carries annotations so clients
@@ -639,6 +666,15 @@ describe('tool annotations', () => {
     const byName = Object.fromEntries(collectTools().map((t) => [t.name, t.annotations]))
     for (const name of DESTRUCTIVE_TOOLS) {
       expect(byName[name]?.destructiveHint, `${name} should be destructive`).toBe(true)
+    }
+  })
+
+  it('marks archive_cycle and unarchive_cycle as writable but NOT destructive (reversible)', () => {
+    const byName = Object.fromEntries(collectTools().map((t) => [t.name, t.annotations]))
+    for (const name of ['archive_cycle', 'unarchive_cycle']) {
+      expect(byName[name], `${name} should be registered`).toBeDefined()
+      expect(byName[name]?.readOnlyHint, `${name} should be writable`).toBe(false)
+      expect(byName[name]?.destructiveHint ?? false, `${name} is reversible, not destructive`).toBe(false)
     }
   })
 

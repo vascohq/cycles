@@ -7,6 +7,7 @@ export type PaletteCycleItem = {
   type: 'build' | 'cooldown'
   start_date: string
   end_date: string
+  archived: boolean
 }
 
 /**

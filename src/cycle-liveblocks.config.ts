@@ -118,6 +118,12 @@ export type Cycle = {
   type: 'build' | 'cooldown'
   start_date: string
   end_date: string
+  /**
+   * Reversible archive override (ADR 0019). Optional — rooms created before
+   * archiving existed have no flag, read as not-archived. Mirrored to room
+   * metadata so the list/landing can filter without opening the room.
+   */
+  archived?: boolean
 }
 
 export type CycleStorage = {

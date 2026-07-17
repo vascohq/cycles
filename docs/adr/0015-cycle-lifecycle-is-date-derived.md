@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted — amended by [ADR 0019](0019-cycles-are-archivable-not-deletable.md),
+which adds the explicit `archived` override this ADR anticipated. Phase stays
+date-derived; archive is a separate, orthogonal axis.
 
 ## Context
 

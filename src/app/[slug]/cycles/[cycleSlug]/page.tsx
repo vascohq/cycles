@@ -58,6 +58,7 @@ export default async function MissionControlPage({ params }: PageParams) {
     type: room.metadata.type === 'cooldown' ? 'cooldown' : 'build',
     start_date: room.metadata.start_date ? String(room.metadata.start_date) : '',
     end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
+    archived: room.metadata.archived === 'true',
   }))
   const { prev: prevCycle, next: nextCycle } = cycleNeighbors(cycleSummaries, cycleSlug)
 

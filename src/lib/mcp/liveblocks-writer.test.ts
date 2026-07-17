@@ -255,6 +255,39 @@ describe('updateCycle', () => {
     expect(mockMutateStorage).not.toHaveBeenCalled()
     expect(mockUpdateRoom).not.toHaveBeenCalled()
   })
+
+  it('archives a cycle: mirrors archived=true to storage (boolean) and metadata ("true")', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    const storage = setupStorage({ cycle: { ...EXISTING_CYCLE } })
+
+    await updateCycle(ROOM, { archived: true })
+
+    // Storage keeps a real boolean; metadata is string-valued.
+    expect(storage.cycle.get('archived')).toBe(true)
+    expect((mockUpdateRoom.mock.calls[0][1] as any).metadata).toEqual({ archived: 'true' })
+    // Descriptive fields are untouched.
+    expect(storage.cycle.get('name')).toBe('Q3 Build')
+  })
+
+  it('unarchives a cycle: mirrors archived=false to both surfaces', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    const storage = setupStorage({ cycle: { ...EXISTING_CYCLE, archived: true } })
+
+    await updateCycle(ROOM, { archived: false })
+
+    expect(storage.cycle.get('archived')).toBe(false)
+    expect((mockUpdateRoom.mock.calls[0][1] as any).metadata).toEqual({ archived: 'false' })
+  })
+
+  it('leaves archived untouched when the flag is omitted', async () => {
+    mockGetRoom.mockResolvedValue({ id: ROOM } as any)
+    const storage = setupStorage({ cycle: { ...EXISTING_CYCLE, archived: true } })
+
+    await updateCycle(ROOM, { name: 'Renamed' })
+
+    expect(storage.cycle.get('archived')).toBe(true)
+    expect((mockUpdateRoom.mock.calls[0][1] as any).metadata).toEqual({ title: 'Renamed' })
+  })
 })
 
 describe('upsertPitch', () => {

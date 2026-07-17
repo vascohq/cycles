@@ -34,6 +34,7 @@ export async function listCycles(): Promise<PaletteCycleItem[]> {
         ? String(room.metadata.start_date)
         : '',
       end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
+      archived: room.metadata.archived === 'true',
       createdOn: room.metadata.createdOn ? String(room.metadata.createdOn) : '',
     }))
     .sort((a, b) => (a.createdOn > b.createdOn ? -1 : 1))
@@ -127,6 +128,23 @@ export async function updateCycleRoom(cycleSlug: string, formData: FormData) {
 
   // The breadcrumb title and the listing read room metadata server-side, so
   // refresh them; in-page content tracks the live storage object reactively.
+  const urlSlug = orgSlug ?? 'me'
+  revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
+  revalidatePath(`/${urlSlug}/cycles`)
+}
+
+/**
+ * Archive (or unarchive) a cycle — a reversible removal from the list/landing,
+ * never a delete (ADR 0019). Reuses the same `updateCycle` writer so the
+ * `archived` flag lands in both storage and room metadata.
+ */
+export async function setCycleArchived(cycleSlug: string, archived: boolean) {
+  const { userId, orgId, orgSlug } = await auth()
+  if (!userId) throw new Error('Not authenticated')
+
+  const roomPrefix = orgId ?? userId
+  await updateCycle(`${roomPrefix}:cycle:${cycleSlug}`, { archived })
+
   const urlSlug = orgSlug ?? 'me'
   revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
   revalidatePath(`/${urlSlug}/cycles`)
