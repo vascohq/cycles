@@ -305,6 +305,46 @@ describe('upsertPitch', () => {
     expect(existing.get('view')).toBe('kanban')
   })
 
+  it('warns when view:"scope_map" is set on a pitch with no timebox (Kanban mode; ADR 0018)', async () => {
+    // No timebox_start/timebox_end → Kanban MODE, so scope_map view can't render.
+    const noTimebox = makeMockItem({
+      id: 'p1',
+      title: 'P',
+      stage: 'building',
+      timebox_start: '',
+      timebox_end: '',
+    })
+    setupStorage({ pitches: [noTimebox] })
+
+    const result = await upsertPitch(ROOM, { id: 'p1', title: 'P', stage: 'building', view: 'scope_map' })
+    expect(noTimebox.get('view')).toBe('scope_map') // still stored
+    expect(result.warning).toMatch(/timebox/i) // but caller is told it won't render
+
+    // With a timebox, the view takes effect and there's no warning.
+    const withTimebox = makeMockItem({
+      id: 'p2',
+      title: 'Q',
+      stage: 'building',
+      timebox_start: '2026-04-06',
+      timebox_end: '2026-05-15',
+    })
+    setupStorage({ pitches: [withTimebox] })
+    const ok = await upsertPitch(ROOM, { id: 'p2', title: 'Q', stage: 'building', view: 'scope_map' })
+    expect(ok.warning).toBeUndefined()
+
+    // Setting the timebox in the SAME call clears the condition too.
+    setupStorage({ pitches: [makeMockItem({ id: 'p3', title: 'R', stage: 'building', timebox_start: '', timebox_end: '' })] })
+    const created = await upsertPitch(ROOM, {
+      id: 'p3',
+      title: 'R',
+      stage: 'building',
+      view: 'scope_map',
+      timebox_start: '2026-04-06',
+      timebox_end: '2026-05-15',
+    })
+    expect(created.warning).toBeUndefined()
+  })
+
   it('creates a new pitch when no id provided', async () => {
     const storage = setupStorage()
 

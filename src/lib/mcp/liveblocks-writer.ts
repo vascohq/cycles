@@ -17,7 +17,7 @@ import {
   isSquadNameTaken,
 } from '@/lib/squad-engine'
 
-type UpsertResult = { created: boolean; id: string }
+type UpsertResult = { created: boolean; id: string; warning?: string }
 
 // Dual-mode storage seam. Standalone (injectedRoot omitted) each writer opens
 // its own mutateStorage — a full-doc load + flush. In batch mode the caller
@@ -225,6 +225,13 @@ export async function upsertPitch(
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
+  // Resulting timebox after this write — needed to detect the Kanban-mode
+  // override below. Kanban MODE is derived from the timebox (ADR 0018): a pitch
+  // with no timebox_start/timebox_end renders as a board regardless of `view`,
+  // so a `view: 'scope_map'` request on such a pitch stores fine but shows
+  // nothing. We capture the effective values inside the mutation and warn after.
+  let resultStart = ''
+  let resultEnd = ''
 
   await withRoot(roomId, injectedRoot, (root: any) => {
     const pitches = root.get('pitches')
@@ -254,6 +261,8 @@ export async function upsertPitch(
         ...(squadId ? { squadId } : {}),
         ...(params.view ? { view: params.view } : {}),
       }
+      resultStart = pitch.timebox_start
+      resultEnd = pitch.timebox_end
       pitches.push(new LiveObject(pitch))
     } else {
       const existing = pitches.find((p: any) => getField(p, 'id') === id)
@@ -273,6 +282,8 @@ export async function upsertPitch(
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       if (params.view !== undefined) existing.set('view', params.view)
+      resultStart = getField(existing, 'timebox_start') ?? ''
+      resultEnd = getField(existing, 'timebox_end') ?? ''
       // squadId: null = clear (remove key), string = assign, undefined = leave.
       if (squadId === null) existing.delete('squadId')
       else if (squadId !== undefined) existing.set('squadId', squadId)
@@ -280,7 +291,18 @@ export async function upsertPitch(
   })
 
   if (notFound) throw new Error(`Pitch not found: "${id}"`)
-  return { created, id }
+
+  // Kanban-MODE override warning (ADR 0018): the write succeeded and `view` is
+  // stored, but a scope_map view can't render on a pitch with no timebox — mode
+  // (derived from the timebox) wins over the stored view. Surface this so the
+  // caller isn't left wondering why the pitch is still a board.
+  const hasTimebox = Boolean(resultStart && resultEnd)
+  const warning =
+    params.view === 'scope_map' && !hasTimebox
+      ? 'view was set to "scope_map" but this pitch has no timebox (timebox_start/timebox_end), so it renders as a Kanban board regardless of view (Kanban mode, ADR 0018). Set timebox_start and timebox_end to make it render as a Scope Map.'
+      : undefined
+
+  return { created, id, ...(warning ? { warning } : {}) }
 }
 
 // ── Squad ──
