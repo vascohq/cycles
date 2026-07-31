@@ -9,6 +9,7 @@ import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { HillSnapshot, Zone } from '@/cycle-liveblocks.config'
 import { needleProgressNote } from '@/lib/slack-message'
 import { useSlackEnabled } from '@/components/slack-config-context'
+import { Markdown } from '@/components/ui/markdown'
 import { cn } from '@/lib/utils'
 
 const ZONE_LABEL: Record<Zone, string> = {
@@ -187,9 +188,9 @@ function UpdateCard({
         {needleNote && <div className="text-xs font-medium">{needleNote}</div>}
 
         {card.narrative && (
-          <p className="text-[13.5px] leading-relaxed border-l-2 border-border pl-2">
+          <Markdown className="text-[13.5px] leading-relaxed border-l-2 border-border pl-2">
             {card.narrative}
-          </p>
+          </Markdown>
         )}
 
         {card.movement && (
