@@ -17,6 +17,8 @@ export type ScopeGridDerived = {
   title: string
   tier: CycleScope['tier']
   litmus_text: string
+  /** Free-form working notes; undefined/'' when unset. Drawer-only (ADR 0020). */
+  notes?: string
   /** Resolved identity color (stored, or deterministically assigned). */
   color: string
   /** True for the one scope flagged as the pitch's Core Scope (see ADR 0012). */
@@ -64,6 +66,7 @@ export function deriveScopeGridItems(
     title: s.title,
     tier: s.tier,
     litmus_text: s.litmus_text,
+    notes: s.notes ?? '',
     color: colors[s.id],
     isCore: s.id === coreId,
     tasks: tasks

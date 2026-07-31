@@ -493,6 +493,43 @@ describe('upsertScope', () => {
     expect(existing.get('litmus_text')).toBe('User sees dashboard')
     expect(existing.get('hill_progress')).toBe(0.7)
   })
+
+  it('stores notes on create, and only when given', async () => {
+    const pitch = makeMockItem({ id: 'p1', title: 'Mission Control' })
+    const storage = setupStorage({ pitches: [pitch] })
+
+    await upsertScope(ROOM, {
+      pitchId: 'p1',
+      title: 'With notes',
+      tier: 'must',
+      notes: 'Depends on the auth rewrite landing first.',
+    })
+    await upsertScope(ROOM, { pitchId: 'p1', title: 'Without notes', tier: 'must' })
+
+    const [withNotes, withoutNotes] = [...storage.scopes]
+    expect(withNotes.notes).toBe('Depends on the auth rewrite landing first.')
+    // Absent — not '' — so "no notes" stays one state rather than two.
+    expect('notes' in withoutNotes).toBe(false)
+  })
+
+  it('leaves notes untouched when omitted on update, and clears them on ""', async () => {
+    const existing = makeMockItem({
+      id: 's1',
+      pitchId: 'p1',
+      title: 'UI',
+      tier: 'must',
+      litmus_text: 'User sees dashboard',
+      notes: 'Long agent findings…',
+      hill_progress: 0.7,
+    })
+    setupStorage({ scopes: [existing] })
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must' })
+    expect(existing.get('notes')).toBe('Long agent findings…')
+
+    await upsertScope(ROOM, { id: 's1', pitchId: 'p1', title: 'UI', tier: 'must', notes: '' })
+    expect(existing.get('notes')).toBe('')
+  })
 })
 
 describe('upsertScope core flag', () => {

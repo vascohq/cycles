@@ -26,6 +26,16 @@ describe('ScopeCard face', () => {
     expect(screen.getByText('Users can log in')).toBeTruthy()
   })
 
+  it('never shows notes on the card face', () => {
+    // Notes are drawer-only (ADR 0020): the card face stays a fixed-height tile,
+    // so a scope's long-form notes must not leak onto it. Spread through a wider
+    // object the way the grid does, to prove the extra field is simply ignored.
+    const withNotes = { ...BASE_PROPS, notes: 'A long paragraph of agent context' }
+    render(<ScopeCard {...withNotes} />)
+    expect(screen.queryByText('notes')).toBeNull()
+    expect(screen.queryByText(/long paragraph of agent context/)).toBeNull()
+  })
+
   it('never shows a task completion count (no "X/Y done")', () => {
     render(<ScopeCard {...BASE_PROPS} />)
     expect(screen.queryByText(/\d+\/\d+ done/)).toBeNull()

@@ -116,7 +116,13 @@ export type ScopeMapViewProps = {
   onAddScope?: (title: string, tier: string, litmus_text: string) => void
   onEditScope?: (
     scopeId: string,
-    fields: { title?: string; tier?: Tier; litmus_text?: string; color?: string }
+    fields: {
+      title?: string
+      tier?: Tier
+      litmus_text?: string
+      notes?: string
+      color?: string
+    }
   ) => void
   /** Flag (true) or clear (false) a scope as the pitch's Core Scope. */
   onToggleCoreScope?: (scopeId: string, next: boolean) => void

@@ -719,7 +719,7 @@ describe('upsert_* partial-update schemas', () => {
     expect(parsed.notion_url).toBeUndefined()
   })
 
-  it('upsert_scope does NOT default omitted litmus_text/hill_progress', () => {
+  it('upsert_scope does NOT default omitted litmus_text/notes/hill_progress', () => {
     const parsed = z.object(schemaFor('upsert_scope')).parse({
       cycle_slug: 'q2-build',
       id: 's1',
@@ -729,6 +729,7 @@ describe('upsert_* partial-update schemas', () => {
     })
 
     expect(parsed.litmus_text).toBeUndefined()
+    expect(parsed.notes).toBeUndefined()
     expect(parsed.hill_progress).toBeUndefined()
     // core is a partial-update flag too: omit = leave the pitch's core unchanged.
     expect(parsed.core).toBeUndefined()

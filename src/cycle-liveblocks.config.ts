@@ -65,7 +65,13 @@ export type CycleScope = {
   pitchId: string
   title: string
   tier: Tier
+  // "What it ships" — one short, stable line. Deliberately kept small; anything
+  // longer belongs in `notes` (see ADR 0020).
   litmus_text: string
+  // Free-form working notes: the scope's scratchpad for context, decisions,
+  // links, open questions. Long content is expected. Drawer-only — never on the
+  // card face (see ADR 0020). Undefined on scopes that predate the field.
+  notes?: string
   hill_progress: number
   color?: string
 }
