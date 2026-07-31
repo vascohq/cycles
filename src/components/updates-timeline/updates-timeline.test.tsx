@@ -38,6 +38,40 @@ const cards = deriveTimelineCards(
   users
 )
 
+describe('UpdatesTimeline narrative markdown', () => {
+  function renderNarrative(narrative: string) {
+    const update = { ...mkUpdate('u1', '2026-06-03T14:00:00Z'), narrative }
+    render(<UpdatesTimeline cards={deriveTimelineCards([update], users)} />)
+  }
+
+  it('renders bold, italic and inline code as markup', () => {
+    renderNarrative('Shipped **auth**, still _tuning_ the `retry` path.')
+    expect(screen.getByText('auth').tagName).toBe('STRONG')
+    expect(screen.getByText('tuning').tagName).toBe('EM')
+    expect(screen.getByText('retry').tagName).toBe('CODE')
+  })
+
+  it('renders lists as real list items', () => {
+    renderNarrative('- shipped login\n- shipped signup')
+    const items = screen.getAllByRole('listitem')
+    expect(items.map((li) => li.textContent)).toEqual(['shipped login', 'shipped signup'])
+  })
+
+  it('renders links safely in a new tab', () => {
+    renderNarrative('See [the PR](https://example.com/pr/1).')
+    const link = screen.getByRole('link', { name: 'the PR' })
+    expect(link).toHaveAttribute('href', 'https://example.com/pr/1')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+  })
+
+  it('does not render raw HTML in the narrative', () => {
+    renderNarrative('Careful <em>here</em>')
+    expect(screen.queryByText('here')).toBeNull()
+    expect(screen.getByText(/Careful <em>here<\/em>/)).toBeTruthy()
+  })
+})
+
 describe('UpdatesTimeline delete affordance', () => {
   it('shows the actions menu only on the newest card', () => {
     render(<UpdatesTimeline cards={cards} onDeleteUpdate={vi.fn()} />)
