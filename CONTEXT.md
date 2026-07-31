@@ -116,7 +116,7 @@ A scope's "if only this ships" statement. Tests whether the scope is a meaningfu
 _Avoid_: Description, acceptance criteria, definition of done
 
 **Scope Notes**:
-A scope's free-form working notes, of any length — context, decisions, links, open questions, findings, whatever the people and agents working the scope need to remember. The counterweight to **Litmus Text**: notes absorb the detail so the litmus can stay one stable line (see [ADR 0020](docs/adr/0020-scope-notes-are-the-long-form-field.md)). Lives **only in the Scope Drawer**, last, below the tasks — never on the Scope Card or Mission Control. Written wholesale (there is no append), by hand or over MCP.
+A scope's free-form working notes — **markdown**, of any length: context, decisions, links, open questions, findings, whatever the people and agents working the scope need to remember. The counterweight to **Litmus Text**: notes absorb the detail so the litmus can stay one stable line (see [ADR 0020](docs/adr/0020-scope-notes-are-the-long-form-field.md)). Lives **only in the Scope Drawer**, last, below the tasks — never on the Scope Card or Mission Control. Written wholesale (there is no append), by hand or over MCP.
 _Avoid_: Description, comments, spec, scratchpad
 
 **Hill Progress**:

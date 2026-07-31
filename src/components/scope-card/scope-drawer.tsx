@@ -22,6 +22,7 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
 import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2, ChevronDown, GripVertical } from 'lucide-react'
 import { ColorPicker } from '@/components/color-picker'
+import { Markdown } from '@/components/ui/markdown'
 import {
   Sheet,
   SheetContent,
@@ -324,7 +325,7 @@ function ScopeDrawerBody({
           multiline
           longForm
           onSave={(notes) => onEditScope?.({ notes })}
-          className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed"
+          className="text-sm text-muted-foreground leading-relaxed"
         />
       </div>
     </>
@@ -463,21 +464,48 @@ function EditableText({
     )
   }
 
+  const interactive = !readOnly && !!onSave
+  const shell = `group/edit text-left w-full ${
+    interactive
+      ? 'cursor-text hover:bg-muted/40 rounded -mx-1 px-1 transition-colors'
+      : 'cursor-default'
+  } ${className}`
+  const pencil = interactive && (
+    <Pencil className="inline-block w-3 h-3 ml-1.5 align-baseline opacity-0 group-hover/edit:opacity-40 transition-opacity" />
+  )
+  const empty = <span className="text-muted-foreground/40">{placeholder}</span>
+
+  // Long-form read view renders markdown, which emits block elements (<p>,
+  // <ul>, tables) — illegal inside a <button>. Use a focusable div instead, and
+  // keep the keyboard affordance a button would have given for free.
+  if (longForm) {
+    return (
+      <div
+        {...(interactive
+          ? {
+              role: 'button',
+              tabIndex: 0,
+              onClick: start,
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  start()
+                }
+              },
+            }
+          : {})}
+        className={shell}
+      >
+        {value ? <Markdown>{value}</Markdown> : empty}
+        {pencil}
+      </div>
+    )
+  }
+
   return (
-    <button
-      type="button"
-      onClick={start}
-      disabled={readOnly || !onSave}
-      className={`group/edit text-left w-full ${readOnly || !onSave ? 'cursor-default' : 'cursor-text hover:bg-muted/40 rounded -mx-1 px-1 transition-colors'} ${className}`}
-    >
-      {value ? (
-        <span>{value}</span>
-      ) : (
-        <span className="text-muted-foreground/40">{placeholder}</span>
-      )}
-      {!readOnly && onSave && (
-        <Pencil className="inline-block w-3 h-3 ml-1.5 align-baseline opacity-0 group-hover/edit:opacity-40 transition-opacity" />
-      )}
+    <button type="button" onClick={start} disabled={!interactive} className={shell}>
+      {value ? <span>{value}</span> : empty}
+      {pencil}
     </button>
   )
 }

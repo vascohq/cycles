@@ -86,6 +86,23 @@ describe('scope field editing', () => {
     expect(onEditScope).toHaveBeenCalledWith({ notes: '' })
   })
 
+  it('renders notes as markdown, and edits the raw source', () => {
+    const onEditScope = vi.fn()
+    renderDrawer({
+      onEditScope,
+      scope: { ...SCOPE, notes: '**Blocked** on the API\n\n- ship the guard' },
+    })
+    // Read view is rendered markdown, not raw syntax.
+    expect(screen.getByText('Blocked').tagName).toBe('STRONG')
+    expect(screen.getByRole('listitem').textContent).toBe('ship the guard')
+    expect(screen.queryByText(/\*\*Blocked\*\*/)).toBeNull()
+
+    // Clicking it edits the markdown source, not the rendered output.
+    fireEvent.click(screen.getByText('Blocked'))
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    expect(textarea.value).toBe('**Blocked** on the API\n\n- ship the guard')
+  })
+
   it('offers an empty notes field to fill when a scope has none', () => {
     renderDrawer({ onEditScope: vi.fn() })
     expect(screen.getByText('notes')).toBeTruthy()

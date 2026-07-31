@@ -929,7 +929,7 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe(
-          'Free-form working notes for this scope, any length: context, decisions, links, open questions, findings. This is the place for detail — not litmus_text. Replaces the whole field, so pass the existing notes plus your additions when appending.'
+          'Free-form working notes for this scope — markdown, any length: context, decisions, links, open questions, findings. This is the place for detail — not litmus_text. Replaces the whole field, so pass the existing notes plus your additions when appending.'
         ),
       hill_progress: z.number().min(0).max(1).optional(),
       // Flag this scope as the pitch's Core Scope (the heart of the pitch; see

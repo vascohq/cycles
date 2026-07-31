@@ -1,6 +1,6 @@
 # Scope notes are the long-form field; litmus stays one stable line
 
-A scope carries two prose fields with opposite jobs. **`litmus_text`** ("what it ships") is one short, stable line — the scope's headline promise, rendered on the card face. **`notes`** is a free-form scratchpad of any length — context, decisions, links, open questions, findings — rendered **only in the scope drawer**, never on the card and never on Mission Control.
+A scope carries two prose fields with opposite jobs. **`litmus_text`** ("what it ships") is one short, stable line — the scope's headline promise, rendered on the card face. **`notes`** is a free-form markdown scratchpad of any length — context, decisions, links, open questions, findings — rendered **only in the scope drawer**, never on the card and never on Mission Control.
 
 ## Status
 
@@ -26,4 +26,5 @@ The underlying problem is that "the shortest field wins by default": absent some
 - The drawer renders notes **last**, after tasks: notes grow without bound, and tasks must stay reachable above them.
 - Notes are the one long-form editor in the drawer, so they change all three inline-edit rules: Enter types a newline (blur saves, Esc reverts), emptying the field is a real clear rather than a revert, and focus lands the caret at the end instead of selecting everything — select-all over a page of notes is one keystroke from wiping it.
 - `upsert_scope` takes `notes`, and `get_pitch` returns it. Both tool descriptions state the division of labour, so an agent with detail to record has an obvious place to put it that is not the litmus.
+- Notes render as **markdown**, through the same shared `<Markdown>` component as update narratives, so the two long-form surfaces in the app read alike. People and agents both write markdown by reflex, and a notes field that showed raw `**` and `-` would be the one place in the app that punished it. Because markdown emits block elements (`<p>`, `<ul>`, tables), the long-form read view is a focusable `div` rather than the `button` the short fields use — a `<p>` inside a `<button>` is invalid HTML.
 - Notes replace wholesale on write; there is no append operation. An agent adding to existing notes must read them first and pass the merged text.
