@@ -97,3 +97,31 @@ export const SingleUpdate: Story = {
 export const WithRetryBanner: Story = {
   args: { cards, onRetrySlack: () => {} },
 }
+
+// Narratives render as markdown — this exercises the formatting people actually
+// reach for in an update, plus raw HTML to confirm it stays inert.
+export const MarkdownNarrative: Story = {
+  args: {
+    cards: deriveTimelineCards(
+      [
+        {
+          ...updates[2],
+          narrative: [
+            'Scope map is **fully wired** with real-time Liveblocks data.',
+            '',
+            'Landed this week:',
+            '',
+            '- Hill chart drag — see [the PR](https://github.com/vascohq/cycles/pull/193)',
+            '- `deriveTimelineCards` now folds in task snapshots',
+            '- ~~Mission Control filters~~ pushed to next week',
+            '',
+            '> Blocked on the Clerk org webhook until Friday.',
+            '',
+            'Next up: _Mission Control_. Raw HTML like <em>this</em> stays inert.',
+          ].join('\n'),
+        },
+      ],
+      users
+    ),
+  },
+}
