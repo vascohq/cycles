@@ -447,6 +447,7 @@ function ScopeMapWired({
         title?: string
         tier?: CycleScope['tier']
         litmus_text?: string
+        notes?: string
         color?: string
       }
     ) => {
@@ -456,6 +457,7 @@ function ScopeMapWired({
       if (fields.tier !== undefined) scope.set('tier', fields.tier)
       if (fields.litmus_text !== undefined)
         scope.set('litmus_text', fields.litmus_text)
+      if (fields.notes !== undefined) scope.set('notes', fields.notes)
       if (fields.color !== undefined) scope.set('color', fields.color)
     },
     []

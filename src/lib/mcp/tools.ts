@@ -909,7 +909,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_scope',
-    'Create or update a scope under a pitch. Omit id to create. Updates are PARTIAL: any field you omit (litmus_text, hill_progress, core) is left unchanged — only fields you pass are overwritten.',
+    'Create or update a scope under a pitch. Omit id to create. Updates are PARTIAL: any field you omit (litmus_text, notes, hill_progress, core) is left unchanged — only fields you pass are overwritten.',
     {
       ...orgArg,
       ...cycleSlugArg,
@@ -919,7 +919,18 @@ export function registerCyclesTools(server: any): void {
       tier: z.enum(['must', 'should', 'could']),
       // Optional (not .default) so an omitted field is left unchanged on update
       // rather than wiped / reset to 0. Defaults to '' / 0 on create.
-      litmus_text: z.string().optional(),
+      litmus_text: z
+        .string()
+        .optional()
+        .describe(
+          'What it ships: ONE short line — if we only ship this scope, what does the user get? Keep it stable and headline-length; put anything longer in notes.'
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe(
+          'Free-form working notes for this scope — markdown, any length: context, decisions, links, open questions, findings. This is the place for detail — not litmus_text. Replaces the whole field, so pass the existing notes plus your additions when appending.'
+        ),
       hill_progress: z.number().min(0).max(1).optional(),
       // Flag this scope as the pitch's Core Scope (the heart of the pitch; see
       // ADR 0012). true steals the core from any other scope; false clears it
@@ -935,7 +946,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text?: string; hill_progress?: number; core?: boolean },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; pitchId: string; title: string; tier: string; litmus_text?: string; notes?: string; hill_progress?: number; core?: boolean },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)

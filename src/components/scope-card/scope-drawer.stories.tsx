@@ -90,3 +90,33 @@ export const ShortTasks: Story = {
     },
   },
 }
+
+// Notes carrying the kind of load an agent leaves behind — multi-paragraph
+// markdown (bold, headings, lists, code, links), with "what it ships" still one
+// stable line above it.
+export const LongNotes: Story = {
+  args: {
+    ...baseHandlers,
+    scope: {
+      ...baseScope,
+      notes: [
+        '**Stripe test account:** `acct_1QxTest`. Real credentials live in the Vercel prod env only.',
+        '**Decision (2026-07-24):** we upgrade in place rather than creating a second subscription, so proration is Stripe-side and we never reconcile two invoices.',
+        '### Open questions\n\n- What happens to a trial that upgrades on its last day?\n- Is `checkout.session.completed` enough, or do we need `subscription.updated` too?',
+        'Findings: the `isPublic` guard on [/checkout](https://example.com/checkout) rejects logged-out users before the plan picker renders, so "pick a plan then sign up" is currently impossible.',
+      ].join('\n\n'),
+      tasks: [
+        { id: 't1', title: 'Plan picker', done: true },
+        { id: 't2', title: 'Proration check', done: false },
+      ],
+    },
+  },
+}
+
+// No notes yet — the section still shows, inviting the first line.
+export const EmptyNotes: Story = {
+  args: {
+    ...baseHandlers,
+    scope: { ...baseScope, tasks: [{ id: 't1', title: 'Plan picker', done: false }] },
+  },
+}

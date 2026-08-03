@@ -59,6 +59,8 @@ export const FIXTURE: Omit<
       tier: 'must',
       color: '#3e63dd',
       litmus_text: 'Teams can see and update their pitch sentiment',
+      notes:
+        'Zone thresholds live in `needle-engine.ts`.\n\n**Open questions**\n\n- Should a needle drop below its previous update warn before posting?\n- Do we snapshot the zone, or re-derive it on read?',
       isCore: true,
       done: false,
       tasks: [

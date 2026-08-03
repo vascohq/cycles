@@ -399,6 +399,7 @@ export async function upsertScope(
     // on create. Must NOT be coerced to a default before this point — doing so
     // wipes litmus / resets hill_progress to 0 on a partial update.
     litmus_text?: string
+    notes?: string
     hill_progress?: number
     // Partial-update flag for the pitch's Core Scope pointer (see ADR 0012):
     // true steals, false clears only if this scope is currently core, undefined
@@ -432,6 +433,9 @@ export async function upsertScope(
         tier: params.tier as CycleScope['tier'],
         litmus_text: params.litmus_text ?? '',
         hill_progress: params.hill_progress ?? 0,
+        // Only stored when given: an absent key is the "no notes" state, so a
+        // create without notes doesn't plant an empty string on every scope.
+        ...(params.notes !== undefined ? { notes: params.notes } : {}),
       }
       scopes.push(new LiveObject(scope))
       parentPitchId = params.pitchId
@@ -444,6 +448,7 @@ export async function upsertScope(
       existing.set('title', params.title)
       existing.set('tier', params.tier)
       if (params.litmus_text !== undefined) existing.set('litmus_text', params.litmus_text)
+      if (params.notes !== undefined) existing.set('notes', params.notes)
       if (params.hill_progress !== undefined) existing.set('hill_progress', params.hill_progress)
       parentPitchId = getField(existing, 'pitchId')
     }

@@ -22,6 +22,7 @@ import type { Tier } from '@/cycle-liveblocks.config'
 import { readableTextColor } from '@/lib/color-engine'
 import { Check, Plus, Pencil, Star, MoreHorizontal, Trash2, ChevronDown, GripVertical } from 'lucide-react'
 import { ColorPicker } from '@/components/color-picker'
+import { Markdown } from '@/components/ui/markdown'
 import {
   Sheet,
   SheetContent,
@@ -50,6 +51,8 @@ export type ScopeDrawerScope = {
   tier: Tier
   color: string
   litmus_text: string
+  /** Free-form working notes; undefined/'' when unset. Drawer-only (ADR 0020). */
+  notes?: string
   /** True when this scope is the pitch's Core Scope (see ADR 0012). */
   isCore?: boolean
   tasks: ScopeCardTask[]
@@ -62,7 +65,13 @@ export type ScopeDrawerProps = {
   /** Colors used by sibling scopes — flagged "in use" in the picker. */
   usedColors?: string[]
   onEditScope?: (
-    fields: { title?: string; tier?: Tier; litmus_text?: string; color?: string }
+    fields: {
+      title?: string
+      tier?: Tier
+      litmus_text?: string
+      notes?: string
+      color?: string
+    }
   ) => void
   /** Flag (true) or clear (false) this scope as the pitch's Core Scope. */
   onToggleCore?: (next: boolean) => void
@@ -301,6 +310,24 @@ function ScopeDrawerBody({
           {onAddTask && !readOnly && <AddTaskInput onAddTask={onAddTask} />}
         </div>
       </div>
+
+      {/* Notes — the scope's scratchpad, and the only long-form field here.
+          Last in the drawer because it grows without bound; tasks stay reachable
+          above it. Never rendered on the card face (see ADR 0020). */}
+      <div className="mt-6 border-t pt-4 pb-2">
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+          notes
+        </p>
+        <EditableText
+          value={scope.notes ?? ''}
+          placeholder="Context, decisions, links, open questions…"
+          readOnly={readOnly}
+          multiline
+          longForm
+          onSave={(notes) => onEditScope?.({ notes })}
+          className="text-sm text-muted-foreground leading-relaxed"
+        />
+      </div>
     </>
   )
 }
@@ -312,17 +339,21 @@ function useCommitOnUnmount(
   editing: boolean,
   draft: string,
   original: string,
-  commit: (value: string) => void
+  commit: (value: string) => void,
+  // When true, an emptied draft commits as '' (a deliberate clear) instead of
+  // being treated as "nothing to save".
+  commitEmpty = false
 ) {
-  const pending = useRef({ editing, draft, original, commit })
+  const pending = useRef({ editing, draft, original, commit, commitEmpty })
   useEffect(() => {
-    pending.current = { editing, draft, original, commit }
+    pending.current = { editing, draft, original, commit, commitEmpty }
   })
   useEffect(
     () => () => {
       const p = pending.current
       const trimmed = p.draft.trim()
-      if (p.editing && trimmed && trimmed !== p.original) p.commit(trimmed)
+      if (!p.editing || trimmed === p.original) return
+      if (trimmed || p.commitEmpty) p.commit(trimmed)
     },
     []
   )
@@ -330,11 +361,18 @@ function useCommitOnUnmount(
 
 // Click-to-edit text. Enter saves (Shift+Enter for a newline when multiline),
 // blur saves, Esc reverts. Empty input reverts to the previous value.
+//
+// `longForm` (notes) rewrites all three rules for a field that may hold pages of
+// text: Enter types a newline (blur saves, Esc reverts), emptying it is a real
+// clear rather than a revert, and focus lands the caret at the end instead of
+// selecting everything — a select-all over a page of notes is one keystroke away
+// from wiping it.
 function EditableText({
   value,
   placeholder,
   readOnly,
   multiline,
+  longForm = false,
   onSave,
   className = '',
 }: {
@@ -342,11 +380,23 @@ function EditableText({
   placeholder: string
   readOnly?: boolean
   multiline: boolean
+  longForm?: boolean
   onSave?: (value: string) => void
   className?: string
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Grow the textarea to fit its content — long notes get the room they need
+  // instead of a fixed box with an inner scrollbar.
+  useLayoutEffect(() => {
+    if (!editing) return
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [editing, draft])
 
   function start() {
     if (readOnly || !onSave) return
@@ -356,11 +406,11 @@ function EditableText({
 
   function save() {
     const trimmed = draft.trim()
-    if (trimmed && trimmed !== value) onSave?.(trimmed)
+    if (trimmed !== value && (trimmed || longForm)) onSave?.(trimmed)
     setEditing(false)
   }
 
-  useCommitOnUnmount(editing, draft, value, (v) => onSave?.(v))
+  useCommitOnUnmount(editing, draft, value, (v) => onSave?.(v), longForm)
 
   if (editing && onSave) {
     const shared = {
@@ -370,18 +420,25 @@ function EditableText({
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
       ) => setDraft(e.target.value),
       onBlur: save,
-      onFocus: (
-        e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>
-      ) => e.currentTarget.select(),
+      onFocus: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (longForm) {
+          const end = e.currentTarget.value.length
+          e.currentTarget.setSelectionRange(end, end)
+        } else {
+          e.currentTarget.select()
+        }
+      },
       className: `w-full bg-transparent border-b border-foreground/30 outline-none resize-none ${className}`,
     }
     if (multiline) {
       return (
         <textarea
           {...shared}
+          ref={textareaRef}
           rows={3}
+          className={`${shared.className} overflow-hidden`}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (!longForm && e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               save()
             }
@@ -407,21 +464,48 @@ function EditableText({
     )
   }
 
+  const interactive = !readOnly && !!onSave
+  const shell = `group/edit text-left w-full ${
+    interactive
+      ? 'cursor-text hover:bg-muted/40 rounded -mx-1 px-1 transition-colors'
+      : 'cursor-default'
+  } ${className}`
+  const pencil = interactive && (
+    <Pencil className="inline-block w-3 h-3 ml-1.5 align-baseline opacity-0 group-hover/edit:opacity-40 transition-opacity" />
+  )
+  const empty = <span className="text-muted-foreground/40">{placeholder}</span>
+
+  // Long-form read view renders markdown, which emits block elements (<p>,
+  // <ul>, tables) — illegal inside a <button>. Use a focusable div instead, and
+  // keep the keyboard affordance a button would have given for free.
+  if (longForm) {
+    return (
+      <div
+        {...(interactive
+          ? {
+              role: 'button',
+              tabIndex: 0,
+              onClick: start,
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  start()
+                }
+              },
+            }
+          : {})}
+        className={shell}
+      >
+        {value ? <Markdown>{value}</Markdown> : empty}
+        {pencil}
+      </div>
+    )
+  }
+
   return (
-    <button
-      type="button"
-      onClick={start}
-      disabled={readOnly || !onSave}
-      className={`group/edit text-left w-full ${readOnly || !onSave ? 'cursor-default' : 'cursor-text hover:bg-muted/40 rounded -mx-1 px-1 transition-colors'} ${className}`}
-    >
-      {value ? (
-        <span>{value}</span>
-      ) : (
-        <span className="text-muted-foreground/40">{placeholder}</span>
-      )}
-      {!readOnly && onSave && (
-        <Pencil className="inline-block w-3 h-3 ml-1.5 align-baseline opacity-0 group-hover/edit:opacity-40 transition-opacity" />
-      )}
+    <button type="button" onClick={start} disabled={!interactive} className={shell}>
+      {value ? <span>{value}</span> : empty}
+      {pencil}
     </button>
   )
 }

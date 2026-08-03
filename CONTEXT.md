@@ -96,7 +96,7 @@ _Avoid_: Check-in, standup, status update
 ### Scopes and tasks
 
 **Scope**:
-A vertical slice of work within a pitch. Has a tier, litmus text, hill progress, and tasks.
+A vertical slice of work within a pitch. Has a tier, litmus text, notes, hill progress, and tasks.
 _Avoid_: Story, work item, feature
 
 **Tier**:
@@ -112,8 +112,12 @@ A scope's unique identity color, used to tell scopes apart at a glance — paint
 _Avoid_: Tier color, zone color, theme color
 
 **Litmus Text**:
-A scope's "if only this ships" statement. Tests whether the scope is a meaningful vertical slice that delivers value on its own.
+A scope's "if only this ships" statement. Tests whether the scope is a meaningful vertical slice that delivers value on its own. **One short, stable line** — it is the Scope Card's second line, and detail belongs in **Scope Notes** instead (see [ADR 0020](docs/adr/0020-scope-notes-are-the-long-form-field.md)).
 _Avoid_: Description, acceptance criteria, definition of done
+
+**Scope Notes**:
+A scope's free-form working notes — **markdown**, of any length: context, decisions, links, open questions, findings, whatever the people and agents working the scope need to remember. The counterweight to **Litmus Text**: notes absorb the detail so the litmus can stay one stable line (see [ADR 0020](docs/adr/0020-scope-notes-are-the-long-form-field.md)). Lives **only in the Scope Drawer**, last, below the tasks — never on the Scope Card or Mission Control. Written wholesale (there is no append), by hand or over MCP.
+_Avoid_: Description, comments, spec, scratchpad
 
 **Hill Progress**:
 A scope's position on the hill chart (0..1). Left side (0–0.5) = figuring it out (unknown). Right side (0.5–1.0) = figured out, making it happen (known). Updated by dragging dots.
@@ -226,7 +230,7 @@ A big-picture tile in the scope grid. Leads with the scope's name and its "what 
 _Avoid_: Story card, ticket, work-item card
 
 **Scope Drawer**:
-A right-side panel opened from a Scope Card. The single editor for one scope — its name, tier, Litmus Text, and tasks — using **Inline auto-save**, so dismissing the drawer (including clicking the backdrop) mid-edit commits the pending change rather than losing it. Where all task management lives, including each task's **Assignee** (a per-row avatar + picker drawn from the cycle's org members). Each task row follows a three-part shape borrowed from Linear's row rhythm but with this tool's semantics — `[done-circle] [title, wraps to full text] [assignee avatar]` — where Linear puts a status icon, we put the binary done-circle (no workflow states). The picker is a cmdk type-ahead (reusing `ui/command.tsx` + the `squad-picker` pattern). Its task list can be narrowed by two **drawer-local filters** — an **All / Open** toggle (Open = not done; never "active") and a **by-assignee** filter. These are ephemeral per-viewer view state (never stored in Liveblocks — a filter must not change a collaborator's screen), each control self-hides when there's no choice to make (assignee filter only with >1 assignee present; All/Open toggle only when ≥1 task is done), and filtering never alters the Scope Card's true presence ticks or assignee cluster.
+A right-side panel opened from a Scope Card. The single editor for one scope — its name, tier, Litmus Text, **Scope Notes**, and tasks — using **Inline auto-save**, so dismissing the drawer (including clicking the backdrop) mid-edit commits the pending change rather than losing it. Where all task management lives, including each task's **Assignee** (a per-row avatar + picker drawn from the cycle's org members). Each task row follows a three-part shape borrowed from Linear's row rhythm but with this tool's semantics — `[done-circle] [title, wraps to full text] [assignee avatar]` — where Linear puts a status icon, we put the binary done-circle (no workflow states). The picker is a cmdk type-ahead (reusing `ui/command.tsx` + the `squad-picker` pattern). Its task list can be narrowed by two **drawer-local filters** — an **All / Open** toggle (Open = not done; never "active") and a **by-assignee** filter. These are ephemeral per-viewer view state (never stored in Liveblocks — a filter must not change a collaborator's screen), each control self-hides when there's no choice to make (assignee filter only with >1 assignee present; All/Open toggle only when ≥1 task is done), and filtering never alters the Scope Card's true presence ticks or assignee cluster.
 
 **Inline auto-save**:
 The commit rule for editable fields. An editor with **no Save CTA** treats clicking away as the commit — blurring, or dismissing the surrounding surface (e.g. the Scope Drawer backdrop), saves the pending edit; only Escape discards. An editor **with a Save CTA** (an explicit Save/Create button) is the opposite: the button or Enter commits, and dismissing the surface discards. Creating a new entity uses an explicit CTA (so an accidental click-out never spawns a junk pitch or scope); editing an existing field uses inline auto-save (a lost tweak is always recoverable by editing again).

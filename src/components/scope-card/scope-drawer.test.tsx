@@ -55,6 +55,62 @@ describe('scope field editing', () => {
     expect(onEditScope).toHaveBeenCalledWith({ litmus_text: 'Users can log in with SSO' })
   })
 
+  it('shows notes and saves an edit on blur', () => {
+    const onEditScope = vi.fn()
+    renderDrawer({ onEditScope, scope: { ...SCOPE, notes: 'Blocked on the API' } })
+    fireEvent.click(screen.getByText('Blocked on the API'))
+    const input = screen.getByDisplayValue('Blocked on the API')
+    fireEvent.change(input, { target: { value: 'Unblocked — API shipped' } })
+    fireEvent.blur(input)
+    expect(onEditScope).toHaveBeenCalledWith({ notes: 'Unblocked — API shipped' })
+  })
+
+  it('types a newline into notes instead of saving on Enter', () => {
+    const onEditScope = vi.fn()
+    renderDrawer({ onEditScope, scope: { ...SCOPE, notes: 'One' } })
+    fireEvent.click(screen.getByText('One'))
+    const input = screen.getByDisplayValue('One')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    // Still editing, nothing saved — long-form fields commit on blur, not Enter.
+    expect(onEditScope).not.toHaveBeenCalled()
+    expect(screen.getByDisplayValue('One')).toBeTruthy()
+  })
+
+  it('clears notes when emptied, rather than reverting', () => {
+    const onEditScope = vi.fn()
+    renderDrawer({ onEditScope, scope: { ...SCOPE, notes: 'Stale context' } })
+    fireEvent.click(screen.getByText('Stale context'))
+    const input = screen.getByDisplayValue('Stale context')
+    fireEvent.change(input, { target: { value: '  ' } })
+    fireEvent.blur(input)
+    expect(onEditScope).toHaveBeenCalledWith({ notes: '' })
+  })
+
+  it('renders notes as markdown, and edits the raw source', () => {
+    const onEditScope = vi.fn()
+    renderDrawer({
+      onEditScope,
+      scope: { ...SCOPE, notes: '**Blocked** on the API\n\n- ship the guard' },
+    })
+    // Read view is rendered markdown, not raw syntax.
+    expect(screen.getByText('Blocked').tagName).toBe('STRONG')
+    expect(screen.getByRole('listitem').textContent).toBe('ship the guard')
+    expect(screen.queryByText(/\*\*Blocked\*\*/)).toBeNull()
+
+    // Clicking it edits the markdown source, not the rendered output.
+    fireEvent.click(screen.getByText('Blocked'))
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    expect(textarea.value).toBe('**Blocked** on the API\n\n- ship the guard')
+  })
+
+  it('offers an empty notes field to fill when a scope has none', () => {
+    renderDrawer({ onEditScope: vi.fn() })
+    expect(screen.getByText('notes')).toBeTruthy()
+    expect(
+      screen.getByText('Context, decisions, links, open questions…')
+    ).toBeTruthy()
+  })
+
   it('reverts an emptied field without saving', () => {
     const onEditScope = vi.fn()
     renderDrawer({ onEditScope })
