@@ -2,7 +2,8 @@
 
 // The Kanban view of a pitch (see ADR 0018): the pitch's cards in fixed status
 // columns. Drag a card to another column to change its status (drop into Done
-// pops confetti). Cards can be filtered by scope and assignee, edited, assigned,
+// pops confetti), or up and down within a column to set its priority — top is
+// highest. Cards can be filtered by scope and assignee, edited, assigned,
 // deleted, and created inline. A card's scope shows as a colored tag; unscoped
 // (triage) cards show untagged.
 
@@ -13,17 +14,33 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  useDraggable,
   useDroppable,
   pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Plus, X, Trash2, ChevronDown, Layers, CircleUser } from 'lucide-react'
 import type { CardStatus, PitchView } from '@/cycle-liveblocks.config'
 import type { OrganizationUser } from '@/lib/users'
-import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
-import { cardStatus, groupCardsByStatus, becameDone, type CardColumns } from '@/lib/card-engine'
+import {
+  cardStatus,
+  groupCardsByStatus,
+  becameDone,
+  isCardStatus,
+  resolveCardDrop,
+  type BoardCard,
+  type CardAnchor,
+  type CardColumns,
+} from '@/lib/card-engine'
 import { assigneeFilterOptions, resolveTaskAssignee } from '@/lib/task-engine'
 import { readableTextColor } from '@/lib/color-engine'
 import { fireTaskDoneConfetti } from '@/lib/confetti'
@@ -36,7 +53,8 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
 
-// A card on the board. Unscoped (triage) cards omit scopeId.
+// A card on the board, before its scope is resolved — the shape the Triage tray
+// and the unscoped-card list speak.
 export type BoardTask = {
   id: string
   title: string
@@ -45,11 +63,7 @@ export type BoardTask = {
   assigneeId?: string
 }
 
-type BoardCard = BoardTask & {
-  scopeId?: string
-  scopeTitle?: string
-  scopeColor?: string
-}
+export type { BoardCard }
 
 const UNSCOPED = '__unscoped__'
 
@@ -59,40 +73,38 @@ const COLUMNS: { key: CardStatus; label: string; dot: string }[] = [
   { key: 'done', label: 'Done', dot: 'bg-emerald-500' },
 ]
 
-function toCards(scopes: ScopeGridDerived[], unscoped: BoardTask[]): BoardCard[] {
-  const scoped = scopes.flatMap((s) =>
-    s.tasks.map((t) => ({
-      ...t,
-      scopeId: s.id,
-      scopeTitle: s.title,
-      scopeColor: s.color,
-    }))
-  )
-  // Unscoped (newly-created/triage) cards first, so a new card lands at the top
-  // of its column rather than below the scoped cards.
-  return [...unscoped.map((t) => ({ ...t })), ...scoped]
+// Cards and columns are both droppable. Prefer the card under the pointer so a
+// drop lands at a position; fall back to the column (its background, below the
+// last card) which means "bottom of the column".
+const boardCollisionDetection: CollisionDetection = (args) => {
+  const pointer = pointerWithin(args)
+  const collisions = pointer.length > 0 ? pointer : rectIntersection(args)
+  const onCard = collisions.find((c) => !isCardStatus(String(c.id)))
+  return onCard ? [onCard] : collisions
 }
 
 export function KanbanBoard({
-  scopes,
-  unscopedTasks = [],
+  cards: allCards,
+  scopeOptions,
   orgUsers,
   view,
   onViewChange,
-  onCardStatusChange,
+  onCardMove,
   onCardEdit,
   onCardAssign,
   onCardDelete,
   onCardScope,
   onAddCard,
 }: {
-  scopes: ScopeGridDerived[]
-  unscopedTasks?: BoardTask[]
+  /** The pitch's cards in priority order — top of a column is highest. */
+  cards: BoardCard[]
+  scopeOptions: { id: string; title: string; color: string }[]
   orgUsers: OrganizationUser[]
   /** When set with onViewChange, the view switcher sits inline with filters. */
   view?: PitchView
   onViewChange?: (view: PitchView) => void
-  onCardStatusChange?: (taskId: string, status: CardStatus) => void
+  /** Set a card's column and, when an anchor is given, its position in it. */
+  onCardMove?: (taskId: string, status: CardStatus, anchor: CardAnchor | null) => void
   onCardEdit?: (taskId: string, title: string) => void
   onCardAssign?: (taskId: string, assigneeId: string | null) => void
   onCardDelete?: (taskId: string) => void
@@ -104,16 +116,16 @@ export function KanbanBoard({
     assigneeId: string | null
   ) => void
 }) {
-  const allCards = toCards(scopes, unscopedTasks)
   const [scopeFilter, setScopeFilter] = useState<string | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [overColumn, setOverColumn] = useState<CardStatus | null>(null)
   const [editing, setEditing] = useState<BoardCard | null>(null)
   const [creating, setCreating] = useState<CardStatus | null>(null)
 
   // Filter options self-hide when there's no choice to make.
-  const scopeOptions = scopes.map((s) => ({ id: s.id, title: s.title, color: s.color }))
   const assigneeOptions = assigneeFilterOptions(allCards, orgUsers)
+  const hasUnscoped = allCards.some((c) => !c.scopeId)
   const showScopeFilter = scopeOptions.length >= 1
   const showAssigneeFilter = assigneeOptions.length >= 1
 
@@ -123,6 +135,8 @@ export function KanbanBoard({
     if (assigneeFilter && c.assigneeId !== assigneeFilter) return false
     return true
   })
+  // Only the visible cards, in display order — a drop resolves against what the
+  // person dragging can see, so an active filter never shuffles hidden cards.
   const columns = groupCardsByStatus(cards)
   const activeCard = activeId ? allCards.find((c) => c.id === activeId) ?? null : null
 
@@ -134,17 +148,29 @@ export function KanbanBoard({
     setActiveId(String(event.active.id))
   }
 
+  // Track the column under the pointer so it highlights even while hovering a
+  // card inside it (the collision detection reports the card, not the column).
+  function handleDragOver(event: DragOverEvent) {
+    const overId = event.over ? String(event.over.id) : null
+    if (!overId) return setOverColumn(null)
+    if (isCardStatus(overId)) return setOverColumn(overId)
+    const card = cards.find((c) => c.id === overId)
+    setOverColumn(card ? cardStatus(card) : null)
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     setActiveId(null)
+    setOverColumn(null)
     const { active, over } = event
-    if (!over || !onCardStatusChange) return
-    const target = over.id as CardStatus
+    if (!over || !onCardMove) return
     const card = allCards.find((c) => c.id === active.id)
     if (!card) return
+    const drop = resolveCardDrop(String(active.id), String(over.id), columns)
+    if (!drop) return
     const prev = cardStatus(card)
-    if (prev === target) return
-    onCardStatusChange(card.id, target)
-    if (becameDone(prev, target)) {
+    if (prev === drop.status && !drop.anchor) return
+    onCardMove(card.id, drop.status, drop.anchor)
+    if (becameDone(prev, drop.status)) {
       const rect = active.rect.current.translated
       if (rect) {
         fireTaskDoneConfetti({
@@ -155,7 +181,7 @@ export function KanbanBoard({
     }
   }
 
-  const draggable = !!onCardStatusChange
+  const draggable = !!onCardMove
 
   const grid = (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[300px]">
@@ -166,6 +192,7 @@ export function KanbanBoard({
           cards={columns[col.key]}
           orgUsers={orgUsers}
           draggable={draggable}
+          isOver={overColumn === col.key}
           onOpen={onCardEdit || onCardDelete ? setEditing : undefined}
           onAssign={onCardAssign}
         />
@@ -200,7 +227,7 @@ export function KanbanBoard({
                   {s.title}
                 </DropdownMenuItem>
               ))}
-              {unscopedTasks.length > 0 && (
+              {hasUnscoped && (
                 <DropdownMenuItem onClick={() => setScopeFilter(UNSCOPED)}>
                   <span className="mr-2 h-2.5 w-2.5 rounded-full border border-dashed border-muted-foreground/50" />
                   Unscoped
@@ -238,10 +265,14 @@ export function KanbanBoard({
       {draggable ? (
         <DndContext
           sensors={sensors}
-          collisionDetection={pointerWithin}
+          collisionDetection={boardCollisionDetection}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => setActiveId(null)}
+          onDragCancel={() => {
+            setActiveId(null)
+            setOverColumn(null)
+          }}
         >
           {grid}
           <DragOverlay dropAnimation={null}>
@@ -261,7 +292,9 @@ export function KanbanBoard({
           onEdit={onCardEdit}
           onDelete={onCardDelete}
           onAssign={onCardAssign}
-          onStatusChange={onCardStatusChange}
+          onStatusChange={
+            onCardMove ? (id, status) => onCardMove(id, status, null) : undefined
+          }
           onScopeChange={onCardScope}
         />
       )}
@@ -364,6 +397,7 @@ function Column({
   cards,
   orgUsers,
   draggable,
+  isOver,
   onOpen,
   onAssign,
 }: {
@@ -371,10 +405,12 @@ function Column({
   cards: CardColumns<BoardCard>[CardStatus]
   orgUsers: OrganizationUser[]
   draggable: boolean
+  /** True while a dragged card hovers this column — including over its cards. */
+  isOver?: boolean
   onOpen?: (card: BoardCard) => void
   onAssign?: (taskId: string, assigneeId: string | null) => void
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: col.key })
+  const { setNodeRef } = useDroppable({ id: col.key })
 
   return (
     <div
@@ -390,18 +426,27 @@ function Column({
           {cards.length}
         </span>
       </div>
-      <div className="flex flex-col gap-2.5 min-h-4">
-        {cards.map((card) => (
-          <KanbanCard
-            key={card.id}
-            card={card}
-            orgUsers={orgUsers}
-            draggable={draggable}
-            onOpen={onOpen}
-            onAssign={onAssign}
-          />
-        ))}
-      </div>
+      {/* Sortable within the column: dragging a card up or down sets its
+          priority (top = highest). Each column is its own sorting context; the
+          column itself stays droppable so a drop on the background below the
+          last card means "bottom". */}
+      <SortableContext
+        items={cards.map((c) => c.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="flex flex-col gap-2.5 min-h-4">
+          {cards.map((card) => (
+            <KanbanCard
+              key={card.id}
+              card={card}
+              orgUsers={orgUsers}
+              draggable={draggable}
+              onOpen={onOpen}
+              onAssign={onAssign}
+            />
+          ))}
+        </div>
+      </SortableContext>
     </div>
   )
 }
@@ -419,10 +464,8 @@ function KanbanCard({
   onOpen?: (card: BoardCard) => void
   onAssign?: (taskId: string, assigneeId: string | null) => void
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: card.id,
-    disabled: !draggable,
-  })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: card.id, disabled: !draggable })
   const done = cardStatus(card) === 'done'
   // Stop the assignee picker from starting a drag / opening the editor.
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
@@ -430,6 +473,7 @@ function KanbanCard({
   return (
     <div
       ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
       onClick={() => onOpen?.(card)}

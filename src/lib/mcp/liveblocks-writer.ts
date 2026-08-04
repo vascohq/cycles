@@ -10,6 +10,7 @@ import type {
   Squad,
 } from '@/cycle-liveblocks.config'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
+import { moveTargetIndex, isCardStatus, CARD_STATUSES } from '@/lib/card-engine'
 import {
   assignSquadColor,
   resolveSquadByName,
@@ -477,6 +478,18 @@ export async function upsertScope(
 
 // ── Task ──
 
+// The `batch` tool hands writer params through un-validated (`z.record`), so a
+// tool's zod enum is NOT a guarantee down here. An unknown status would persist
+// and then take the board down for the whole room on the next render, so every
+// writer that stores one checks it at the door — the single point every entry
+// path (standalone tool, batch op) goes through.
+function assertCardStatus(status: unknown): void {
+  if (status === undefined || isCardStatus(status)) return
+  throw new Error(
+    `Invalid status "${String(status)}" — use one of: ${CARD_STATUSES.join(', ')}`
+  )
+}
+
 export async function upsertTask(
   roomId: string,
   params: {
@@ -500,6 +513,8 @@ export async function upsertTask(
   },
   injectedRoot?: any
 ): Promise<UpsertResult> {
+  assertCardStatus(params.status)
+
   const id = params.id ?? nanoid()
   const created = !params.id
   let notFound = false
@@ -568,49 +583,105 @@ export async function upsertTask(
   return { created, id }
 }
 
-// Reorder a task within the flat tasks list, relative to a sibling. Exactly one
-// of `before`/`after` (a sibling task id) must be given. Order is the list
-// position (no order field) — mirrors the in-app drag reorder via LiveList.move.
+// The MCP twin of dragging a card on the board (see ADR 0018): move a task to a
+// Kanban column (`status`) and/or to a position relative to a sibling
+// (`before`/`after`). Position in the flat tasks list IS priority — there is no
+// order field — so a reprioritise is a LiveList.move against an anchor, exactly
+// like the in-app drag. At least one of status/before/after must be given, and
+// before/after are mutually exclusive.
+//
+// `moved` reports whether the card's POSITION changed, so an agent can tell
+// "already there" from "done something" — it is false, not an error, when the
+// card already sat next to its anchor (or when only the column was set).
+// `status` echoes the column when one was set.
 export async function moveTask(
   roomId: string,
-  params: { id: string; before?: string; after?: string }
-): Promise<{ moved: boolean }> {
+  params: {
+    id: string
+    status?: 'todo' | 'doing' | 'done'
+    before?: string
+    after?: string
+  },
+  injectedRoot?: any
+): Promise<{ moved: boolean; status?: 'todo' | 'doing' | 'done' }> {
+  assertCardStatus(params.status)
+
   const hasBefore = !!params.before
   const hasAfter = !!params.after
-  if (hasBefore === hasAfter) {
-    throw new Error('Pass exactly one of "before" or "after" (a sibling task id)')
+  if (hasBefore && hasAfter) {
+    throw new Error('Pass at most one of "before" or "after" (a sibling task id)')
   }
-  const anchorId = (params.after ?? params.before) as string
+  if (!hasBefore && !hasAfter && params.status === undefined) {
+    throw new Error('Pass "status" and/or one of "before"/"after" (a sibling task id)')
+  }
+  const anchorId = params.after ?? params.before
 
   let notFound = false
   let anchorMissing = false
+  let foreignAnchor = false
+  let moved = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const tasks = root.get('tasks')
-    const from = tasks.findIndex((t: any) => getField(t, 'id') === params.id)
-    if (from === -1) {
+    const scopes = root.get('scopes')
+    const task = tasks.find((t: any) => getField(t, 'id') === params.id)
+    if (!task) {
       notFound = true
       return
     }
-    const anchorIdx = tasks.findIndex((t: any) => getField(t, 'id') === anchorId)
-    if (anchorIdx === -1) {
-      anchorMissing = true
-      return
+    if (anchorId !== undefined) {
+      const anchor = tasks.find((t: any) => getField(t, 'id') === anchorId)
+      if (!anchor) {
+        // Nothing has been touched yet, so a bad anchor is a clean no-op.
+        anchorMissing = true
+        return
+      }
+      // Order is one cycle-wide list, so a cross-pitch anchor is silently
+      // meaningless: the move lands the card next to a card its own board never
+      // shows. Reject it rather than report success for a nonsense position.
+      const pitch = resolveTaskPitchId(task, scopes)
+      const anchorPitch = resolveTaskPitchId(anchor, scopes)
+      if (pitch && anchorPitch && pitch !== anchorPitch) {
+        foreignAnchor = true
+        return
+      }
+      if (params.status !== undefined) setCardStatus(task, params.status)
+      const from = tasks.findIndex((t: any) => getField(t, 'id') === params.id)
+      const anchorIdx = tasks.findIndex((t: any) => getField(t, 'id') === anchorId)
+      const to = moveTargetIndex(from, anchorIdx, hasAfter ? 'after' : 'before')
+      if (to !== from) {
+        tasks.move(from, to)
+        moved = true
+      }
+    } else if (params.status !== undefined) {
+      setCardStatus(task, params.status)
     }
-    // LiveList.move(from, to): the element ends at index `to` after removal.
-    const to = hasAfter
-      ? from < anchorIdx
-        ? anchorIdx
-        : anchorIdx + 1
-      : from < anchorIdx
-        ? anchorIdx - 1
-        : anchorIdx
-    if (to !== from) tasks.move(from, to)
   })
 
   if (notFound) throw new Error(`Task not found: "${params.id}"`)
   if (anchorMissing) throw new Error(`Anchor task not found: "${anchorId}"`)
-  return { moved: true }
+  if (foreignAnchor)
+    throw new Error(
+      `Anchor task "${anchorId}" belongs to a different pitch — anchor against a card on the same board`
+    )
+  return { moved, ...(params.status !== undefined ? { status: params.status } : {}) }
+}
+
+// A card's pitch: set directly on Unscoped/triage cards, otherwise derived from
+// its scope (see ADR 0018). Undefined for legacy data carrying neither — those
+// skip the sibling check rather than being blocked by it.
+function resolveTaskPitchId(task: any, scopes: any): string | undefined {
+  const scopeId = getField(task, 'scopeId')
+  if (!scopeId) return getField(task, 'pitchId') as string | undefined
+  const scope = scopes.find((s: any) => getField(s, 'id') === scopeId)
+  return scope ? (getField(scope, 'pitchId') as string | undefined) : undefined
+}
+
+// Status is the source of truth for a card's column; legacy `done` is kept in
+// sync so done-counts and update snapshots stay correct (see ADR 0018).
+function setCardStatus(task: any, status: 'todo' | 'doing' | 'done') {
+  task.set('status', status)
+  task.set('done', status === 'done')
 }
 
 // ── Parking Item ──

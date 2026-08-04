@@ -189,6 +189,30 @@ describe('handleGetPitch', () => {
     expect(tasks.find((t) => t.id === 't2')?.assigneeId).toBeUndefined()
   })
 
+  it('returns the board cards in priority order, including unscoped ones', async () => {
+    const storage: StorageJson = {
+      ...FIXTURE_STORAGE,
+      tasks: [
+        // Deliberately interleaved across scopes: priority is the list order,
+        // not a per-scope grouping (ADR 0018).
+        { id: 't3', scopeId: 's2', title: 'Endpoint', done: false, status: 'doing' },
+        { id: 'tx', pitchId: 'p1', title: 'Awaiting triage', done: false },
+        { id: 't1', scopeId: 's1', title: 'Build gauge', done: true, status: 'done' },
+        { id: 't4', scopeId: 's3', title: 'Other pitch', done: false },
+      ],
+    }
+    mockGetStorage.mockResolvedValue(storage)
+    mockResolvePitch.mockReturnValue(storage.pitches[0])
+
+    const result = await handleGetPitch(ORG_ID, '2026-q2-build', 'mission-control')
+    const data = JSON.parse(result.content[0].text as string) as any
+
+    expect(data.cards.map((c: any) => c.id)).toEqual(['t3', 'tx', 't1'])
+    expect(data.cards[0]).toMatchObject({ scopeId: 's2', scopeTitle: 'API', status: 'doing' })
+    // The triage card has no scope — invisible in scopes[].tasks, visible here.
+    expect(data.cards[1].scopeId).toBeUndefined()
+  })
+
   it('returns error when pitch not found', async () => {
     mockGetStorage.mockResolvedValue(FIXTURE_STORAGE)
     mockResolvePitch.mockReturnValue(undefined)
@@ -511,6 +535,53 @@ describe('handleBatch', () => {
     expect(data.results[0].id).toBe('p1')
     expect(data.results[1].ok).toBe(true)
     expect(data.results[2].ok).toBe(true)
+  })
+
+  it('dispatches move_task, so a whole board reprioritises in one batch', async () => {
+    mockMoveTask.mockResolvedValue({ moved: true })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'move_task', params: { id: 't3', before: 't1' } },
+      { tool: 'move_task', params: { id: 't2', status: 'doing', after: 't3' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0]).toMatchObject({ ok: true, tool: 'move_task' })
+    expect(data.results[1]).toMatchObject({ ok: true, tool: 'move_task' })
+    // Both moves run against the one shared batch root, so the second sees the
+    // first.
+    expect(mockMoveTask).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      { id: 't3', before: 't1' },
+      expect.anything()
+    )
+    expect(mockMoveTask).toHaveBeenLastCalledWith(
+      'org_test:cycle:q2-build',
+      { id: 't2', status: 'doing', after: 't3' },
+      expect.anything()
+    )
+  })
+
+  it("carries each move's outcome through, so a no-op reorder is visible in a batch", async () => {
+    // Re-ranking a board is the reason move_task is batchable; if the batch
+    // swallowed `moved`, an agent could not tell which of its moves did nothing.
+    mockMoveTask
+      .mockResolvedValueOnce({ moved: true })
+      .mockResolvedValueOnce({ moved: false, status: 'doing' })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'move_task', params: { id: 't3', before: 't1' } },
+      { tool: 'move_task', params: { id: 't2', status: 'doing', after: 't3' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0]).toEqual({ ok: true, tool: 'move_task', moved: true })
+    expect(data.results[1]).toEqual({
+      ok: true,
+      tool: 'move_task',
+      moved: false,
+      status: 'doing',
+    })
   })
 
   it('dispatches upsert_squad and delete_squad', async () => {
@@ -870,6 +941,25 @@ describe('task assignment & reordering via registered tools', () => {
       EXTRA
     )
     expect(mockMoveTask).toHaveBeenCalledWith('org_test:cycle:q2-build', { id: 'a', after: 'b' })
+  })
+
+  it('move_task forwards a column change, with or without a priority anchor', async () => {
+    mockMoveTask.mockResolvedValue({ moved: true })
+    await handlerFor('move_task')({ cycle_slug: 'q2-build', id: 'a', status: 'doing' }, EXTRA)
+    expect(mockMoveTask).toHaveBeenCalledWith('org_test:cycle:q2-build', {
+      id: 'a',
+      status: 'doing',
+    })
+
+    await handlerFor('move_task')(
+      { cycle_slug: 'q2-build', id: 'a', status: 'doing', before: 'b' },
+      EXTRA
+    )
+    expect(mockMoveTask).toHaveBeenCalledWith('org_test:cycle:q2-build', {
+      id: 'a',
+      status: 'doing',
+      before: 'b',
+    })
   })
 
   it('list_members returns userId, name, email', async () => {
