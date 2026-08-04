@@ -30,6 +30,7 @@ import { getTeamToday } from '@/lib/team-time'
 import type { SlackMessageParams } from '@/lib/slack-message'
 import { useOrganizationUsers } from '@/components/organization-users-context'
 import type { Stage, Zone, PitchUpdate, CycleScope, ScopeTask, PitchView, CardStatus } from '@/cycle-liveblocks.config'
+import { deriveBoardCards, moveTargetIndex, type CardAnchor } from '@/lib/card-engine'
 import { LiveObject } from '@liveblocks/client'
 import { nanoid } from 'nanoid'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -158,15 +159,24 @@ function ScopeMapWired({
     [pitchId]
   )
 
-  // Move a card between Kanban columns. `done` is kept in sync with status so
-  // existing done-counts/snapshots stay correct (status is the source of truth;
-  // see ADR 0018).
-  const onTaskStatusChange = useCycleMutation(
-    ({ storage }, taskId: string, status: CardStatus) => {
-      const t = storage.get('tasks').find((x) => x.get('id') === taskId)
-      if (!t) return
+  // Move a card on the board: its column, and — when an anchor card is given —
+  // its position within that column, which is its priority (see ADR 0018).
+  // Order is the position in the flat `tasks` list, so the move is a
+  // LiveList.move relative to the anchor; `done` is kept in sync with status so
+  // existing done-counts/snapshots stay correct (status is the source of truth).
+  const onCardMove = useCycleMutation(
+    ({ storage }, taskId: string, status: CardStatus, anchor: CardAnchor | null) => {
+      const tasksList = storage.get('tasks')
+      const from = tasksList.findIndex((x) => x.get('id') === taskId)
+      if (from === -1) return
+      const t = tasksList.get(from)!
       t.set('status', status)
       t.set('done', status === 'done')
+      if (!anchor) return
+      const anchorIdx = tasksList.findIndex((x) => x.get('id') === anchor.id)
+      if (anchorIdx === -1) return
+      const to = moveTargetIndex(from, anchorIdx, anchor.placement)
+      if (to !== from) tasksList.move(from, to)
     },
     []
   )
@@ -365,8 +375,9 @@ function ScopeMapWired({
         ...(scopeId ? { scopeId } : { pitchId }),
         ...(assigneeId ? { assigneeId } : {}),
       }
-      // Insert at the front so a new card shows at the top of its column.
-      storage.get('tasks').insert(new LiveObject(task), 0)
+      // Append: a new card lands at the bottom of its column — lowest priority
+      // until someone drags it up (see ADR 0018).
+      storage.get('tasks').push(new LiveObject(task))
     },
     [pitchId]
   )
@@ -608,6 +619,10 @@ function ScopeMapWired({
     pitchId,
     pitch?.core_scope_id
   )
+  // The Kanban board's cards: the pitch's tasks as one flat list, in `tasks`
+  // order — which is their priority (see ADR 0018). Scope rides along as a tag,
+  // so the board is NOT rebuilt from the per-scope grid items.
+  const boardCards = deriveBoardCards(allTasks, scopeGridItems, pitchId)
   // Unscoped (triage) cards: parented to the pitch, no scope. Surfaced on the
   // Kanban board untagged (see ADR 0018).
   const unscopedTasks = allTasks
@@ -805,8 +820,9 @@ function ScopeMapWired({
       today={today}
       onStageChange={onStageChange}
       onViewChange={onViewChange}
-      onTaskStatusChange={onTaskStatusChange}
+      onCardMove={onCardMove}
       onTaskScopeChange={onTaskScopeChange}
+      boardCards={boardCards}
       unscopedTasks={unscopedTasks}
       onAddCard={onAddCard}
       onEmojiChange={onEmojiChange}

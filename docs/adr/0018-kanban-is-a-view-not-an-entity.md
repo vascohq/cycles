@@ -25,6 +25,18 @@ Two distinct ways a pitch is Kanban, settled after the first build:
 
 So the needle/hill section renders when `hasTimebox`; the board renders when `showKanban = !hasTimebox || view === 'kanban'`; the scope grid when `!showKanban`. Trade-off accepted: a Shape-Up pitch that hasn't been given a timebox yet reads as Kanban mode until dates are set — benign, and consistent with "no appetite ⇒ not yet shaped."
 
+## Card order is priority
+
+Added after the first build: **a card's position within its column is its priority** (top = highest), set by dragging it up and down. Decisions:
+
+- **Order is the position in the flat `tasks` list** — no `order`/`rank` field. This is the convention already used for **Scope** order and for task reordering inside the Scope Drawer, and it needs no backfill: every existing card already has a position. Rejected a fractional-index/LexoRank field: it buys concurrent-insert precision the board doesn't need (Liveblocks already resolves concurrent `LiveList.move`s), at the cost of a second, contradictable source of truth.
+- **The board reads that order directly.** v1 rebuilt the board's cards from the per-scope grid items, which silently sorted them by scope; that's dropped for a single flat derivation (`deriveBoardCards`) over the pitch's tasks. Scope is a tag on a card, never its grouping — so the board is one ordered list, split into columns by status.
+- **A move is expressed against an anchor** (a sibling card + `before`/`after`), never an absolute index — the same shape MCP `move_task` already used, with the index math now shared (`moveTargetIndex`). This is what makes reordering correct **while a filter is active**: the anchor is the neighbour the person can actually see, so hidden cards are never shuffled. Dropping on a column's background (below the last card) means "bottom".
+- **Agents reprioritise the same way people do.** `move_task` is the MCP twin of a board drag: it takes an optional `status` (the column, keeping `done` in sync) *and/or* a `before`/`after` anchor (the priority), so one call does what one drag does. It's also batchable, so a whole board can be re-ranked in a single load/flush with each move seeing the previous one. Rejected a separate `reprioritise_task` verb — same operation, and a second name invites the two to drift.
+- **Reads expose the order.** `get_pitch` returns `cards`: the pitch's cards as one flat list in priority order, **including Unscoped/triage cards**, which `scopes[].tasks` structurally cannot show. Without this an agent could reorder but not see what it was reordering.
+- **New cards land at the bottom** of their column, not the top. Claiming priority should be a deliberate drag, not a side effect of being created last. This reverses v1's `insert(…, 0)`; the MCP writer already appended.
+- **Not modelled:** a priority *field* (P0/P1, numeric rank) — one ordered list cannot disagree with itself, two representations can. Also still deferred: WIP limits, per-column ordering rules (e.g. auto-sorting Done by completion time), and cross-pitch priority.
+
 ## Consequences
 
 - **Schema change to Task.** `pitchId` added (always set), `scopeId` optional, `status` enum added. Legacy binary `done` is **derived** (`status === 'done'`) so existing done-counts and snapshots keep working. `doing` exists only as a board column — the Scope Drawer still renders a task as a plain done/not-done line.
@@ -32,6 +44,6 @@ So the needle/hill section renders when `hasTimebox`; the board renders when `sh
 - **Kanban pitches ship manually.** No needle means the needle-at-100% auto-advance can't fire; a kanban pitch defaults to `building` and is flipped to `done` manually (optional — clean-slate auto-ends it at cycle close). Framing/shaping stages don't apply.
 - **Celebrations reuse existing confetti.** `fireTaskDoneConfetti` fires per card into the Done column; `startConfettiRain(gold = true)` is the all-cards-done gold parade — a celebration, **not** a stage change.
 - **Kanban-mode pitches have no Updates.** An Update is a needle move over a timebox; a Kanban-mode pitch (no timebox) has neither, and the board itself is the status — so the Updates feed and posting are hidden when `!hasTimebox`. (An earlier plan for a card-diff "Kanban update" was dropped in favour of this simpler rule. A Shape-Up pitch *viewed* as Kanban keeps its needle and Updates.)
-- **MCP follow-ons.** `upsert_pitch` gains an optional `view` param; `upsert_task` gains optional `status` and pitch-level (scopeless) creation; `move_task` extends to move a card between statuses. All partial-update-safe (ADR 0011).
+- **MCP follow-ons.** `upsert_pitch` gains an optional `view` param; `upsert_task` gains optional `status` and pitch-level (scopeless) creation; `move_task` extends to move a card between statuses **and to set its priority** (see "Card order is priority"). All partial-update-safe (ADR 0011).
 - **Mission Control row.** A kanban-view pitch has no mini-needle; its row shows a `kanban` badge in that slot plus its **Timebox** bar if one is set.
 - **Deferred:** swimlanes, WIP limits, embedded sections, counting unscoped tasks in `task_snapshot`, per-viewer view override, a Triage-tray size cap.

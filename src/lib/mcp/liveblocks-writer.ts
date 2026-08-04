@@ -10,6 +10,7 @@ import type {
   Squad,
 } from '@/cycle-liveblocks.config'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
+import { moveTargetIndex } from '@/lib/card-engine'
 import {
   assignSquadColor,
   resolveSquadByName,
@@ -568,49 +569,68 @@ export async function upsertTask(
   return { created, id }
 }
 
-// Reorder a task within the flat tasks list, relative to a sibling. Exactly one
-// of `before`/`after` (a sibling task id) must be given. Order is the list
-// position (no order field) — mirrors the in-app drag reorder via LiveList.move.
+// The MCP twin of dragging a card on the board (see ADR 0018): move a task to a
+// Kanban column (`status`) and/or to a position relative to a sibling
+// (`before`/`after`). Position in the flat tasks list IS priority — there is no
+// order field — so a reprioritise is a LiveList.move against an anchor, exactly
+// like the in-app drag. At least one of status/before/after must be given, and
+// before/after are mutually exclusive.
 export async function moveTask(
   roomId: string,
-  params: { id: string; before?: string; after?: string }
+  params: {
+    id: string
+    status?: 'todo' | 'doing' | 'done'
+    before?: string
+    after?: string
+  },
+  injectedRoot?: any
 ): Promise<{ moved: boolean }> {
   const hasBefore = !!params.before
   const hasAfter = !!params.after
-  if (hasBefore === hasAfter) {
-    throw new Error('Pass exactly one of "before" or "after" (a sibling task id)')
+  if (hasBefore && hasAfter) {
+    throw new Error('Pass at most one of "before" or "after" (a sibling task id)')
   }
-  const anchorId = (params.after ?? params.before) as string
+  if (!hasBefore && !hasAfter && params.status === undefined) {
+    throw new Error('Pass "status" and/or one of "before"/"after" (a sibling task id)')
+  }
+  const anchorId = params.after ?? params.before
 
   let notFound = false
   let anchorMissing = false
 
-  await liveblocks.mutateStorage(roomId, ({ root }: { root: any }) => {
+  await withRoot(roomId, injectedRoot, (root: any) => {
     const tasks = root.get('tasks')
-    const from = tasks.findIndex((t: any) => getField(t, 'id') === params.id)
-    if (from === -1) {
+    const task = tasks.find((t: any) => getField(t, 'id') === params.id)
+    if (!task) {
       notFound = true
       return
     }
-    const anchorIdx = tasks.findIndex((t: any) => getField(t, 'id') === anchorId)
-    if (anchorIdx === -1) {
-      anchorMissing = true
-      return
+    if (anchorId !== undefined) {
+      const anchorIdx = tasks.findIndex((t: any) => getField(t, 'id') === anchorId)
+      if (anchorIdx === -1) {
+        // Nothing has been touched yet, so a bad anchor is a clean no-op.
+        anchorMissing = true
+        return
+      }
+      if (params.status !== undefined) setCardStatus(task, params.status)
+      const from = tasks.findIndex((t: any) => getField(t, 'id') === params.id)
+      const to = moveTargetIndex(from, anchorIdx, hasAfter ? 'after' : 'before')
+      if (to !== from) tasks.move(from, to)
+    } else if (params.status !== undefined) {
+      setCardStatus(task, params.status)
     }
-    // LiveList.move(from, to): the element ends at index `to` after removal.
-    const to = hasAfter
-      ? from < anchorIdx
-        ? anchorIdx
-        : anchorIdx + 1
-      : from < anchorIdx
-        ? anchorIdx - 1
-        : anchorIdx
-    if (to !== from) tasks.move(from, to)
   })
 
   if (notFound) throw new Error(`Task not found: "${params.id}"`)
   if (anchorMissing) throw new Error(`Anchor task not found: "${anchorId}"`)
   return { moved: true }
+}
+
+// Status is the source of truth for a card's column; legacy `done` is kept in
+// sync so done-counts and update snapshots stay correct (see ADR 0018).
+function setCardStatus(task: any, status: 'todo' | 'doing' | 'done') {
+  task.set('status', status)
+  task.set('done', status === 'done')
 }
 
 // ── Parking Item ──

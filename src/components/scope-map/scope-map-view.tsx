@@ -32,6 +32,7 @@ import {
 import type { TimelineCard } from '@/lib/timeline-helpers'
 import type { Stage, Zone, Needle, NeedleSnapshot, PitchView, CardStatus } from '@/cycle-liveblocks.config'
 import { KanbanBoard, ViewToggle, CreateCardDialog, EditCardDialog, type BoardTask } from '@/components/scope-map/kanban-board'
+import type { BoardCard, CardAnchor } from '@/lib/card-engine'
 import { TriageTray } from '@/components/scope-map/triage-tray'
 import type { ScopeGridDerived } from '@/lib/scope-map-helpers'
 import { shouldShowCoreScopePrompt } from '@/lib/scope-map-helpers'
@@ -94,9 +95,15 @@ export type ScopeMapViewProps = {
   today: string
   onStageChange?: (stage: Stage) => void
   onViewChange?: (view: PitchView) => void
-  onTaskStatusChange?: (taskId: string, status: CardStatus) => void
+  /**
+   * Move a card to a column and, when an anchor is given, to a position within
+   * it — the board's order is priority (see ADR 0018).
+   */
+  onCardMove?: (taskId: string, status: CardStatus, anchor: CardAnchor | null) => void
   onTaskScopeChange?: (taskId: string, scopeId: string | null) => void
-  /** Unscoped (triage) cards — shown untagged on the Kanban board. */
+  /** The pitch's Kanban cards in priority order (see ADR 0018). */
+  boardCards?: BoardCard[]
+  /** Unscoped (triage) cards — the Triage tray's contents in Scope Map view. */
   unscopedTasks?: BoardTask[]
   onAddCard?: (
     title: string,
@@ -167,8 +174,9 @@ export function ScopeMapView({
   today,
   onStageChange,
   onViewChange,
-  onTaskStatusChange,
+  onCardMove,
   onTaskScopeChange,
+  boardCards = [],
   unscopedTasks = [],
   onAddCard,
   onEmojiChange,
@@ -220,10 +228,7 @@ export function ScopeMapView({
   // Shape-Up pitches keep the needle/scope celebration even when viewed as a
   // board (the needle/hill still show — see ADR 0018).
   const celebration = isKanbanMode
-    ? areAllCardsDone([
-        ...scopeGridItems.flatMap((s) => s.tasks),
-        ...unscopedTasks,
-      ])
+    ? areAllCardsDone(boardCards)
       ? 'gold'
       : 'none'
     : pageCelebration(
@@ -360,12 +365,12 @@ export function ScopeMapView({
       {showKanban && (
         <section>
           <KanbanBoard
-            scopes={scopeGridItems}
-            unscopedTasks={unscopedTasks}
+            cards={boardCards}
+            scopeOptions={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
             orgUsers={orgUsers}
             view={pitch.view ?? 'kanban'}
             onViewChange={hasTimebox ? onViewChange : undefined}
-            onCardStatusChange={isDone ? undefined : onTaskStatusChange}
+            onCardMove={isDone ? undefined : onCardMove}
             onCardEdit={
               !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined
             }
@@ -541,7 +546,9 @@ export function ScopeMapView({
             onEdit={onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined}
             onDelete={onTaskDelete ? (id) => onTaskDelete('', id) : undefined}
             onAssign={onTaskAssign ? (id, uid) => onTaskAssign('', id, uid) : undefined}
-            onStatusChange={onTaskStatusChange}
+            onStatusChange={
+              onCardMove ? (id, status) => onCardMove(id, status, null) : undefined
+            }
             onScopeChange={onTaskScopeChange}
           />
         )

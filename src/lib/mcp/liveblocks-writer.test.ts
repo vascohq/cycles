@@ -740,6 +740,8 @@ describe('moveTask', () => {
       ],
     })
   const order = (s: ReturnType<typeof seed>) => s.tasks.map((t) => t.get('id'))
+  const card = (s: ReturnType<typeof seed>, id: string) =>
+    s.tasks.find((t) => t.get('id') === id)!
 
   it('moves a task after a later sibling', async () => {
     const s = seed()
@@ -759,20 +761,60 @@ describe('moveTask', () => {
     expect(order(s)).toEqual(['c', 'a', 'b'])
   })
 
-  it('throws when neither before nor after is given', async () => {
+  it('changes a card column on its own, leaving the order alone', async () => {
+    const s = seed()
+    await moveTask(ROOM, { id: 'b', status: 'doing' })
+    expect(order(s)).toEqual(['a', 'b', 'c'])
+    expect(card(s, 'b').get('status')).toBe('doing')
+    expect(card(s, 'b').get('done')).toBe(false)
+  })
+
+  it('keeps the legacy done flag in sync with the column', async () => {
+    const s = seed()
+    await moveTask(ROOM, { id: 'a', status: 'done' })
+    expect(card(s, 'a').get('done')).toBe(true)
+    await moveTask(ROOM, { id: 'a', status: 'todo' })
+    expect(card(s, 'a').get('done')).toBe(false)
+  })
+
+  it('sets the column and the priority in one move', async () => {
+    const s = seed()
+    await moveTask(ROOM, { id: 'c', status: 'doing', before: 'a' })
+    expect(order(s)).toEqual(['c', 'a', 'b'])
+    expect(card(s, 'c').get('status')).toBe('doing')
+  })
+
+  it('throws when nothing to do is given', async () => {
     seed()
-    await expect(moveTask(ROOM, { id: 'a' })).rejects.toThrow(/exactly one/i)
+    await expect(moveTask(ROOM, { id: 'a' })).rejects.toThrow(/status/i)
   })
 
   it('throws when both before and after are given', async () => {
     seed()
-    await expect(moveTask(ROOM, { id: 'a', before: 'b', after: 'c' })).rejects.toThrow(/exactly one/i)
+    await expect(moveTask(ROOM, { id: 'a', before: 'b', after: 'c' })).rejects.toThrow(/at most one/i)
   })
 
   it('throws when the task or anchor is missing', async () => {
     seed()
     await expect(moveTask(ROOM, { id: 'ghost', after: 'b' })).rejects.toThrow(/Task not found/)
     await expect(moveTask(ROOM, { id: 'a', after: 'ghost' })).rejects.toThrow(/Anchor task not found/)
+  })
+
+  it('leaves the column unchanged when the anchor is missing', async () => {
+    const s = seed()
+    await expect(
+      moveTask(ROOM, { id: 'a', status: 'doing', after: 'ghost' })
+    ).rejects.toThrow(/Anchor task not found/)
+    expect(card(s, 'a').get('status')).toBeUndefined()
+    expect(order(s)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('runs against a batch root without opening its own mutateStorage', async () => {
+    const s = seed()
+    const root = { get: (key: string) => (s as any)[key] }
+    await moveTask(ROOM, { id: 'a', after: 'c' }, root)
+    expect(order(s)).toEqual(['b', 'c', 'a'])
+    expect(mockMutateStorage).not.toHaveBeenCalled()
   })
 })
 

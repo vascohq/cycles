@@ -5,6 +5,7 @@ import { resolveOrg, type OrgMembership } from './auth'
 import { slugify } from '@/lib/slugify'
 import { derivePitchCards } from '@/lib/mission-control-helpers'
 import { deriveTotalTaskProgress, resolveCoreScopeId } from '@/lib/scope-map-helpers'
+import { deriveBoardCards } from '@/lib/card-engine'
 import { buildUpdate } from '@/lib/update-engine'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { normalizeEmoji, validateNotionUrl } from '@/lib/pitch-identity-engine'
@@ -224,9 +225,15 @@ export async function handleGetPitch(
       (p) => p.pitchId === pitch.id
     )
 
+    // The Kanban board (see ADR 0018): the pitch's cards as one flat list in
+    // priority order — top of a column is highest — including Unscoped (triage)
+    // cards, which `scopes[].tasks` cannot show. Reprioritise with move_task.
+    const cards = deriveBoardCards(storage.tasks, pitchScopes, pitch.id)
+
     return jsonResult({
       pitch: { ...pitch, core_scope_id: coreId },
       scopes,
+      cards,
       parkingItems,
     })
   } catch {
@@ -451,6 +458,9 @@ const WRITE_TOOLS: Record<
   upsert_pitch: upsertPitch,
   upsert_scope: upsertScope,
   upsert_task: upsertTask,
+  // Batchable so a whole board can be reprioritised in one load/flush — each
+  // move sees the previous one's order (see ADR 0018).
+  move_task: (roomId, p, root) => moveTask(roomId, p, root).then(() => undefined),
   upsert_parking_item: upsertParkingItem,
   upsert_squad: upsertSquad,
   delete_squad: (roomId, p, root) => deleteSquad(roomId, p.id, root).then(() => undefined),
@@ -700,7 +710,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'get_pitch',
-    'Get full pitch detail with scopes, tasks, and parking items',
+    'Get full pitch detail with scopes, tasks, and parking items. Also returns `cards`: the pitch\'s Kanban cards as one flat list in priority order (top of a column is highest), including Unscoped/triage cards that scopes[].tasks cannot show — reprioritise them with move_task.',
     { ...orgArg, ...slugPathArg },
     { title: 'Get pitch', readOnlyHint: true, openWorldHint: false },
     async (
@@ -1036,13 +1046,23 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'move_task',
-    'Reorder a task within its scope, relative to a sibling task. Pass exactly one of `before` or `after` (a sibling task id).',
+    'Move a card on the Kanban board: its column (`status`) and/or its priority — the position within that column, where top is highest. Priority is the order itself (no priority field): pass `before`/`after` a sibling task id to reprioritise, exactly like dragging the card. Pass `status` and/or one of `before`/`after` (never both anchors). Reads (get_pitch) return tasks in priority order.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().describe('Id of the task to move'),
-      before: z.string().optional().describe('Place the task immediately before this sibling task id'),
-      after: z.string().optional().describe('Place the task immediately after this sibling task id'),
+      status: z
+        .enum(['todo', 'doing', 'done'])
+        .optional()
+        .describe('Kanban column to move the card to; keeps `done` in sync'),
+      before: z
+        .string()
+        .optional()
+        .describe('Place the task immediately before this sibling task id (higher priority than it)'),
+      after: z
+        .string()
+        .optional()
+        .describe('Place the task immediately after this sibling task id (lower priority than it)'),
     },
     {
       title: 'Move task',
@@ -1052,7 +1072,18 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id: string; before?: string; after?: string },
+      {
+        org,
+        cycle_slug,
+        ...params
+      }: {
+        org?: string
+        cycle_slug: string
+        id: string
+        status?: 'todo' | 'doing' | 'done'
+        before?: string
+        after?: string
+      },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -1342,7 +1373,7 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       operations: z.array(
         z.object({
-          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update'),
+          tool: z.string().describe('Tool name: upsert_pitch, upsert_scope, upsert_task, move_task, upsert_parking_item, upsert_squad, delete_pitch, delete_scope, delete_task, delete_parking_item, delete_squad, undo_update'),
           params: z.record(z.unknown()).describe('Tool parameters'),
         })
       ),
