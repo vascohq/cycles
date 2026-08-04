@@ -548,7 +548,8 @@ describe('handleBatch', () => {
     const data = JSON.parse(result.content[0].text) as any
     expect(data.results[0]).toMatchObject({ ok: true, tool: 'move_task' })
     expect(data.results[1]).toMatchObject({ ok: true, tool: 'move_task' })
-    // Both moves run against the one shared batch root, so the second sees the first.
+    // Both moves run against the one shared batch root, so the second sees the
+    // first.
     expect(mockMoveTask).toHaveBeenCalledWith(
       'org_test:cycle:q2-build',
       { id: 't3', before: 't1' },
@@ -559,6 +560,28 @@ describe('handleBatch', () => {
       { id: 't2', status: 'doing', after: 't3' },
       expect.anything()
     )
+  })
+
+  it("carries each move's outcome through, so a no-op reorder is visible in a batch", async () => {
+    // Re-ranking a board is the reason move_task is batchable; if the batch
+    // swallowed `moved`, an agent could not tell which of its moves did nothing.
+    mockMoveTask
+      .mockResolvedValueOnce({ moved: true })
+      .mockResolvedValueOnce({ moved: false, status: 'doing' })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'move_task', params: { id: 't3', before: 't1' } },
+      { tool: 'move_task', params: { id: 't2', status: 'doing', after: 't3' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0]).toEqual({ ok: true, tool: 'move_task', moved: true })
+    expect(data.results[1]).toEqual({
+      ok: true,
+      tool: 'move_task',
+      moved: false,
+      status: 'doing',
+    })
   })
 
   it('dispatches upsert_squad and delete_squad', async () => {

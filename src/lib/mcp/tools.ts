@@ -14,7 +14,7 @@ import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
-import type { Zone, Needle } from '@/cycle-liveblocks.config'
+import type { Zone, Needle, CardStatus } from '@/cycle-liveblocks.config'
 import {
   createCycle,
   updateCycle,
@@ -446,21 +446,40 @@ export async function handlePostUpdate(
 // ── Write tool handlers ──
 
 type BatchOp = { tool: string; params: Record<string, unknown> }
-type BatchResult = { ok: true; tool: string; id?: string; created?: boolean } | { ok: false; tool: string; error: string }
+type BatchResult =
+  | {
+      ok: true
+      tool: string
+      id?: string
+      created?: boolean
+      moved?: boolean
+      status?: CardStatus
+    }
+  | { ok: false; tool: string; error: string }
+
+// What a write tool reports back. A batched op's result must say as much as the
+// standalone call does: an upsert answers "which entity, new or not", a move
+// answers "did the position actually change" (see ADR 0018) — dropping that on
+// the batch path would blind an agent re-ranking a whole board in one call,
+// which is the reason move_task is batchable at all.
+type WriteResult =
+  | { created: boolean; id: string }
+  | { moved: boolean; status?: CardStatus }
+  | void
 
 // Each handler takes the shared batch `root` (from openBatch's single
 // mutateStorage) as its last arg, so every op in a batch mutates one loaded
 // storage doc instead of opening its own load/flush.
 const WRITE_TOOLS: Record<
   string,
-  (roomId: string, params: any, root: any) => Promise<{ created: boolean; id: string } | void>
+  (roomId: string, params: any, root: any) => Promise<WriteResult>
 > = {
   upsert_pitch: upsertPitch,
   upsert_scope: upsertScope,
   upsert_task: upsertTask,
   // Batchable so a whole board can be reprioritised in one load/flush — each
   // move sees the previous one's order (see ADR 0018).
-  move_task: (roomId, p, root) => moveTask(roomId, p, root).then(() => undefined),
+  move_task: moveTask,
   upsert_parking_item: upsertParkingItem,
   upsert_squad: upsertSquad,
   delete_squad: (roomId, p, root) => deleteSquad(roomId, p.id, root).then(() => undefined),
@@ -494,11 +513,8 @@ export async function handleBatch(
       }
       try {
         const result = await handler(roomId, op.params, root)
-        if (result) {
-          results.push({ ok: true, tool: op.tool, id: result.id, created: result.created })
-        } else {
-          results.push({ ok: true, tool: op.tool })
-        }
+        // Forward whichever outcome the writer reports; a delete reports none.
+        results.push({ ok: true, tool: op.tool, ...(result ?? {}) })
       } catch (err) {
         results.push({ ok: false, tool: op.tool, error: (err as Error).message })
       }
@@ -1367,7 +1383,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'batch',
-    'Execute multiple write operations sequentially. Each operation specifies a tool and params. Returns results for all operations — successful ops persist even if others fail.',
+    'Execute multiple write operations sequentially. Each operation specifies a tool and params. Returns results for all operations — successful ops persist even if others fail. Each result carries that op\'s outcome, same as the standalone call: `id`/`created` for an upsert, `moved` for move_task (false = the card was already in that position).',
     {
       ...orgArg,
       ...cycleSlugArg,
