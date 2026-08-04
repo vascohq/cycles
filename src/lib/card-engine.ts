@@ -67,11 +67,21 @@ export function moveTargetIndex(
   return from < anchorIdx ? anchorIdx - 1 : anchorIdx
 }
 
+export const CARD_STATUSES: readonly CardStatus[] = ['todo', 'doing', 'done']
+
+export function isCardStatus(value: unknown): value is CardStatus {
+  return typeof value === 'string' && (CARD_STATUSES as readonly string[]).includes(value)
+}
+
 // A card's column. Existing tasks predate the `status` field (they only carry
 // the legacy binary `done`), so when `status` is absent we derive it: a done
 // task is `done`, anything else is `todo`. No stored migration needed.
+// A stored status outside the enum is treated as absent rather than trusted:
+// every column lookup goes through here, and an unknown key would take the
+// board down for the whole room (writers reject one at the door, but stored
+// data outlives the code that wrote it).
 export function cardStatus(task: { status?: CardStatus; done?: boolean }): CardStatus {
-  if (task.status) return task.status
+  if (isCardStatus(task.status)) return task.status
   return task.done ? 'done' : 'todo'
 }
 
@@ -92,12 +102,6 @@ export function areAllCardsDone(
 }
 
 export type CardColumns<T> = { todo: T[]; doing: T[]; done: T[] }
-
-export const CARD_STATUSES: CardStatus[] = ['todo', 'doing', 'done']
-
-export function isCardStatus(value: string): value is CardStatus {
-  return (CARD_STATUSES as string[]).includes(value)
-}
 
 // Turn a board drop into "which column, next to which card". `overId` is either
 // a column key — dropped on the column's background, so the card lands at the

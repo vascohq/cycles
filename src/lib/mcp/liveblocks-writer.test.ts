@@ -602,6 +602,24 @@ describe('upsertTask', () => {
     expect(t.get('done')).toBe(false)
   })
 
+  it('refuses a status outside the enum, on create and on update', async () => {
+    const t = makeMockItem({ id: 't1', scopeId: 's1', title: 'T', done: false })
+    const storage = setupStorage({ scopes: [makeMockItem({ id: 's1' })], tasks: [t] })
+
+    // The `batch` tool forwards params un-validated, so the zod enum on the tool
+    // is no guarantee here — an unknown status must never reach storage, where it
+    // would break every column lookup on the board.
+    await expect(
+      upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'T', status: 'blocked' as any })
+    ).rejects.toThrow(/Invalid status "blocked"/)
+    expect(t.get('status')).toBeUndefined()
+
+    await expect(
+      upsertTask(ROOM, { scopeId: 's1', title: 'New', status: '' as any })
+    ).rejects.toThrow(/Invalid status/)
+    expect([...storage.tasks]).toHaveLength(1)
+  })
+
   it('creates an unscoped (triage) task parented to a pitch', async () => {
     const storage = setupStorage({ pitches: [makeMockItem({ id: 'p1' })] })
 
@@ -733,10 +751,17 @@ describe('moveTask', () => {
 
   const seed = () =>
     setupStorage({
+      // Two pitches share the one cycle-wide tasks list, so a move's anchor can
+      // (wrongly) point at another board's card — 'z' is that card.
+      scopes: [
+        makeMockItem({ id: 's1', pitchId: 'p1' }),
+        makeMockItem({ id: 's2', pitchId: 'p2' }),
+      ],
       tasks: [
         makeMockItem({ id: 'a', scopeId: 's1', title: 'A', done: false }),
         makeMockItem({ id: 'b', scopeId: 's1', title: 'B', done: false }),
         makeMockItem({ id: 'c', scopeId: 's1', title: 'C', done: false }),
+        makeMockItem({ id: 'z', scopeId: 's2', title: 'Z', done: false }),
       ],
     })
   const order = (s: ReturnType<typeof seed>) => s.tasks.map((t) => t.get('id'))
@@ -746,25 +771,25 @@ describe('moveTask', () => {
   it('moves a task after a later sibling', async () => {
     const s = seed()
     await moveTask(ROOM, { id: 'a', after: 'b' })
-    expect(order(s)).toEqual(['b', 'a', 'c'])
+    expect(order(s)).toEqual(['b', 'a', 'c', 'z'])
   })
 
   it('moves a task after a later sibling (to the end)', async () => {
     const s = seed()
     await moveTask(ROOM, { id: 'a', after: 'c' })
-    expect(order(s)).toEqual(['b', 'c', 'a'])
+    expect(order(s)).toEqual(['b', 'c', 'a', 'z'])
   })
 
   it('moves a task before an earlier sibling (to the front)', async () => {
     const s = seed()
     await moveTask(ROOM, { id: 'c', before: 'a' })
-    expect(order(s)).toEqual(['c', 'a', 'b'])
+    expect(order(s)).toEqual(['c', 'a', 'b', 'z'])
   })
 
   it('changes a card column on its own, leaving the order alone', async () => {
     const s = seed()
     await moveTask(ROOM, { id: 'b', status: 'doing' })
-    expect(order(s)).toEqual(['a', 'b', 'c'])
+    expect(order(s)).toEqual(['a', 'b', 'c', 'z'])
     expect(card(s, 'b').get('status')).toBe('doing')
     expect(card(s, 'b').get('done')).toBe(false)
   })
@@ -780,7 +805,7 @@ describe('moveTask', () => {
   it('sets the column and the priority in one move', async () => {
     const s = seed()
     await moveTask(ROOM, { id: 'c', status: 'doing', before: 'a' })
-    expect(order(s)).toEqual(['c', 'a', 'b'])
+    expect(order(s)).toEqual(['c', 'a', 'b', 'z'])
     expect(card(s, 'c').get('status')).toBe('doing')
   })
 
@@ -806,14 +831,64 @@ describe('moveTask', () => {
       moveTask(ROOM, { id: 'a', status: 'doing', after: 'ghost' })
     ).rejects.toThrow(/Anchor task not found/)
     expect(card(s, 'a').get('status')).toBeUndefined()
-    expect(order(s)).toEqual(['a', 'b', 'c'])
+    expect(order(s)).toEqual(['a', 'b', 'c', 'z'])
+  })
+
+  it('reports moved:false when the card already sat next to its anchor', async () => {
+    const s = seed()
+    // 'b' is already immediately after 'a' — a legitimate no-op, not an error.
+    const result = await moveTask(ROOM, { id: 'b', after: 'a' })
+    expect(result.moved).toBe(false)
+    expect(order(s)).toEqual(['a', 'b', 'c', 'z'])
+
+    expect((await moveTask(ROOM, { id: 'a', before: 'b' })).moved).toBe(false)
+  })
+
+  it('reports moved:true only when the position actually changed, echoing the column', async () => {
+    seed()
+    expect(await moveTask(ROOM, { id: 'a', after: 'c' })).toEqual({ moved: true })
+    expect(await moveTask(ROOM, { id: 'a', status: 'doing' })).toEqual({
+      moved: false,
+      status: 'doing',
+    })
+  })
+
+  it('rejects an anchor from another pitch instead of reporting a nonsense move', async () => {
+    const s = seed()
+    await expect(moveTask(ROOM, { id: 'a', after: 'z' })).rejects.toThrow(
+      /different pitch/i
+    )
+    expect(order(s)).toEqual(['a', 'b', 'c', 'z'])
+  })
+
+  it('accepts an unscoped sibling on the same pitch as an anchor', async () => {
+    const s = setupStorage({
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+      tasks: [
+        makeMockItem({ id: 'a', scopeId: 's1', title: 'A', done: false }),
+        makeMockItem({ id: 'triage', pitchId: 'p1', title: 'Triage', done: false }),
+      ],
+    })
+    await moveTask(ROOM, { id: 'triage', before: 'a' })
+    expect(s.tasks.map((t) => t.get('id'))).toEqual(['triage', 'a'])
+  })
+
+  it('refuses a status outside the enum — batch bypasses the tool schema', async () => {
+    const s = seed()
+    await expect(moveTask(ROOM, { id: 'a', status: 'in_progress' as any })).rejects.toThrow(
+      /Invalid status "in_progress"/
+    )
+    expect(card(s, 'a').get('status')).toBeUndefined()
+    await expect(
+      moveTask(ROOM, { id: 'a', status: 'doing', after: 'garbage' })
+    ).rejects.toThrow(/Anchor task not found/)
   })
 
   it('runs against a batch root without opening its own mutateStorage', async () => {
     const s = seed()
     const root = { get: (key: string) => (s as any)[key] }
     await moveTask(ROOM, { id: 'a', after: 'c' }, root)
-    expect(order(s)).toEqual(['b', 'c', 'a'])
+    expect(order(s)).toEqual(['b', 'c', 'a', 'z'])
     expect(mockMutateStorage).not.toHaveBeenCalled()
   })
 })

@@ -1046,7 +1046,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'move_task',
-    'Move a card on the Kanban board: its column (`status`) and/or its priority — the position within that column, where top is highest. Priority is the order itself (no priority field): pass `before`/`after` a sibling task id to reprioritise, exactly like dragging the card. Pass `status` and/or one of `before`/`after` (never both anchors). Reads (get_pitch) return tasks in priority order.',
+    'Move a card on the Kanban board: its column (`status`) and/or its priority — the position within that column, where top is highest. Priority is the order itself (no priority field): pass `before`/`after` a sibling task id to reprioritise, exactly like dragging the card. Pass `status` and/or one of `before`/`after` (never both anchors); the anchor must be a card on the same pitch. Reads (get_pitch) return `cards` in priority order. Returns `moved: false` (not an error) when the card already sat in that position.',
     {
       ...orgArg,
       ...cycleSlugArg,

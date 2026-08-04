@@ -20,6 +20,13 @@ describe('cardStatus', () => {
     expect(cardStatus({ done: false })).toBe('todo')
     expect(cardStatus({})).toBe('todo')
   })
+
+  it('treats a stored status outside the enum as absent', () => {
+    // Writers reject one at the door, but stored data outlives the code that
+    // wrote it — and an unknown column key would crash every board in the room.
+    expect(cardStatus({ status: 'in_progress' as never })).toBe('todo')
+    expect(cardStatus({ status: 'in_progress' as never, done: true })).toBe('done')
+  })
 })
 
 describe('groupCardsByStatus', () => {
@@ -34,6 +41,15 @@ describe('groupCardsByStatus', () => {
     expect(columns.todo.map((c) => c.id)).toEqual(['b', 'd'])
     expect(columns.doing.map((c) => c.id)).toEqual(['a'])
     expect(columns.done.map((c) => c.id)).toEqual(['c'])
+  })
+
+  it('survives a card carrying an unknown status instead of throwing', () => {
+    const columns = groupCardsByStatus([
+      { id: 'bad', status: 'blocked' as never },
+      { id: 'ok', status: 'doing' as const },
+    ])
+    expect(columns.todo.map((c) => c.id)).toEqual(['bad'])
+    expect(columns.doing.map((c) => c.id)).toEqual(['ok'])
   })
 
   it('places legacy status-less tasks via their done flag', () => {
