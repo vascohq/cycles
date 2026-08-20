@@ -655,6 +655,70 @@ describe('handleBatch', () => {
     expect(data.results[1].error).toContain('latest update')
   })
 
+  it('resolves an assignee ref in a batched upsert_task, fetching members once', async () => {
+    // Regression: batch used to forward params straight to the writer, which
+    // takes `assigneeId` — so an `assignee` email was silently dropped and the
+    // op reported success having assigned nobody.
+    mockGetOrgUsers.mockResolvedValue([
+      { userId: 'u_simon', email: 'simon@vasco.app' } as any,
+      { userId: 'u_marie', email: 'marie@vasco.app' } as any,
+    ])
+    mockUpsertTask.mockResolvedValue({ created: false, id: 't1' })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'upsert_task', params: { id: 't1', assignee: 'simon@vasco.app' } },
+      { tool: 'upsert_task', params: { id: 't2', assignee: 'u_marie' } },
+      { tool: 'upsert_task', params: { id: 't3', assignee: '' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results.every((r: any) => r.ok)).toBe(true)
+    expect(mockUpsertTask).toHaveBeenNthCalledWith(
+      1, 'org_test:cycle:q2-build', { id: 't1', assigneeId: 'u_simon' }, expect.anything()
+    )
+    expect(mockUpsertTask).toHaveBeenNthCalledWith(
+      2, 'org_test:cycle:q2-build', { id: 't2', assigneeId: 'u_marie' }, expect.anything()
+    )
+    // '' unassigns — it must survive as '' rather than being resolved away.
+    expect(mockUpsertTask).toHaveBeenNthCalledWith(
+      3, 'org_test:cycle:q2-build', { id: 't3', assigneeId: '' }, expect.anything()
+    )
+    // One member list for the whole batch, however many ops assign someone.
+    expect(mockGetOrgUsers).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails only the op whose assignee ref matches no member', async () => {
+    mockGetOrgUsers.mockResolvedValue([{ userId: 'u_simon', email: 'simon@vasco.app' } as any])
+    mockUpsertTask.mockResolvedValue({ created: false, id: 't1' })
+
+    const result = await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'upsert_task', params: { id: 't1', assignee: 'ghost@vasco.app' } },
+      { tool: 'upsert_task', params: { id: 't2', assignee: 'simon@vasco.app' } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as any
+    expect(data.results[0].ok).toBe(false)
+    expect(data.results[0].error).toContain('No org member matches assignee "ghost@vasco.app"')
+    expect(data.results[1].ok).toBe(true)
+    expect(mockUpsertTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes emoji and notion_url in a batched upsert_pitch', async () => {
+    // Same trap as assignee: normalization done only in the tool handler would
+    // let raw, unvalidated values reach storage through a batch.
+    mockUpsertPitch.mockResolvedValue({ created: false, id: 'p1' })
+
+    await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'upsert_pitch', params: { id: 'p1', title: 'P', stage: 'framing', notion_url: 'not a url' } },
+    ])
+
+    expect(mockUpsertPitch).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      expect.objectContaining({ notion_url: '' }),
+      expect.anything()
+    )
+  })
+
   it('rejects unknown tool names', async () => {
     const result = await handleBatch(ORG_ID, 'q2-build', [
       { tool: 'unknown_tool', params: {} },
