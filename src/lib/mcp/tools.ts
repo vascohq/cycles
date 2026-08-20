@@ -34,7 +34,11 @@ import {
   deleteSquad,
   openBatch,
 } from './liveblocks-writer'
-import { getOrganizationUsers, resolveAssigneeRef } from '@/lib/users'
+import {
+  getOrganizationUsers,
+  resolveAssigneeRef,
+  type OrganizationUser,
+} from '@/lib/users'
 
 const orgArg = {
   org: z
@@ -445,6 +449,55 @@ export async function handlePostUpdate(
 
 // ── Write tool handlers ──
 
+// Pre-writer normalization: the work a write tool does to its raw params before
+// the writer sees them (resolving an assignee ref to a userId, normalizing an
+// emoji, validating a Notion URL). It lives here, not in a tool handler, because
+// `batch` forwards params straight from the client — anything done only in a
+// handler is silently skipped on the batch path. That bites hardest with
+// `assignee`: the writer takes `assigneeId`, so an unresolved `assignee` is not
+// an error there, it's an omitted field — the op reports success having assigned
+// nobody. Both paths go through these.
+type WriteParams = Record<string, any>
+type UsersProvider = () => Promise<OrganizationUser[]>
+
+// undefined = leave unchanged; '' = unassign. Anything else must match a member
+// by email or userId — a ref that doesn't is rejected, never silently dropped.
+async function resolveAssigneeId(ref: string, users: UsersProvider): Promise<string> {
+  if (ref.trim() === '') return ''
+  const match = resolveAssigneeRef(ref, await users())
+  if (!match) {
+    throw new Error(
+      `No org member matches assignee "${ref}" (use an email or userId — see list_members)`
+    )
+  }
+  return match
+}
+
+function preparePitchParams(params: WriteParams): WriteParams {
+  const prepared = { ...params }
+  // Only normalize a field that was actually supplied, so an omitted field is
+  // never coerced to '' (ADR 0011).
+  if (params.emoji !== undefined) prepared.emoji = normalizeEmoji(params.emoji)
+  if (params.notion_url !== undefined) {
+    const notion = validateNotionUrl(params.notion_url)
+    prepared.notion_url = notion.isValidUrl ? notion.value : ''
+  }
+  return prepared
+}
+
+async function prepareWriteParams(
+  tool: string,
+  params: WriteParams,
+  users: UsersProvider
+): Promise<WriteParams> {
+  if (tool === 'upsert_pitch') return preparePitchParams(params)
+  if (tool === 'upsert_task' && params.assignee !== undefined) {
+    const { assignee, ...rest } = params
+    return { ...rest, assigneeId: await resolveAssigneeId(assignee, users) }
+  }
+  return params
+}
+
 type BatchOp = { tool: string; params: Record<string, unknown> }
 type BatchResult =
   | {
@@ -501,18 +554,41 @@ export async function handleBatch(
   const roomId = `${orgId}:cycle:${cycleSlug}`
   const results: BatchResult[] = []
 
+  // Normalize every op's params BEFORE opening the batch: preparation can hit
+  // Clerk (resolving an assignee), and that must not happen while a
+  // mutateStorage is held open. The member list is fetched at most once per
+  // batch, however many ops assign someone.
+  // Memoize the promise, not the resolved list: preparation runs concurrently,
+  // so caching only the result would let every op fire its own fetch first.
+  let orgUsers: Promise<OrganizationUser[]> | null = null
+  const users: UsersProvider = () => (orgUsers ??= getOrganizationUsers(orgId))
+  const prepared = await Promise.all(
+    operations.map(async (op) => {
+      try {
+        return { ok: true as const, params: await prepareWriteParams(op.tool, op.params, users) }
+      } catch (err) {
+        return { ok: false as const, error: (err as Error).message }
+      }
+    })
+  )
+
   // One mutateStorage for the whole batch: every op runs against the same loaded
   // root, in order, so later ops see earlier ones (create scope → create task)
   // and we pay a single load/flush instead of one per op.
   await openBatch(roomId, async (root) => {
-    for (const op of operations) {
+    for (const [i, op] of operations.entries()) {
       const handler = WRITE_TOOLS[op.tool]
       if (!handler) {
         results.push({ ok: false, tool: op.tool, error: `Unknown tool: "${op.tool}"` })
         continue
       }
+      const params = prepared[i]
+      if (!params.ok) {
+        results.push({ ok: false, tool: op.tool, error: params.error })
+        continue
+      }
       try {
-        const result = await handler(roomId, op.params, root)
+        const result = await handler(roomId, params.params, root)
         // Forward whichever outcome the writer reports; a delete reports none.
         results.push({ ok: true, tool: op.tool, ...(result ?? {}) })
       } catch (err) {
@@ -914,17 +990,10 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
-      // undefined = field omitted = leave unchanged on update. Only normalize when
-      // a value was actually supplied, so we never coerce an omitted field to ''.
-      const notion =
-        params.notion_url === undefined ? undefined : validateNotionUrl(params.notion_url)
       try {
-        const result = await upsertPitch(roomId, {
-          ...params,
-          emoji: params.emoji === undefined ? undefined : normalizeEmoji(params.emoji),
-          notion_url:
-            notion === undefined ? undefined : notion.isValidUrl ? notion.value : '',
-        })
+        // Same normalization the batch path applies — one implementation, so the
+        // two entry points can't drift.
+        const result = await upsertPitch(roomId, preparePitchParams(params) as typeof params)
         return jsonResult(result)
       } catch (err) {
         return errorResult((err as Error).message)
@@ -991,14 +1060,26 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_task',
-    'Create or update a task/card. Omit id to create. When creating, pass exactly one parent: scopeId (a normal task under a scope) OR pitchId (an Unscoped "triage" card, see ADR 0018). Updates are PARTIAL: omit done/status/assignee to leave them unchanged — passing only a new title will NOT un-complete or un-assign the task.',
+    'Create or update a task/card. Omit id to create. When creating, pass exactly one parent: scopeId (a normal task under a scope) OR pitchId (an Unscoped "triage" card, see ADR 0018). On an update, scopeId/pitchId RE-PARENT the card — this is how a triage card is assigned to a scope. Updates are PARTIAL: omit title/done/status/assignee/parent to leave them unchanged — passing only a new title will NOT un-complete or un-assign the task.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().optional(),
-      scopeId: z.string().optional().describe('Parent scope id (a scoped task). On create, pass this OR pitchId.'),
-      pitchId: z.string().optional().describe('Parent pitch id for an Unscoped/triage card (no scope). On create, pass this OR scopeId.'),
-      title: z.string(),
+      scopeId: z
+        .string()
+        .optional()
+        .describe(
+          'Parent scope id. On create, pass this OR pitchId. On update, moves the card into this scope (triage → scoped); pass "" to unscope it back to triage.'
+        ),
+      pitchId: z
+        .string()
+        .optional()
+        .describe(
+          'Parent pitch id for an Unscoped/triage card (no scope). On create, pass this OR scopeId. On update, moves the card back to that pitch\'s triage tray.'
+        ),
+      // Optional (not required) so re-parenting or assigning an existing card
+      // needn't resend its title. Required on create — enforced in the writer.
+      title: z.string().optional().describe('Task title. Required when creating; omit on update to leave unchanged.'),
       // Optional (not .default) so a title-only update leaves done unchanged
       // rather than resetting it to false. Defaults to false on create.
       done: z.boolean().optional(),
@@ -1024,7 +1105,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, assignee, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId?: string; pitchId?: string; title: string; done?: boolean; status?: 'todo' | 'doing' | 'done'; assignee?: string },
+      { org, cycle_slug, assignee, ...params }: { org?: string; cycle_slug: string; id?: string; scopeId?: string; pitchId?: string; title?: string; done?: boolean; status?: 'todo' | 'doing' | 'done'; assignee?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -1032,25 +1113,14 @@ export function registerCyclesTools(server: any): void {
       if (!resolved.ok) return errorResult(resolved.error)
       const roomId = `${resolved.org.id}:cycle:${cycle_slug}`
 
-      // Resolve the assignee ref → userId. undefined = unchanged; '' = unassign;
-      // anything else must match a member by email or userId.
-      let assigneeId: string | undefined
-      if (assignee !== undefined) {
-        if (assignee.trim() === '') {
-          assigneeId = ''
-        } else {
-          const orgUsers = await getOrganizationUsers(resolved.org.id)
-          const match = resolveAssigneeRef(assignee, orgUsers)
-          if (!match) {
-            return errorResult(
-              `No org member matches assignee "${assignee}" (use an email or userId — see list_members)`
-            )
-          }
-          assigneeId = match
-        }
-      }
-
       try {
+        // Same resolution the batch path applies (see prepareWriteParams).
+        const assigneeId =
+          assignee === undefined
+            ? undefined
+            : await resolveAssigneeId(assignee, () =>
+                getOrganizationUsers(resolved.org.id)
+              )
         const result = await upsertTask(roomId, { ...params, assigneeId })
         return jsonResult(result)
       } catch (err) {

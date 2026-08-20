@@ -665,7 +665,7 @@ describe('upsertTask', () => {
     const existing = makeMockItem({ id: 't1', scopeId: 's1', title: 'Build gauge', done: true })
     setupStorage({ tasks: [existing] })
 
-    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build the gauge' })
+    await upsertTask(ROOM, { id: 't1', title: 'Build the gauge' })
 
     expect(existing.get('title')).toBe('Build the gauge')
     expect(existing.get('done')).toBe(true)
@@ -679,7 +679,7 @@ describe('upsertTask', () => {
     })
     setupStorage({ tasks: [existing] })
 
-    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build the gauge', done: true })
+    await upsertTask(ROOM, { id: 't1', title: 'Build the gauge', done: true })
 
     expect(existing.get('title')).toBe('Build the gauge')
     expect(existing.get('done')).toBe(true)
@@ -689,14 +689,14 @@ describe('upsertTask', () => {
   it('assigns a task when a resolved assigneeId is passed', async () => {
     const existing = makeMockItem({ id: 't1', scopeId: 's1', title: 'Build gauge', done: false })
     setupStorage({ tasks: [existing] })
-    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build gauge', assigneeId: 'u_simon' })
+    await upsertTask(ROOM, { id: 't1', assigneeId: 'u_simon' })
     expect(existing.get('assigneeId')).toBe('u_simon')
   })
 
   it('unassigns by deleting the key when assigneeId is empty string', async () => {
     const existing = makeMockItem({ id: 't1', scopeId: 's1', title: 'Build gauge', done: false, assigneeId: 'u_simon' })
     setupStorage({ tasks: [existing] })
-    await upsertTask(ROOM, { id: 't1', scopeId: 's1', title: 'Build gauge', assigneeId: '' })
+    await upsertTask(ROOM, { id: 't1', assigneeId: '' })
     expect(existing.get('assigneeId')).toBeUndefined()
   })
 
@@ -705,6 +705,114 @@ describe('upsertTask', () => {
     const storage = setupStorage({ scopes: [scope] })
     await upsertTask(ROOM, { scopeId: 's1', title: 'New', done: false, assigneeId: 'u_marie' })
     expect([...storage.tasks][0].get('assigneeId')).toBe('u_marie')
+  })
+
+  it('re-parents a triage card into a scope, keeping its pitch in step', async () => {
+    // The board's "assign this card to a scope" move, over MCP (ADR 0018).
+    const card = makeMockItem({ id: 't1', pitchId: 'p1', title: 'Triage me', done: false })
+    setupStorage({
+      pitches: [makeMockItem({ id: 'p1' })],
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1', title: 'UI' })],
+      tasks: [card],
+    })
+
+    await upsertTask(ROOM, { id: 't1', scopeId: 's1' })
+
+    expect(card.get('scopeId')).toBe('s1')
+    expect(card.get('pitchId')).toBe('p1')
+    expect(card.get('title')).toBe('Triage me')
+  })
+
+  it('unscopes a card back to triage on its own pitch when scopeId is empty string', async () => {
+    const card = makeMockItem({ id: 't1', scopeId: 's1', pitchId: 'p1', title: 'Scoped', done: false })
+    setupStorage({
+      pitches: [makeMockItem({ id: 'p1' })],
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+      tasks: [card],
+    })
+
+    await upsertTask(ROOM, { id: 't1', scopeId: '' })
+
+    expect(card.get('scopeId')).toBeUndefined()
+    expect(card.get('pitchId')).toBe('p1')
+  })
+
+  it('unscopes a legacy card with no pitchId by falling back to its scope pitch', async () => {
+    const card = makeMockItem({ id: 't1', scopeId: 's1', title: 'Legacy', done: false })
+    setupStorage({
+      pitches: [makeMockItem({ id: 'p1' })],
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+      tasks: [card],
+    })
+
+    await upsertTask(ROOM, { id: 't1', scopeId: '' })
+
+    expect(card.get('scopeId')).toBeUndefined()
+    expect(card.get('pitchId')).toBe('p1')
+  })
+
+  it('re-parents a scoped card back to a pitch when pitchId is passed', async () => {
+    const card = makeMockItem({ id: 't1', scopeId: 's1', pitchId: 'p1', title: 'Scoped', done: false })
+    setupStorage({
+      pitches: [makeMockItem({ id: 'p1' }), makeMockItem({ id: 'p2' })],
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+      tasks: [card],
+    })
+
+    await upsertTask(ROOM, { id: 't1', pitchId: 'p2' })
+
+    expect(card.get('pitchId')).toBe('p2')
+    expect(card.get('scopeId')).toBeUndefined()
+  })
+
+  it('validates the new parent before writing anything', async () => {
+    // Half-applying a re-parent (title changed, parent not) is worse than
+    // failing: the caller would read success into a card that never moved.
+    const card = makeMockItem({ id: 't1', pitchId: 'p1', title: 'Triage me', done: false })
+    setupStorage({ pitches: [makeMockItem({ id: 'p1' })], tasks: [card] })
+
+    await expect(
+      upsertTask(ROOM, { id: 't1', scopeId: 'ghost', title: 'Renamed' })
+    ).rejects.toThrow('Scope not found: "ghost"')
+    expect(card.get('title')).toBe('Triage me')
+    expect(card.get('scopeId')).toBeUndefined()
+
+    await expect(
+      upsertTask(ROOM, { id: 't1', pitchId: 'ghost', title: 'Renamed' })
+    ).rejects.toThrow('Pitch not found: "ghost"')
+    expect(card.get('title')).toBe('Triage me')
+  })
+
+  it('refuses two parents on an update', async () => {
+    const card = makeMockItem({ id: 't1', pitchId: 'p1', title: 'Triage me', done: false })
+    setupStorage({
+      pitches: [makeMockItem({ id: 'p1' })],
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+      tasks: [card],
+    })
+
+    await expect(
+      upsertTask(ROOM, { id: 't1', scopeId: 's1', pitchId: 'p1' })
+    ).rejects.toThrow(/at most one of "scopeId" or "pitchId"/)
+    expect(card.get('scopeId')).toBeUndefined()
+  })
+
+  it('requires a title on create only', async () => {
+    setupStorage({ scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })] })
+
+    await expect(upsertTask(ROOM, { scopeId: 's1' })).rejects.toThrow(
+      '"title" is required when creating a task'
+    )
+  })
+
+  it('leaves the title unchanged when omitted on update', async () => {
+    const card = makeMockItem({ id: 't1', scopeId: 's1', pitchId: 'p1', title: 'Keep me', done: false })
+    setupStorage({ tasks: [card] })
+
+    await upsertTask(ROOM, { id: 't1', status: 'doing' })
+
+    expect(card.get('title')).toBe('Keep me')
+    expect(card.get('status')).toBe('doing')
   })
 })
 

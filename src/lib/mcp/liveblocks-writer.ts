@@ -496,9 +496,16 @@ export async function upsertTask(
     id?: string
     // A card belongs to a scope OR (when unscoped/triage) directly to a pitch
     // (see ADR 0018). On create, pass exactly one. Both optional on update.
+    // On update, either one RE-PARENTS the card: a scopeId moves it into that
+    // scope (triage → scoped), a pitchId moves it back to Unscoped/triage, and
+    // scopeId: '' unscopes it onto the pitch it already belongs to. Passing both
+    // on an update is rejected — a card has one parent.
     scopeId?: string
     pitchId?: string
-    title: string
+    // Partial-update field like the rest: required on create, undefined on
+    // update = leave the title unchanged (so re-parenting or assigning a card
+    // needn't resend its title).
+    title?: string
     // Partial-update field: undefined = leave unchanged (on update) / false on
     // create. Must NOT be coerced to false before this point — that would silently
     // un-complete a task on a title-only update.
@@ -521,6 +528,9 @@ export async function upsertTask(
   let scopeMissing = false
   let pitchMissing = false
   let badParent = false
+  let twoParents = false
+  let noTitle = false
+  let noPitchToFallBackOn = false
 
   await withRoot(roomId, injectedRoot, (root: any) => {
     const scopes = root.get('scopes')
@@ -542,6 +552,10 @@ export async function upsertTask(
         pitchMissing = true
         return
       }
+      if (params.title === undefined) {
+        noTitle = true
+        return
+      }
       const status = params.status
       const task: ScopeTask = {
         id,
@@ -558,7 +572,61 @@ export async function upsertTask(
         notFound = true
         return
       }
-      existing.set('title', params.title)
+
+      // Re-parenting is resolved and validated BEFORE anything is written:
+      // bailing out mid-way would leave the title changed and the parent not.
+      let reparent: (() => void) | null = null
+      if (params.scopeId !== undefined && params.pitchId !== undefined) {
+        twoParents = true
+        return
+      }
+      if (params.scopeId !== undefined) {
+        if (params.scopeId === '') {
+          // '' unscopes the card: it becomes a triage card on the pitch it
+          // already belongs to — its own pitchId, or (legacy tasks, which
+          // predate pitchId) the pitch its current scope hangs off.
+          const currentScopeId = getField(existing, 'scopeId')
+          const currentScope = currentScopeId
+            ? scopes.find((s: any) => getField(s, 'id') === currentScopeId)
+            : undefined
+          const pitchId =
+            getField(existing, 'pitchId') ??
+            (currentScope ? getField(currentScope, 'pitchId') : undefined)
+          if (!pitchId) {
+            noPitchToFallBackOn = true
+            return
+          }
+          reparent = () => {
+            existing.set('pitchId', pitchId)
+            existing.delete('scopeId')
+          }
+        } else {
+          const scope = scopes.find((s: any) => getField(s, 'id') === params.scopeId)
+          if (!scope) {
+            scopeMissing = true
+            return
+          }
+          // Keep pitchId in step with the scope's own pitch, so a re-parented
+          // card can never claim a different board than the scope it sits in.
+          const scopePitchId = getField(scope, 'pitchId')
+          reparent = () => {
+            existing.set('scopeId', params.scopeId)
+            if (scopePitchId) existing.set('pitchId', scopePitchId)
+          }
+        }
+      } else if (params.pitchId !== undefined) {
+        if (!pitches.find((p: any) => getField(p, 'id') === params.pitchId)) {
+          pitchMissing = true
+          return
+        }
+        reparent = () => {
+          existing.set('pitchId', params.pitchId)
+          existing.delete('scopeId')
+        }
+      }
+
+      reparent?.()
+      if (params.title !== undefined) existing.set('title', params.title)
       // Status is the source of truth in Kanban view; keep done in sync.
       if (params.status !== undefined) {
         existing.set('status', params.status)
@@ -577,6 +645,11 @@ export async function upsertTask(
 
   if (badParent)
     throw new Error('Pass exactly one of "scopeId" or "pitchId" when creating a task')
+  if (twoParents)
+    throw new Error('Pass at most one of "scopeId" or "pitchId" when re-parenting a task')
+  if (noTitle) throw new Error('"title" is required when creating a task')
+  if (noPitchToFallBackOn)
+    throw new Error(`Task "${id}" has no pitch to unscope onto — pass "pitchId" instead`)
   if (scopeMissing) throw new Error(`Scope not found: "${params.scopeId}"`)
   if (pitchMissing) throw new Error(`Pitch not found: "${params.pitchId}"`)
   if (notFound) throw new Error(`Task not found: "${id}"`)
