@@ -1,6 +1,8 @@
 import { liveblocks } from '@/lib/liveblocks'
 import { slugify } from '@/lib/slugify'
 import { readStage } from '@/lib/stage-engine'
+import { productMapRoomId } from '@/product-map-liveblocks.config'
+import type { Area, Frame } from '@/product-map-liveblocks.config'
 import type {
   Cycle,
   CyclePitch,
@@ -64,4 +66,26 @@ export function resolvePitch(
   // Rooms written before ADR 0023 still hold a `framing` stage. Normalize on the
   // way out, so no read surface ever hands a caller a stage that no longer exists.
   return pitch && { ...pitch, stage: readStage(pitch.stage) }
+}
+
+export type ProductMapJson = {
+  areas: Area[]
+  frames: Frame[]
+}
+
+/**
+ * Read the org's Product Map room (ADR 0021). An organization that has never
+ * captured a frame has no room yet, which is not an error — it reads as an
+ * empty map, so `map_list_frames` answers before anybody has written anything.
+ */
+export async function getProductMapStorage(orgId: string): Promise<ProductMapJson> {
+  try {
+    const json = (await liveblocks.getStorageDocument(
+      productMapRoomId(orgId),
+      'json'
+    )) as unknown as Partial<ProductMapJson>
+    return { areas: json.areas ?? [], frames: json.frames ?? [] }
+  } catch {
+    return { areas: [], frames: [] }
+  }
 }

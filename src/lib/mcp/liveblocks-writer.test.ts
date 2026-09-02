@@ -30,6 +30,7 @@ import {
   markSlackDelivered,
   upsertSquad,
   deleteSquad,
+  upsertFrame,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -113,6 +114,9 @@ type StorageData = {
   updates?: MockItem[]
   squads?: MockItem[]
   cycle?: Record<string, unknown>
+  // Product Map room storage (ADR 0021) — a different room, same mock shape.
+  frames?: MockItem[]
+  areas?: MockItem[]
 }
 
 function setupStorage(data: StorageData = {}) {
@@ -124,6 +128,8 @@ function setupStorage(data: StorageData = {}) {
     updates: makeMockList(data.updates ?? []),
     squads: makeMockList(data.squads ?? []),
     cycle: makeMockItem(data.cycle ?? {}),
+    frames: makeMockList(data.frames ?? []),
+    areas: makeMockList(data.areas ?? []),
   }
 
   mockMutateStorage.mockImplementation(async (_roomId, callback) => {
@@ -1422,5 +1428,197 @@ describe('upsertPitch squad assignment', () => {
     expect(squads).toHaveLength(1)
     expect(squads[0].name).toBe('Platform')
     expect([...pitches][0].squadId).toBe(squads[0].id)
+  })
+})
+
+// ── Product Map ──
+
+const MAP_ROOM = 'org_1:product-map'
+
+function makeFrameItem(overrides: Record<string, unknown> = {}) {
+  return makeMockItem({
+    id: 'f1',
+    kind: 'pain_point',
+    type: 'bug',
+    problem: 'Imports fail silently',
+    appetite: '2 weeks',
+    business_case: 'Three customers hit this last month',
+    owner: 'user_9',
+    reports: [{ capturer: 'user_9', source: 'internal', text: 'again', date: '2026-08-01' }],
+    pointers: [{ url: 'https://example.test/1', label: 'Issue', kind: 'issue' }],
+    last_woken: '2026-08-01',
+    resolved: false,
+    ...overrides,
+  })
+}
+
+describe('upsertFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('creates a frame from a problem and a Type alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    const result = await upsertFrame(MAP_ROOM, {
+      type: 'irritant',
+      problem: 'The export button is three clicks deep',
+    })
+
+    expect(result.created).toBe(true)
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('The export button is three clicks deep')
+    expect(frame.get('type')).toBe('irritant')
+    // A frame with no appetite is rough. Sharpness is derived, never stored.
+    expect(frame.get('appetite')).toBe('')
+    expect(frame.get('business_case')).toBe('')
+    expect(frame.get('reports')).toEqual([])
+    expect(frame.get('pointers')).toEqual([])
+    expect(frame.get('resolved')).toBe(false)
+  })
+
+  it('defaults the Kind to pain_point, so capture never has to pick a severity', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+
+    expect(storage.frames.find(() => true)!.get('kind')).toBe('pain_point')
+  })
+
+  it('is born awake, with its clock started on the day it was captured', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+
+    expect(storage.frames.find(() => true)!.get('last_woken')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('leaves a frame Unmapped when no area is given', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await upsertFrame(MAP_ROOM, { type: 'idea', problem: 'A digest email' })
+
+    expect(storage.frames.find(() => true)!.get('areaId')).toBeUndefined()
+  })
+
+  // The Product Map room is org-scoped and may not exist yet (ADR 0021). An
+  // agent must not have to create it by hand before its first capture.
+  it('creates the Product Map room on the first capture', async () => {
+    mockGetRoom.mockRejectedValue(new Error('Room not found'))
+    setupStorage()
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+
+    expect(mockCreateRoom).toHaveBeenCalledWith(MAP_ROOM, expect.anything())
+    const [, doc] = mockInitStorage.mock.calls[0]
+    expect((doc as any).data.frames).toEqual({ liveblocksType: 'LiveList', data: [] })
+    expect((doc as any).data.areas).toEqual({ liveblocksType: 'LiveList', data: [] })
+  })
+
+  it('does not recreate a Product Map room that already exists', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+
+    expect(mockCreateRoom).not.toHaveBeenCalled()
+  })
+
+  // ADR 0011: an omitted field is left unchanged. This is the guarantee that
+  // lets a light touch on a frame never erase what somebody else wrote.
+  it('changes only the field the caller sent', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
+
+    expect(result.created).toBe(false)
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('appetite')).toBe('6 weeks')
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('kind')).toBe('pain_point')
+    expect(frame.get('type')).toBe('bug')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+  })
+
+  it('never touches the reports, the pointers or the wake clock', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', problem: 'Imports fail, loudly now' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('reports')).toHaveLength(1)
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+    expect(frame.get('resolved')).toBe(false)
+  })
+
+  it('clears an optional field when the caller passes an empty string', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ areaId: 'a1' })] })
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', areaId: '' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('areaId')).toBeUndefined()
+    expect(frame.get('owner')).toBe('user_9')
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(upsertFrame(MAP_ROOM, { id: 'nope', problem: 'x' })).rejects.toThrow(
+      'Frame not found: "nope"'
+    )
+  })
+})
+
+describe('upsertFrame validation', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // The writer is the shared seam every path goes through, so the vocabularies
+  // are enforced here and not only in the MCP tool schema.
+  it('refuses a Type outside the vocabulary', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    await expect(
+      upsertFrame(MAP_ROOM, { type: 'feature' as never, problem: 'x' })
+    ).rejects.toThrow('Invalid type')
+    expect(mockCreateRoom).not.toHaveBeenCalled()
+  })
+
+  it('refuses a Kind outside the vocabulary', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    await expect(
+      upsertFrame(MAP_ROOM, { id: 'f1', kind: 'severe' as never })
+    ).rejects.toThrow('Invalid kind')
+  })
+
+  // Type selects the playbook, so there is no unknown Type (ADR 0025).
+  it('refuses a create with no Type', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await expect(upsertFrame(MAP_ROOM, { problem: 'Something hurts' })).rejects.toThrow(
+      'A new frame needs a type'
+    )
+    expect(storage.frames.find(() => true)).toBeUndefined()
+  })
+
+  it('lets an update omit the Type, because the frame already has one', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
+
+    expect(storage.frames.find(() => true)!.get('type')).toBe('bug')
   })
 })
