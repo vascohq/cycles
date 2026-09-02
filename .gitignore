@@ -48,3 +48,7 @@ storybook-static
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# claude code (personal overrides and worktrees; .claude/settings.json is shared)
+/.claude/settings.local.json
+/.claude/worktrees/
