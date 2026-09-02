@@ -51,8 +51,7 @@ test.describe('Mission Control view', () => {
 
   test('pitch cards show stage badges', async ({ page }) => {
     await expect(page.getByText('building').first()).toBeVisible()
-    await expect(page.getByText('shaping')).toBeVisible()
-    await expect(page.getByText('framing')).toBeVisible()
+    await expect(page.getByText('shaping').first()).toBeVisible()
     await expect(page.locator('span.rounded-full:has-text("done")')).toBeVisible()
   })
 

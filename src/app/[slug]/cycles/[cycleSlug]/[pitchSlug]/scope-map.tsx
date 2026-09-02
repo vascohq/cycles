@@ -19,7 +19,7 @@ import {
   buildHillHistoryFrames,
 } from '@/lib/scope-map-helpers'
 import { deriveGhost, needleAfterDeletingLatest } from '@/lib/needle-engine'
-import { stageAfterNeedle } from '@/lib/stage-engine'
+import { readStage, stageAfterNeedle } from '@/lib/stage-engine'
 import { assignScopeColor, resolveScopeColors } from '@/lib/color-engine'
 import { assignSquadColor, resolveSquadByName } from '@/lib/squad-engine'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
@@ -123,7 +123,7 @@ function ScopeMapWired({
         id: p.id,
         title: p.title,
         emoji: p.emoji ?? '',
-        stage: p.stage,
+        stage: readStage(p.stage),
         zone: p.needle?.zone ?? null,
         href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
       })),
@@ -520,7 +520,7 @@ function ScopeMapWired({
       if (p) {
         p.set('needle', { progress: built.needle_snapshot.progress, zone: built.needle_snapshot.zone })
         // Posting a 100% update is the act of shipping — auto-advance to done.
-        p.set('stage', stageAfterNeedle(built.needle_snapshot.progress, p.get('stage')))
+        p.set('stage', stageAfterNeedle(built.needle_snapshot.progress, readStage(p.get('stage'))))
       }
     },
     []
@@ -800,6 +800,7 @@ function ScopeMapWired({
       cyclePitches={cyclePitches}
       pitch={{
         ...pitch,
+        stage: readStage(pitch.stage),
         emoji: pitch.emoji ?? '',
         notion_url: pitch.notion_url ?? '',
       }}

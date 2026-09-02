@@ -1,5 +1,6 @@
 import { liveblocks } from '@/lib/liveblocks'
 import { slugify } from '@/lib/slugify'
+import { readStage } from '@/lib/stage-engine'
 import type {
   Cycle,
   CyclePitch,
@@ -57,7 +58,10 @@ export function resolvePitch(
   storage: StorageJson,
   pitchSlug: string
 ): CyclePitch | undefined {
-  return storage.pitches.find(
+  const pitch = storage.pitches.find(
     (p) => p.id === pitchSlug || slugify(p.title) === pitchSlug
   )
+  // Rooms written before ADR 0023 still hold a `framing` stage. Normalize on the
+  // way out, so no read surface ever hands a caller a stage that no longer exists.
+  return pitch && { ...pitch, stage: readStage(pitch.stage) }
 }

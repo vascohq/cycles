@@ -2,7 +2,7 @@ import { LiveList, LiveObject } from '@liveblocks/client'
 
 export type Zone = 'on_track' | 'some_risk' | 'concerned'
 
-export type Stage = 'framing' | 'shaping' | 'building' | 'done'
+export type Stage = 'shaping' | 'building' | 'done'
 
 export type Tier = 'must' | 'should' | 'could'
 

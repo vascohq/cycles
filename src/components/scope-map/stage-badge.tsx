@@ -7,7 +7,7 @@ import { nextStage, prevStage } from '@/lib/stage-engine'
 // The pitch's current Stage shown as a compact badge (styled like the squad
 // badge), with arrows on either side that step it back/forward one stage. No
 // dropdown — the arrows are the whole interaction. An arrow is hidden at the
-// ends (no back arrow while framing, no forward arrow once done); the label
+// ends (no back arrow while shaping, no forward arrow once done); the label
 // keeps its own padding so it never looks cramped when an arrow is absent.
 export function StageBadge({
   stage,

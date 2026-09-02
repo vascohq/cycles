@@ -1,4 +1,5 @@
 'use client'
+import { newShapeStage, readStage } from '@/lib/stage-engine'
 
 import { ClientSideSuspense } from '@liveblocks/react'
 import { MissionControlSkeleton } from '@/components/mission-control'
@@ -118,7 +119,7 @@ function MissionControlWired({
         new LiveObject({
           id: nanoid(),
           title,
-          stage: 'framing' as const,
+          stage: newShapeStage(cycle.type),
           needle: null,
           frame_problem: '',
           frame_outcome: '',
@@ -129,7 +130,7 @@ function MissionControlWired({
         })
       )
     },
-    [cycle.start_date, cycle.end_date]
+    [cycle.start_date, cycle.end_date, cycle.type]
   )
 
   // Register this cycle's pitches into the command palette while we're in the room.
@@ -139,7 +140,7 @@ function MissionControlWired({
         id: p.id,
         title: p.title,
         emoji: p.emoji ?? '',
-        stage: p.stage,
+        stage: readStage(p.stage),
         zone: p.needle?.zone ?? null,
         href: `/${slug}/cycles/${cycleSlug}/${slugify(p.title)}`,
       })),
