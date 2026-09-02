@@ -1,25 +1,10 @@
-import { createClient } from '@liveblocks/client'
 import { createRoomContext } from '@liveblocks/react'
 import type { CycleStorage } from './cycle-liveblocks.config'
 import { LiveList, LiveObject } from '@liveblocks/client'
-
-const client = createClient({
-  authEndpoint: '/api/liveblocks-auth',
-})
+import { liveblocksClient, type UserMeta } from './liveblocks-browser-client'
 
 type Presence = {
   activePitchId?: string | null
-}
-
-type UserMeta = {
-  id: string
-  info: {
-    name: string
-    username: string
-    imageUrl: string
-    hasImage: boolean
-    initials: string
-  }
 }
 
 export const {
@@ -30,7 +15,7 @@ export const {
     useOthers: useCycleOthers,
     useSelf: useCycleSelf,
   },
-} = createRoomContext<Presence, CycleStorage, UserMeta>(client)
+} = createRoomContext<Presence, CycleStorage, UserMeta>(liveblocksClient)
 
 export function cycleInitialStorage(): CycleStorage {
   return {
