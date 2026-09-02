@@ -76,17 +76,19 @@ Real-time state lives in Liveblocks (accessed via hooks from `src/cycle-room-con
 
 ## Agent skills
 
-### Install the skills plugin first
+### The skills plugin
 
 The skills that these docs reference come from the `mattpocock-skills` plugin. This repo does not hold a copy of them.
 
-Install the plugin one time:
+`.claude/settings.json` declares the plugin, so Claude Code offers to install it on your first session. Accept the prompt. If you decline it, or if the prompt does not appear, install the plugin yourself:
 
 ```bash
 claude plugin install mattpocock-skills@claude-plugins-official
 ```
 
 Then restart Claude Code. The plugin gives you `/mattpocock-skills:to-spec`, `to-tickets`, `implement`, `triage`, `wayfinder`, `tdd`, and more. Without the plugin, the skills named in this file do not exist.
+
+To turn the plugin off for yourself only, set it to `false` in `.claude/settings.local.json`. That file is not in git, and local settings win over project settings.
 
 ### Issue tracker
 
