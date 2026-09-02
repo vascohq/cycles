@@ -9,6 +9,15 @@ import type {
   PitchUpdate,
   Squad,
 } from '@/cycle-liveblocks.config'
+import type { Frame } from '@/product-map-liveblocks.config'
+import {
+  DEFAULT_KIND,
+  FRAME_KINDS,
+  FRAME_TYPES,
+  isFrameKind,
+  isFrameType,
+} from '@/lib/product-map-engine'
+import { getTeamToday } from '@/lib/team-time'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
 import { moveTargetIndex, isCardStatus, CARD_STATUSES } from '@/lib/card-engine'
 import {
@@ -1014,4 +1023,119 @@ export async function deleteParkingItem(
   })
 
   if (notFound) throw new Error(`Parking item not found: "${itemId}"`)
+}
+
+// ── Product Map ──
+
+// The Product Map room is org-scoped and sits outside the cycle rooms (ADR 0021).
+// An org that has never captured a frame has no room yet, and an agent must not
+// have to create one by hand, so the first write brings it into being.
+async function ensureProductMapRoom(roomId: string): Promise<void> {
+  if (await roomExists(roomId)) return
+  await liveblocks.createRoom(roomId, { defaultAccesses: ['room:write'] })
+  await liveblocks.initializeStorageDocument(roomId, {
+    liveblocksType: 'LiveObject',
+    data: {
+      areas: { liveblocksType: 'LiveList', data: [] },
+      frames: { liveblocksType: 'LiveList', data: [] },
+    },
+  })
+}
+
+type FrameFields = {
+  kind: Frame['kind']
+  type: Frame['type']
+  problem: string
+  appetite: string
+  business_case: string
+  areaId: string
+  owner: string
+  originFrameId: string
+}
+
+/**
+ * Create or partial-update a frame. Every non-identity field is optional:
+ * undefined = omitted = leave unchanged (ADR 0011). Capture needs a problem and
+ * a Type and nothing else, so the rest fall back to empty on create.
+ *
+ * `reports`, `pointers`, `last_woken` and `resolved` are NOT writable here.
+ * They belong to the tools that own them (attach_report, link_pointer, wake,
+ * resolve), which is what keeps an upsert from erasing a frame's history.
+ */
+export async function upsertFrame(
+  roomId: string,
+  params: { id?: string } & Partial<FrameFields>
+): Promise<UpsertResult> {
+  const id = params.id ?? nanoid()
+  const created = !params.id
+  let notFound = false
+
+  // Validate the two vocabularies HERE, not only at the tool schema. The writer
+  // is the shared seam every path goes through, and a Kind or Type outside the
+  // vocabulary would break the pin color and the playbook lookup downstream.
+  if (params.kind !== undefined && !isFrameKind(params.kind)) {
+    throw new Error(`Invalid kind: "${params.kind}". One of: ${FRAME_KINDS.join(', ')}.`)
+  }
+  if (params.type !== undefined && !isFrameType(params.type)) {
+    throw new Error(`Invalid type: "${params.type}". One of: ${FRAME_TYPES.join(', ')}.`)
+  }
+  if (created && params.type === undefined) {
+    throw new Error(`A new frame needs a type. One of: ${FRAME_TYPES.join(', ')}.`)
+  }
+  // Narrowed above; held in a local so the check survives into the closure.
+  const newType = params.type as Frame['type']
+
+  await ensureProductMapRoom(roomId)
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const frames = root.get('frames')
+
+    if (created) {
+      const frame: Frame = {
+        id,
+        kind: params.kind ?? DEFAULT_KIND,
+        type: newType,
+        problem: params.problem ?? '',
+        appetite: params.appetite ?? '',
+        business_case: params.business_case ?? '',
+        ...(params.areaId ? { areaId: params.areaId } : {}),
+        ...(params.owner ? { owner: params.owner } : {}),
+        ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
+        reports: [],
+        pointers: [],
+        // A frame is born awake. Its clock starts on the day it was captured.
+        last_woken: getTeamToday(new Date()),
+        resolved: false,
+      }
+      frames.push(new LiveObject(frame))
+      return
+    }
+
+    const existing = frames.find((f: any) => getField(f, 'id') === id)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    // undefined = omitted = leave unchanged. Guard every field explicitly, so an
+    // omitted field is never coerced away (the timebox-nullification incident).
+    if (params.kind !== undefined) existing.set('kind', params.kind)
+    if (params.type !== undefined) existing.set('type', params.type)
+    if (params.problem !== undefined) existing.set('problem', params.problem)
+    if (params.appetite !== undefined) existing.set('appetite', params.appetite)
+    if (params.business_case !== undefined) existing.set('business_case', params.business_case)
+    // '' clears an optional pointer field; the key goes away rather than
+    // sitting there as an empty string nobody can tell from "unset".
+    setOrClear(existing, 'areaId', params.areaId)
+    setOrClear(existing, 'owner', params.owner)
+    setOrClear(existing, 'originFrameId', params.originFrameId)
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${id}"`)
+  return { created, id }
+}
+
+function setOrClear(item: any, key: string, value: string | undefined): void {
+  if (value === undefined) return
+  if (value === '') item.delete(key)
+  else item.set(key, value)
 }

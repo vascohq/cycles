@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
+import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
 import { STAGES, readStage } from '@/lib/stage-engine'
 import { parseSlugPath, isValidSlugSegment } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
@@ -15,6 +15,8 @@ import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
+import { productMapRoomId } from '@/product-map-liveblocks.config'
+import { FRAME_KINDS, FRAME_TYPES } from '@/lib/product-map-engine'
 import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
 import {
   createCycle,
@@ -34,6 +36,7 @@ import {
   upsertSquad,
   deleteSquad,
   openBatch,
+  upsertFrame,
 } from './liveblocks-writer'
 import {
   getOrganizationUsers,
@@ -602,6 +605,63 @@ export async function handleBatch(
   })
 
   return jsonResult({ results })
+}
+
+// ── Product Map handlers ──
+//
+// The Product Map is org-scoped and names no cycle (ADR 0021), so these take an
+// org id where the cycle tools take a slug path. Their `map_` prefix is the only
+// thing separating the two scopes in the tool list, so it never comes off.
+
+export async function handleListFrames(orgId: string): Promise<ToolResult> {
+  const { frames } = await getProductMapStorage(orgId)
+  return jsonResult({ frames })
+}
+
+export async function handleUpsertFrame(
+  orgId: string,
+  params: {
+    id?: string
+    kind?: string
+    type?: string
+    problem?: string
+    appetite?: string
+    business_case?: string
+    area_id?: string
+    owner?: string
+    origin_frame_id?: string
+  }
+): Promise<ToolResult> {
+  // Type decides the workflow, so a frame can never exist without one (ADR
+  // 0025). There is no "unknown" Type to fall back on. A problem is the other
+  // half of a capture: a frame with no problem records nothing.
+  if (!params.id) {
+    if (!params.type) {
+      return errorResult(
+        `A new frame needs a "type" — it selects the playbook. One of: ${FRAME_TYPES.join(', ')}.`
+      )
+    }
+    if (!params.problem?.trim()) {
+      return errorResult('A new frame needs a "problem" — one line saying what hurts.')
+    }
+  }
+
+  try {
+    const result = await upsertFrame(productMapRoomId(orgId), {
+      id: params.id,
+      kind: params.kind as never,
+      type: params.type as never,
+      problem: params.problem,
+      appetite: params.appetite,
+      business_case: params.business_case,
+      areaId: params.area_id,
+      owner: params.owner,
+      originFrameId: params.origin_frame_id,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
 }
 
 // Every tool MUST declare annotations so MCP clients (e.g. Claude) can group it
@@ -1485,6 +1545,95 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleBatch(resolved.org.id, cycle_slug, operations)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_list_frames',
+    'List the frames on the organization\'s Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the map holds problems, a cycle holds the bets.',
+    orgArg,
+    { title: 'List frames', readOnlyHint: true, openWorldHint: false },
+    async ({ org }: { org?: string }, extra: ToolExtra) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleListFrames(resolved.org.id)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_upsert_frame',
+    'Capture a new frame, or update an existing one by id. A new frame needs only a "problem" and a "type" — everything else is optional, so noticing a problem costs nothing. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. Reports, pointers and the wake clock are never touched here. A frame with no appetite stays rough until somebody sharpens it.',
+    {
+      ...orgArg,
+      // All optional with NO .default() — omitting a field must leave it
+      // unchanged, never coerce it away (ADR 0011).
+      id: z.string().optional().describe('Frame id. Omit to capture a new frame.'),
+      problem: z
+        .string()
+        .optional()
+        .describe('One line saying what hurts. Required when capturing a new frame.'),
+      type: z
+        .enum(FRAME_TYPES)
+        .optional()
+        .describe(
+          'Where the problem came from and how it gets worked. Type selects the playbook. Required when capturing a new frame.'
+        ),
+      kind: z
+        .enum(FRAME_KINDS)
+        .optional()
+        .describe(
+          'How much it hurts, and the pin color on the map. Defaults to "pain_point" on capture.'
+        ),
+      appetite: z
+        .string()
+        .optional()
+        .describe('The time the business will spend, e.g. "6 weeks". A frame with an appetite and a problem is sharp.'),
+      business_case: z
+        .string()
+        .optional()
+        .describe('Free text: who is affected, what it is worth, why now.'),
+      area_id: z
+        .string()
+        .optional()
+        .describe('Area to file the frame in. Omit to leave it Unmapped, which is always valid. Pass "" to unfile it.'),
+      owner: z.string().optional().describe('Clerk user id of the frame owner. Pass "" to clear.'),
+      origin_frame_id: z
+        .string()
+        .optional()
+        .describe('The frame whose monitoring surfaced this one. Pass "" to clear.'),
+    },
+    {
+      title: 'Capture or update a frame',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        ...params
+      }: {
+        org?: string
+        id?: string
+        problem?: string
+        type?: string
+        kind?: string
+        appetite?: string
+        business_case?: string
+        area_id?: string
+        owner?: string
+        origin_frame_id?: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleUpsertFrame(resolved.org.id, params)
     }
   )
 }

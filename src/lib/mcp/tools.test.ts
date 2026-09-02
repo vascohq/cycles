@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListFrames, handleUpsertFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
   listCycleRooms: vi.fn(),
   getCycleStorage: vi.fn(),
+  getProductMapStorage: vi.fn(),
   resolvePitch: vi.fn(),
   slugify: vi.fn((t: string) => t.toLowerCase().replace(/\s+/g, '-')),
 }))
@@ -27,6 +28,7 @@ vi.mock('./liveblocks-writer', () => ({
   markSlackDelivered: vi.fn(),
   upsertSquad: vi.fn(),
   deleteSquad: vi.fn(),
+  upsertFrame: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
   openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
@@ -45,8 +47,8 @@ vi.mock('@/lib/users', async (importOriginal) => ({
   getOrganizationUsers: vi.fn(),
 }))
 
-import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle } from './liveblocks-writer'
+import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -789,7 +791,7 @@ describe('tool annotations', () => {
     return tools
   }
 
-  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members']
+  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_frames']
   const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
@@ -1047,5 +1049,167 @@ describe('task assignment & reordering via registered tools', () => {
     const res = await handlerFor('list_members')({}, EXTRA)
     const data = JSON.parse(res.content[0].text)
     expect(data).toEqual([{ userId: 'user_simon', name: 'Simon', email: 'simon@vasco.app' }])
+  })
+})
+
+// ── Product Map tools ──
+
+describe('map_list_frames', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockGetMap = vi.mocked(getProductMapStorage)
+
+  it("returns the frames of the caller's organization", async () => {
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [
+        {
+          id: 'f1',
+          kind: 'brand_burn',
+          type: 'bug',
+          problem: 'Imports fail silently',
+          appetite: '',
+          business_case: '',
+          reports: [],
+          pointers: [],
+          last_woken: '2026-09-01',
+          resolved: false,
+        },
+      ],
+    })
+
+    const result = await handleListFrames(ORG_ID)
+
+    expect(mockGetMap).toHaveBeenCalledWith(ORG_ID)
+    const parsed = JSON.parse(result.content[0].text) as { frames: unknown[] }
+    expect(parsed.frames).toHaveLength(1)
+  })
+
+  // The Product Map opens for an org that has never created a cycle, and for
+  // one that has never captured a frame (ADR 0021).
+  it('answers with an empty list for an organization with no map yet', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], frames: [] })
+
+    const result = await handleListFrames(ORG_ID)
+
+    expect(JSON.parse(result.content[0].text)).toEqual({ frames: [] })
+  })
+})
+
+describe('map_upsert_frame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockUpsertFrame = vi.mocked(upsertFrame)
+
+  it('captures a frame from a problem and a Type alone', async () => {
+    mockUpsertFrame.mockResolvedValue({ created: true, id: 'f9' })
+
+    const result = await handleUpsertFrame(ORG_ID, {
+      problem: 'The export button is three clicks deep',
+      type: 'irritant',
+    })
+
+    expect(mockUpsertFrame).toHaveBeenCalledWith(
+      `${ORG_ID}:product-map`,
+      expect.objectContaining({
+        problem: 'The export button is three clicks deep',
+        type: 'irritant',
+      })
+    )
+    expect(JSON.parse(result.content[0].text)).toEqual({ created: true, id: 'f9' })
+  })
+
+  // Type decides the workflow, so there is no "unknown" Type to fall back on
+  // (ADR 0025). Rejecting at the tool boundary keeps the writer honest.
+  it('rejects a capture with no Type, and writes nothing', async () => {
+    const result = await handleUpsertFrame(ORG_ID, { problem: 'Something hurts' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('type')
+    expect(mockUpsertFrame).not.toHaveBeenCalled()
+  })
+
+  it('rejects a capture with no problem, and writes nothing', async () => {
+    const result = await handleUpsertFrame(ORG_ID, { type: 'bug' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('problem')
+    expect(mockUpsertFrame).not.toHaveBeenCalled()
+  })
+
+  it('lets an update omit the Type, because the frame already has one', async () => {
+    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+
+    const result = await handleUpsertFrame(ORG_ID, { id: 'f1', appetite: '6 weeks' })
+
+    expect(result.isError).toBeUndefined()
+    expect(mockUpsertFrame).toHaveBeenCalledWith(
+      `${ORG_ID}:product-map`,
+      expect.objectContaining({ id: 'f1', appetite: '6 weeks' })
+    )
+  })
+
+  // ADR 0011: an omitted field must reach the writer as undefined, so the writer
+  // can leave it alone. Nothing in between may coerce it to ''.
+  it('passes an omitted field through as undefined', async () => {
+    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+
+    await handleUpsertFrame(ORG_ID, { id: 'f1', appetite: '6 weeks' })
+
+    const [, params] = mockUpsertFrame.mock.calls[0]
+    expect(params.problem).toBeUndefined()
+    expect(params.business_case).toBeUndefined()
+    expect(params.owner).toBeUndefined()
+    expect(params.areaId).toBeUndefined()
+  })
+
+  it('reports a writer failure as an error, not a success', async () => {
+    mockUpsertFrame.mockRejectedValue(new Error('Frame not found: "nope"'))
+
+    const result = await handleUpsertFrame(ORG_ID, { id: 'nope', appetite: '2 weeks' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Frame not found: "nope"')
+  })
+})
+
+describe('map_upsert_frame schema', () => {
+  function schemaFor(toolName: string): Record<string, z.ZodTypeAny> {
+    let captured: Record<string, z.ZodTypeAny> | undefined
+    const server = {
+      tool(name: string, _d: string, schema: Record<string, z.ZodTypeAny>) {
+        if (name === toolName) captured = schema
+      },
+    }
+    registerCyclesTools(server)
+    if (!captured) throw new Error(`tool not registered: ${toolName}`)
+    return captured
+  }
+
+  it('defaults no field, so a partial update can never wipe one (ADR 0011)', () => {
+    const parsed = z.object(schemaFor('map_upsert_frame')).parse({ id: 'f1', appetite: '6 weeks' })
+
+    expect(parsed.problem).toBeUndefined()
+    expect(parsed.kind).toBeUndefined()
+    expect(parsed.type).toBeUndefined()
+    expect(parsed.business_case).toBeUndefined()
+    expect(parsed.area_id).toBeUndefined()
+    expect(parsed.owner).toBeUndefined()
+    expect(parsed.origin_frame_id).toBeUndefined()
+  })
+
+  it('refuses a Kind or a Type outside the vocabulary', () => {
+    const schema = z.object(schemaFor('map_upsert_frame'))
+
+    expect(() => schema.parse({ type: 'feature' })).toThrow()
+    expect(() => schema.parse({ kind: 'severe' })).toThrow()
+    expect(schema.parse({ type: 'security', kind: 'brand_burn' }).type).toBe('security')
+  })
+
+  // The `map_` prefix is the only thing separating org-scoped map tools from
+  // cycle-scoped tools in the list, so it never comes off (ADR 0021).
+  it('takes no cycle slug, because the map names no cycle', () => {
+    expect(schemaFor('map_upsert_frame')).not.toHaveProperty('cycle_slug')
+    expect(schemaFor('map_list_frames')).not.toHaveProperty('cycle_slug')
   })
 })

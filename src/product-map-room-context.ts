@@ -7,7 +7,11 @@ import { liveblocksClient, type UserMeta } from './liveblocks-browser-client'
 type Presence = Record<string, never>
 
 export const {
-  suspense: { RoomProvider: ProductMapRoomProvider, useStorage: useProductMapStorage },
+  suspense: {
+    RoomProvider: ProductMapRoomProvider,
+    useStorage: useProductMapStorage,
+    useMutation: useProductMapMutation,
+  },
 } = createRoomContext<Presence, ProductMapStorage, UserMeta>(liveblocksClient)
 
 export function productMapInitialStorage(): ProductMapStorage {
