@@ -17,7 +17,6 @@ import { useCommandPalette } from './command-palette-context'
 import type { PaletteCycleItem } from './types'
 
 const STAGE_BADGE_STYLES: Record<Stage, string> = {
-  framing: 'bg-muted text-muted-foreground',
   shaping:
     'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
   building:

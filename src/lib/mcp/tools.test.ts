@@ -68,7 +68,7 @@ const FIXTURE_STORAGE: StorageJson = {
   cycle: { name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15' },
   pitches: [
     { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '', squadId: 'sq1' },
-    { id: 'p2', title: 'MCP Server', stage: 'framing', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
+    { id: 'p2', title: 'MCP Server', stage: 'shaping', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
   ],
   squads: [{ id: 'sq1', name: 'Platform', color: '#3e63dd' }],
   scopes: [
@@ -511,7 +511,7 @@ describe('handleBatch', () => {
         tool: 'upsert_pitch',
         params: {
           title: 'New Pitch',
-          stage: 'framing',
+          stage: 'shaping',
           frame_problem: '',
           frame_outcome: '',
           timebox_start: '2026-04-06',
@@ -611,7 +611,7 @@ describe('handleBatch', () => {
         tool: 'upsert_pitch',
         params: {
           title: 'Good Pitch',
-          stage: 'framing',
+          stage: 'shaping',
           frame_problem: '',
           frame_outcome: '',
           timebox_start: '',
@@ -703,13 +703,29 @@ describe('handleBatch', () => {
     expect(mockUpsertTask).toHaveBeenCalledTimes(1)
   })
 
+  it('normalizes a legacy framing stage in a batched upsert_pitch', async () => {
+    // The batch path skips the tool's zod enum, so without this a caller could
+    // still write the stage ADR 0023 removed.
+    mockUpsertPitch.mockResolvedValue({ created: false, id: 'p1' })
+
+    await handleBatch(ORG_ID, 'q2-build', [
+      { tool: 'upsert_pitch', params: { id: 'p1', title: 'P', stage: 'framing' } },
+    ])
+
+    expect(mockUpsertPitch).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      expect.objectContaining({ stage: 'shaping' }),
+      expect.anything()
+    )
+  })
+
   it('normalizes emoji and notion_url in a batched upsert_pitch', async () => {
     // Same trap as assignee: normalization done only in the tool handler would
     // let raw, unvalidated values reach storage through a batch.
     mockUpsertPitch.mockResolvedValue({ created: false, id: 'p1' })
 
     await handleBatch(ORG_ID, 'q2-build', [
-      { tool: 'upsert_pitch', params: { id: 'p1', title: 'P', stage: 'framing', notion_url: 'not a url' } },
+      { tool: 'upsert_pitch', params: { id: 'p1', title: 'P', stage: 'shaping', notion_url: 'not a url' } },
     ])
 
     expect(mockUpsertPitch).toHaveBeenCalledWith(

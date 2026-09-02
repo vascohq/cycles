@@ -14,7 +14,6 @@ import type { Stage } from '@/cycle-liveblocks.config'
 export const TIMELINE_GRID = 'flex flex-col gap-2'
 
 const STAGE_DOT: Record<Stage, string> = {
-  framing: 'bg-slate-400',
   shaping: 'bg-blue-400',
   building: 'bg-amber-400',
   done: 'bg-emerald-500',

@@ -6,6 +6,7 @@ import type {
   Needle,
   Stage,
 } from '@/cycle-liveblocks.config'
+import { readStage } from '@/lib/stage-engine'
 
 export type PitchCard = {
   id: string
@@ -56,7 +57,7 @@ export function derivePitchCards(
       id: p.id,
       title: p.title,
       emoji: p.emoji ?? '',
-      stage: p.stage,
+      stage: readStage(p.stage),
       needle: p.needle,
       tasksDone: pitchTasks.filter((t) => t.done).length,
       tasksTotal: pitchTasks.length,
@@ -84,12 +85,11 @@ export function partitionByStage(cards: PitchCard[]): {
 const STAGE_ORDER: Record<Stage, number> = {
   building: 0,
   shaping: 1,
-  framing: 2,
-  done: 3,
+  done: 2,
 }
 
 /**
- * Order pitches by stage progression: building → shaping → framing → done.
+ * Order pitches by stage progression: building → shaping → done.
  * Stable within a stage (preserves input order) and non-mutating.
  */
 export function sortByStageProgression(cards: PitchCard[]): PitchCard[] {

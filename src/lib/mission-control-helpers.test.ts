@@ -121,14 +121,13 @@ describe('sortByStageProgression', () => {
     timebox_end: '',
   })
 
-  it('orders building → shaping → framing → done', () => {
+  it('orders building → shaping → done', () => {
     const sorted = sortByStageProgression([
-      card('a', 'framing'),
-      card('b', 'done'),
+      card('a', 'done'),
+      card('b', 'shaping'),
       card('c', 'building'),
-      card('d', 'shaping'),
     ])
-    expect(sorted.map((c) => c.id)).toEqual(['c', 'd', 'a', 'b'])
+    expect(sorted.map((c) => c.id)).toEqual(['c', 'b', 'a'])
   })
 
   it('keeps done pitches last', () => {
@@ -149,7 +148,7 @@ describe('sortByStageProgression', () => {
   })
 
   it('does not mutate the input array', () => {
-    const input = [card('a', 'framing'), card('b', 'building')]
+    const input = [card('a', 'shaping'), card('b', 'building')]
     const before = input.map((c) => c.id)
     sortByStageProgression(input)
     expect(input.map((c) => c.id)).toEqual(before)
@@ -209,14 +208,14 @@ describe('groupBySquad', () => {
   it('sorts cards within each section by stage progression', () => {
     const sections = groupBySquad(
       [
-        card('framing1', 'framing', 'sq1'),
+        card('shaping1', 'shaping', 'sq1'),
         card('building1', 'building', 'sq1'),
       ],
       squads
     )
     expect(sections[0].cards.map((c) => c.id)).toEqual([
       'building1',
-      'framing1',
+      'shaping1',
     ])
   })
 

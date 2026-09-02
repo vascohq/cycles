@@ -56,7 +56,7 @@ export const CARDS: PitchCard[] = [
     id: 'p4',
     title: 'Onboarding v2',
     emoji: '',
-    stage: 'framing',
+    stage: 'shaping',
     needle: null,
     tasksDone: 0,
     tasksTotal: 0,

@@ -29,8 +29,8 @@ describe('StageBadge', () => {
     expect(screen.queryByLabelText(/Advance to/)).toBeNull()
   })
 
-  it('offers no back arrow while still framing', () => {
-    render(<StageBadge stage="framing" onChange={vi.fn()} />)
+  it('offers no back arrow while still shaping', () => {
+    render(<StageBadge stage="shaping" onChange={vi.fn()} />)
     expect(screen.queryByLabelText(/Move back to/)).toBeNull()
   })
 })

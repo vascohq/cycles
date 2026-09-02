@@ -350,7 +350,7 @@ describe('upsertPitch', () => {
 
     const result = await upsertPitch(ROOM, {
       title: 'Mission Control',
-      stage: 'framing',
+      stage: 'shaping',
       frame_problem: 'No visibility',
       frame_outcome: 'Dashboard',
       timebox_start: '2026-04-06',
@@ -368,7 +368,7 @@ describe('upsertPitch', () => {
   })
 
   it('updates an existing pitch when id is provided', async () => {
-    const existing = makeMockItem({ id: 'p1', title: 'Old', stage: 'framing' })
+    const existing = makeMockItem({ id: 'p1', title: 'Old', stage: 'shaping' })
     setupStorage({ pitches: [existing] })
 
     const result = await upsertPitch(ROOM, {
@@ -423,7 +423,7 @@ describe('upsertPitch', () => {
       upsertPitch(ROOM, {
         id: 'nonexistent',
         title: 'X',
-        stage: 'framing',
+        stage: 'shaping',
         frame_problem: '',
         frame_outcome: '',
         timebox_start: '',
@@ -1345,7 +1345,7 @@ describe('upsertPitch squad assignment', () => {
 
   const pitchParams = {
     title: 'Mission Control',
-    stage: 'framing' as const,
+    stage: 'shaping' as const,
     frame_problem: '',
     frame_outcome: '',
     timebox_start: '',
@@ -1379,7 +1379,7 @@ describe('upsertPitch squad assignment', () => {
   })
 
   it('clears the assignment when squad is an empty string', async () => {
-    const pitch = makeMockItem({ id: 'p1', title: 'X', stage: 'framing', squadId: 'sq1' })
+    const pitch = makeMockItem({ id: 'p1', title: 'X', stage: 'shaping', squadId: 'sq1' })
     setupStorage({
       pitches: [pitch],
       squads: [makeMockItem({ id: 'sq1', name: 'Platform', color: '#3e63dd' })],
@@ -1391,7 +1391,7 @@ describe('upsertPitch squad assignment', () => {
   })
 
   it('leaves the existing assignment untouched when squad is omitted', async () => {
-    const pitch = makeMockItem({ id: 'p1', title: 'X', stage: 'framing', squadId: 'sq1' })
+    const pitch = makeMockItem({ id: 'p1', title: 'X', stage: 'shaping', squadId: 'sq1' })
     setupStorage({ pitches: [pitch] })
 
     await upsertPitch(ROOM, { ...pitchParams, id: 'p1' })

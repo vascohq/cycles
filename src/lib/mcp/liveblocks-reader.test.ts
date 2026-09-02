@@ -89,7 +89,7 @@ describe('resolvePitch', () => {
     cycle: { name: 'Q2', type: 'build' as const, start_date: '', end_date: '' },
     pitches: [
       { id: 'p1', title: 'Mission Control', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
-      { id: 'p2', title: 'Agentic Skills', stage: 'framing' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
+      { id: 'p2', title: 'Agentic Skills', stage: 'shaping' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
     ],
     scopes: [],
     tasks: [],
@@ -107,6 +107,16 @@ describe('resolvePitch', () => {
 
   it('returns undefined when not found', () => {
     expect(resolvePitch(storage, 'no-such-pitch')).toBeUndefined()
+  })
+
+  // ADR 0023: rooms written before the stage change still hold `framing`.
+  // Nothing rewrites them, so the read surface normalizes on the way out.
+  it('reads a stored framing stage as shaping', () => {
+    const legacy = {
+      ...storage,
+      pitches: [{ ...storage.pitches[0], stage: 'framing' }],
+    } as unknown as typeof storage
+    expect(resolvePitch(legacy, 'p1')?.stage).toBe('shaping')
   })
 
   it('resolves a title with special characters via its cleaned slug', () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
+import { STAGES, readStage } from '@/lib/stage-engine'
 import { parseSlugPath, isValidSlugSegment } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
 import { slugify } from '@/lib/slugify'
@@ -14,7 +15,7 @@ import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
-import type { Zone, Needle, CardStatus } from '@/cycle-liveblocks.config'
+import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
 import {
   createCycle,
   updateCycle,
@@ -478,6 +479,9 @@ function preparePitchParams(params: WriteParams): WriteParams {
   // Only normalize a field that was actually supplied, so an omitted field is
   // never coerced to '' (ADR 0011).
   if (params.emoji !== undefined) prepared.emoji = normalizeEmoji(params.emoji)
+  // The batch path skips this tool's zod enum, so normalize here too: a caller
+  // passing the stage ADR 0023 removed gets `shaping`, never a stored `framing`.
+  if (params.stage !== undefined) prepared.stage = readStage(params.stage as string)
   if (params.notion_url !== undefined) {
     const notion = validateNotionUrl(params.notion_url)
     prepared.notion_url = notion.isValidUrl ? notion.value : ''
@@ -943,7 +947,9 @@ export function registerCyclesTools(server: any): void {
       ...cycleSlugArg,
       id: z.string().optional().describe('Pitch id. Omit to create.'),
       title: z.string(),
-      stage: z.enum(['framing', 'shaping', 'building', 'done']),
+      // Derived from STAGES so the tool surface cannot drift from the engine
+      // (ADR 0023 removed `framing`, which this now rejects).
+      stage: z.enum(STAGES as [Stage, ...Stage[]]),
       // On update, these are PARTIAL: omit to leave a field unchanged. They must
       // stay optional (not .default('')) — a default would coerce an omitted
       // field to '' and silently wipe it on update (the timebox-nullification
