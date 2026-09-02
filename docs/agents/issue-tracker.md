@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Everything this repo tracks lives as a GitHub issue: bug reports, specs (`/to-spec`), tickets (`/to-tickets`), and wayfinder maps. Use the `gh` CLI for all operations.
 
 ## Conventions
 
