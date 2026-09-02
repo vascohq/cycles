@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  AREA_GAP,
   FRAME_KINDS,
   FRAME_TYPES,
   KIND_COLORS,
@@ -7,7 +8,7 @@ import {
   isFrameType,
   renderProductMap,
 } from './product-map-engine'
-import type { Frame } from '@/product-map-liveblocks.config'
+import type { Area, Frame } from '@/product-map-liveblocks.config'
 
 function makeFrame(overrides: Partial<Frame> = {}): Frame {
   return {
@@ -144,5 +145,193 @@ describe('renderProductMap', () => {
       })
       expect(model.pins[0].daysSinceWoken).toBeNull()
     })
+  })
+})
+
+// ── Areas ──
+
+function makeArea(overrides: Partial<Area> = {}): Area {
+  return { id: 'a1', name: 'Integrations', x: 0, y: 0, ...overrides }
+}
+
+describe('area grouping', () => {
+  it('groups each frame under the area it is filed in', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', name: 'Integrations' }), makeArea({ id: 'a2', name: 'Billing' })],
+      frames: [
+        makeFrame({ id: 'f1', areaId: 'a1' }),
+        makeFrame({ id: 'f2', areaId: 'a2' }),
+        makeFrame({ id: 'f3', areaId: 'a1' }),
+      ],
+      today: '2026-09-02',
+    })
+    expect(model.areas.map((a) => a.name)).toEqual(['Integrations', 'Billing'])
+    expect(model.areas[0].pins.map((p) => p.frameId)).toEqual(['f1', 'f3'])
+    expect(model.areas[1].pins.map((p) => p.frameId)).toEqual(['f2'])
+  })
+
+  it('keeps an area with no frames, because an empty area is still land', () => {
+    const model = renderProductMap({
+      areas: [makeArea()],
+      frames: [],
+      today: '2026-09-02',
+    })
+    expect(model.areas).toHaveLength(1)
+    expect(model.areas[0].pins).toEqual([])
+  })
+
+  it('carries the area owner through, as a default and nothing more', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ owner: 'user_9' }), makeArea({ id: 'a2', name: 'Billing' })],
+      frames: [],
+      today: '2026-09-02',
+    })
+    expect(model.areas[0].owner).toBe('user_9')
+    expect(model.areas[1].owner).toBeNull()
+  })
+
+  // Rejected on purpose: it makes the individual pins unreadable.
+  it('never gives an area a color of its own', () => {
+    const model = renderProductMap({
+      areas: [makeArea()],
+      frames: [makeFrame({ areaId: 'a1', kind: 'brand_burn' })],
+      today: '2026-09-02',
+    })
+    expect(Object.keys(model.areas[0])).not.toContain('color')
+  })
+
+  it('leaves a resolved frame off its area', () => {
+    const model = renderProductMap({
+      areas: [makeArea()],
+      frames: [
+        makeFrame({ id: 'open', areaId: 'a1' }),
+        makeFrame({ id: 'gone', areaId: 'a1', resolved: true }),
+      ],
+      today: '2026-09-02',
+    })
+    expect(model.areas[0].pins.map((p) => p.frameId)).toEqual(['open'])
+  })
+})
+
+describe('the Unmapped group', () => {
+  it('collects the frames that belong to no area', () => {
+    const model = renderProductMap({
+      areas: [makeArea()],
+      frames: [makeFrame({ id: 'filed', areaId: 'a1' }), makeFrame({ id: 'homeless' })],
+      today: '2026-09-02',
+    })
+    expect(model.unmapped.map((p) => p.frameId)).toEqual(['homeless'])
+  })
+
+  // A dangling area id is not a home. Unmapped is always a valid result, so the
+  // frame stays visible rather than disappearing with the area that held it.
+  it('collects a frame whose area no longer exists', () => {
+    const model = renderProductMap({
+      areas: [],
+      frames: [makeFrame({ id: 'orphan', areaId: 'deleted' })],
+      today: '2026-09-02',
+    })
+    expect(model.unmapped.map((p) => p.frameId)).toEqual(['orphan'])
+  })
+
+  it('is empty when every frame is filed', () => {
+    const model = renderProductMap({
+      areas: [makeArea()],
+      frames: [makeFrame({ areaId: 'a1' })],
+      today: '2026-09-02',
+    })
+    expect(model.unmapped).toEqual([])
+  })
+})
+
+describe('sub-areas', () => {
+  it('nests a sub-area under its parent, and off the top level', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'a1', name: 'Integrations' }),
+        makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'a1' }),
+      ],
+      frames: [makeFrame({ id: 'f1', areaId: 'a2' })],
+      today: '2026-09-02',
+    })
+    expect(model.areas.map((a) => a.name)).toEqual(['Integrations'])
+    expect(model.areas[0].children.map((a) => a.name)).toEqual(['HubSpot'])
+    expect(model.areas[0].children[0].pins.map((p) => p.frameId)).toEqual(['f1'])
+    // The frames of a sub-area belong to the sub-area, not to the parent.
+    expect(model.areas[0].pins).toEqual([])
+  })
+
+  it('nests a sub-area of a sub-area', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'a1', name: 'Integrations' }),
+        makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'a1' }),
+        makeArea({ id: 'a3', name: 'Deals sync', parentAreaId: 'a2' }),
+      ],
+      frames: [],
+      today: '2026-09-02',
+    })
+    expect(model.areas[0].children[0].children.map((a) => a.name)).toEqual(['Deals sync'])
+  })
+
+  it('promotes an area whose parent no longer exists, rather than losing it', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'deleted' })],
+      frames: [],
+      today: '2026-09-02',
+    })
+    expect(model.areas.map((a) => a.name)).toEqual(['HubSpot'])
+  })
+
+  // Storage can hold anything, including a parent loop. The map still draws.
+  it('draws every area even when the parent chain loops', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'a1', name: 'One', parentAreaId: 'a2' }),
+        makeArea({ id: 'a2', name: 'Two', parentAreaId: 'a1' }),
+      ],
+      frames: [],
+      today: '2026-09-02',
+    })
+    const drawn = model.areas.flatMap((a) => [a.name, ...a.children.map((c) => c.name)])
+    expect(drawn.sort()).toEqual(['One', 'Two'])
+  })
+})
+
+describe("an area's generated shape", () => {
+  // An agent must be able to create an area, and an agent cannot draw. So the
+  // area carries a grid position and the app turns it into a shape.
+  it('places the shape from the position, not from stored geometry', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', x: 0, y: 0 }), makeArea({ id: 'a2', x: 2, y: 1 })],
+      frames: [],
+      today: '2026-09-02',
+    })
+    const [first, second] = model.areas
+    expect(first.shape.x).toBe(0)
+    expect(first.shape.y).toBe(0)
+    expect(second.shape.x).toBe(2 * (first.shape.width + AREA_GAP))
+    expect(second.shape.y).toBe(1 * (first.shape.height + AREA_GAP))
+  })
+
+  it('gives two areas at the same position the same shape', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', x: 1, y: 1 }), makeArea({ id: 'a2', x: 1, y: 1 })],
+      frames: [],
+      today: '2026-09-02',
+    })
+    expect(model.areas[0].shape).toEqual(model.areas[1].shape)
+  })
+
+  it('draws a sub-area smaller than its parent', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'a1' }),
+        makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'a1' }),
+      ],
+      frames: [],
+      today: '2026-09-02',
+    })
+    expect(model.areas[0].children[0].shape.width).toBeLessThan(model.areas[0].shape.width)
   })
 })

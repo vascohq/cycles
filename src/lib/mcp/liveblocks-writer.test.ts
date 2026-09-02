@@ -30,6 +30,7 @@ import {
   markSlackDelivered,
   upsertSquad,
   deleteSquad,
+  upsertArea,
   upsertFrame,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
@@ -1451,6 +1452,183 @@ function makeFrameItem(overrides: Record<string, unknown> = {}) {
     ...overrides,
   })
 }
+
+function makeAreaItem(overrides: Record<string, unknown> = {}) {
+  return makeMockItem({
+    id: 'a1',
+    name: 'Integrations',
+    x: 1,
+    y: 0,
+    owner: 'user_9',
+    ...overrides,
+  })
+}
+
+describe('upsertArea', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('creates an area from a name alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    const result = await upsertArea(MAP_ROOM, { name: 'Billing' })
+
+    expect(result.created).toBe(true)
+    const area = storage.areas.find(() => true)!
+    expect(area.get('name')).toBe('Billing')
+    expect(area.get('parentAreaId')).toBeUndefined()
+    expect(area.get('owner')).toBeUndefined()
+  })
+
+  // An agent cannot draw, so the app places the area. Position is a grid slot,
+  // and the engine turns it into a shape.
+  it('lands a new area on the next free grid slot', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      areas: [
+        makeAreaItem({ id: 'a1', x: 0, y: 0 }),
+        makeAreaItem({ id: 'a2', x: 1, y: 0 }),
+        makeAreaItem({ id: 'a3', x: 2, y: 0 }),
+      ],
+    })
+
+    await upsertArea(MAP_ROOM, { name: 'Billing' })
+
+    const created = storage.areas.map((a: any) => a).at(-1)!
+    expect(created.get('x')).toBe(0)
+    expect(created.get('y')).toBe(1)
+  })
+
+  // Counting the areas would collide with an area somebody positioned by hand,
+  // and two areas on one slot draw exactly on top of each other.
+  it('skips a slot an area already sits on', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', x: 0, y: 0 })] })
+
+    await upsertArea(MAP_ROOM, { name: 'Billing' })
+
+    const created = storage.areas.map((a: any) => a).at(-1)!
+    expect(created.get('x')).toBe(1)
+    expect(created.get('y')).toBe(0)
+  })
+
+  it('skips a hand-placed slot further along the grid', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', x: 1, y: 0 })] })
+
+    await upsertArea(MAP_ROOM, { name: 'Billing' })
+
+    const created = storage.areas.map((a: any) => a).at(-1)!
+    expect(created.get('x')).toBe(0)
+    expect(created.get('y')).toBe(0)
+  })
+
+  it('refuses to blank the name of an existing area', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem()] })
+
+    await expect(upsertArea(MAP_ROOM, { id: 'a1', name: '' })).rejects.toThrow(
+      'cannot be blank'
+    )
+    expect(storage.areas.find(() => true)!.get('name')).toBe('Integrations')
+  })
+
+  it('honours a position the caller gave', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await upsertArea(MAP_ROOM, { name: 'Billing', x: 2, y: 3 })
+
+    const area = storage.areas.find(() => true)!
+    expect(area.get('x')).toBe(2)
+    expect(area.get('y')).toBe(3)
+  })
+
+  it('creates a sub-area under its parent', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem()] })
+
+    await upsertArea(MAP_ROOM, { name: 'HubSpot', parentAreaId: 'a1' })
+
+    const created = storage.areas.map((a: any) => a).at(-1)!
+    expect(created.get('parentAreaId')).toBe('a1')
+  })
+
+  it('creates the Product Map room on the first area', async () => {
+    mockGetRoom.mockRejectedValue(new Error('Room not found'))
+    setupStorage()
+
+    await upsertArea(MAP_ROOM, { name: 'Billing' })
+
+    expect(mockCreateRoom).toHaveBeenCalledWith(MAP_ROOM, expect.anything())
+  })
+
+  // ADR 0011: an omitted field is left unchanged.
+  it('changes only the field the caller sent', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem()] })
+
+    const result = await upsertArea(MAP_ROOM, { id: 'a1', name: 'Integrations & sync' })
+
+    expect(result.created).toBe(false)
+    const area = storage.areas.find(() => true)!
+    expect(area.get('name')).toBe('Integrations & sync')
+    expect(area.get('x')).toBe(1)
+    expect(area.get('y')).toBe(0)
+    expect(area.get('owner')).toBe('user_9')
+  })
+
+  it('moves an area by writing its position alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem()] })
+
+    await upsertArea(MAP_ROOM, { id: 'a1', x: 0, y: 2 })
+
+    const area = storage.areas.find(() => true)!
+    expect(area.get('x')).toBe(0)
+    expect(area.get('y')).toBe(2)
+    expect(area.get('name')).toBe('Integrations')
+  })
+
+  it('clears an optional field when the caller passes an empty string', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ parentAreaId: 'a0' })] })
+
+    await upsertArea(MAP_ROOM, { id: 'a1', parentAreaId: '' })
+
+    const area = storage.areas.find(() => true)!
+    expect(area.get('parentAreaId')).toBeUndefined()
+    expect(area.get('owner')).toBe('user_9')
+  })
+
+  it('refuses a create with no name', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await expect(upsertArea(MAP_ROOM, { owner: 'user_9' })).rejects.toThrow(
+      'A new area needs a name'
+    )
+    expect(storage.areas.find(() => true)).toBeUndefined()
+  })
+
+  it('refuses to make an area its own parent', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ areas: [makeAreaItem()] })
+
+    await expect(upsertArea(MAP_ROOM, { id: 'a1', parentAreaId: 'a1' })).rejects.toThrow(
+      'cannot be its own parent'
+    )
+  })
+
+  it('throws when the area id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ areas: [makeAreaItem()] })
+
+    await expect(upsertArea(MAP_ROOM, { id: 'nope', name: 'x' })).rejects.toThrow(
+      'Area not found: "nope"'
+    )
+  })
+})
 
 describe('upsertFrame', () => {
   beforeEach(() => vi.clearAllMocks())

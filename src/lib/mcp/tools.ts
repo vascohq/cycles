@@ -36,6 +36,7 @@ import {
   upsertSquad,
   deleteSquad,
   openBatch,
+  upsertArea,
   upsertFrame,
 } from './liveblocks-writer'
 import {
@@ -612,6 +613,33 @@ export async function handleBatch(
 // The Product Map is org-scoped and names no cycle (ADR 0021), so these take an
 // org id where the cycle tools take a slug path. Their `map_` prefix is the only
 // thing separating the two scopes in the tool list, so it never comes off.
+
+export async function handleListAreas(orgId: string): Promise<ToolResult> {
+  const { areas } = await getProductMapStorage(orgId)
+  return jsonResult({ areas })
+}
+
+export async function handleUpsertArea(
+  orgId: string,
+  params: { id?: string; name?: string; parent_area_id?: string; x?: number; y?: number; owner?: string }
+): Promise<ToolResult> {
+  if (!params.id && !params.name?.trim()) {
+    return errorResult('A new area needs a "name", for example "Integrations" or "Billing".')
+  }
+  try {
+    const result = await upsertArea(productMapRoomId(orgId), {
+      id: params.id,
+      name: params.name,
+      parentAreaId: params.parent_area_id,
+      x: params.x,
+      y: params.y,
+      owner: params.owner,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
 
 export async function handleListFrames(orgId: string): Promise<ToolResult> {
   const { frames } = await getProductMapStorage(orgId)
@@ -1545,6 +1573,87 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleBatch(resolved.org.id, cycle_slug, operations)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_list_areas',
+    "List the areas of the organization's Product Map. An area is a named region of the product, for example Integrations or Billing. An area with a \"parentAreaId\" is a sub-area. \"x\" and \"y\" are a position on a coarse grid, not pixels — the app draws the area's shape from them.",
+    orgArg,
+    { title: 'List areas', readOnlyHint: true, openWorldHint: false },
+    async ({ org }: { org?: string }, extra: ToolExtra) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleListAreas(resolved.org.id)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_upsert_area',
+    'Create a named area on the Product Map, or update one by id. A new area needs only a "name" — omit the position and it lands on the next free grid slot, because the app draws the shape. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. To file a frame into an area, pass the area id to map_upsert_frame.',
+    {
+      ...orgArg,
+      // All optional with NO .default() — omitting a field must leave it
+      // unchanged, never coerce it away (ADR 0011).
+      id: z.string().optional().describe('Area id. Omit to create a new area.'),
+      name: z
+        .string()
+        .optional()
+        .describe('The name of the region, e.g. "Integrations". Required when creating.'),
+      parent_area_id: z
+        .string()
+        .optional()
+        .describe('Make this a sub-area of that area. Pass "" to lift it back to the top level.'),
+      // Non-negative integers only: the app multiplies these into a pixel
+      // offset, and a negative one puts the area off-canvas for good.
+      x: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Grid column, 0 or more. Omit on create for the next free slot.'),
+      y: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Grid row, 0 or more. Omit on create for the next free slot.'),
+      owner: z
+        .string()
+        .optional()
+        .describe(
+          'Clerk user id of the area owner — the suggested frame owner for this area, and nothing more. Pass "" to clear.'
+        ),
+    },
+    {
+      title: 'Create or update an area',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        ...params
+      }: {
+        org?: string
+        id?: string
+        name?: string
+        parent_area_id?: string
+        x?: number
+        y?: number
+        owner?: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleUpsertArea(resolved.org.id, params)
     }
   )
 
