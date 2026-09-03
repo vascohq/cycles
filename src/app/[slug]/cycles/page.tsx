@@ -136,7 +136,7 @@ export default async function CyclesPage({
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
       {/* A big gap under the map, a small one above CURRENT: the Cycles heading
           and its button belong to the list below them, not to the map above. */}
-      <section className="mb-12 flex flex-col gap-3">
+      <section className="mb-12 flex flex-col gap-2">
         <ProductMap
           variant="canvas"
           roomId={productMapRoomId(roomPrefix)}

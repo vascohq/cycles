@@ -271,7 +271,7 @@ function ProductMapView({
         <CyclesContext.Provider value={cycles}>
           {/* The heading row lives in here, not on the host page: Capture needs
               the room, and the room provider stops at this component. */}
-          <div className="mb-3 flex items-baseline justify-between gap-3">
+          <div className="flex items-baseline justify-between gap-3">
             {heading}
             <div className="flex items-center gap-3">
               {action}
@@ -1658,7 +1658,7 @@ function Shell({
 }) {
   return (
     <main className="mx-auto w-full max-w-screen-xl px-6 py-8">
-      <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h1 className="font-display text-2xl">Product Map</h1>
         {action}
       </div>
