@@ -9,10 +9,23 @@ export function productMapRoomId(orgPrefix: string): string {
   return `${orgPrefix}:product-map`
 }
 
-// Area carries only its id for now. Its fields arrive with #220, the ticket
-// that renders areas and files a frame into one.
+/**
+ * A named region of the product, for example Integrations or Billing. An area
+ * with a `parentAreaId` is a sub-area.
+ *
+ * `x` and `y` are a position on a coarse grid, NOT pixels. The app generates the
+ * area's shape from that position (product-map-engine), because an agent must be
+ * able to create an area and an agent cannot draw.
+ */
 export type Area = {
   id: string
+  name: string
+  /** The area this one sits inside. Absent for a top-level area. */
+  parentAreaId?: string
+  x: number
+  y: number
+  /** Clerk user id. The suggested Frame owner for this area, and nothing more. */
+  owner?: string
 }
 
 /** How much a problem hurts. The only axis with a color on the map. */

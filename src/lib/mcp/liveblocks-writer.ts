@@ -9,7 +9,7 @@ import type {
   PitchUpdate,
   Squad,
 } from '@/cycle-liveblocks.config'
-import type { Frame } from '@/product-map-liveblocks.config'
+import type { Area, Frame } from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
   FRAME_KINDS,
@@ -1040,6 +1040,96 @@ async function ensureProductMapRoom(roomId: string): Promise<void> {
       frames: { liveblocksType: 'LiveList', data: [] },
     },
   })
+}
+
+type AreaFields = {
+  name: string
+  parentAreaId: string
+  x: number
+  y: number
+  owner: string
+}
+
+/**
+ * Create or partial-update an area. Every non-identity field is optional:
+ * undefined = omitted = leave unchanged (ADR 0011).
+ *
+ * `x` and `y` are a grid position, not pixels — the app generates the area's
+ * shape from them. A create with no position lands on the next free grid slot,
+ * so an agent that cannot draw still gets an area that does not sit on another.
+ */
+export async function upsertArea(
+  roomId: string,
+  params: { id?: string } & Partial<AreaFields>
+): Promise<UpsertResult> {
+  const id = params.id ?? nanoid()
+  const created = !params.id
+  let notFound = false
+
+  if (created && !params.name?.trim()) {
+    throw new Error('A new area needs a name.')
+  }
+  if (params.name !== undefined && !params.name.trim()) {
+    throw new Error('An area name cannot be blank. Omit the field to leave the name unchanged.')
+  }
+  // An area inside itself has no shape and no meaning.
+  if (params.parentAreaId && params.parentAreaId === id) {
+    throw new Error('An area cannot be its own parent.')
+  }
+
+  await ensureProductMapRoom(roomId)
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const areas = root.get('areas')
+
+    if (created) {
+      // `.map` is the only read the node LiveList offers.
+      const slot = nextFreeGridSlot(areas.map((a: any) => ({ x: getField(a, 'x'), y: getField(a, 'y') })))
+      const area: Area = {
+        id,
+        name: (params.name as string).trim(),
+        x: params.x ?? slot.x,
+        y: params.y ?? slot.y,
+        ...(params.parentAreaId ? { parentAreaId: params.parentAreaId } : {}),
+        ...(params.owner ? { owner: params.owner } : {}),
+      }
+      areas.push(new LiveObject(area))
+      return
+    }
+
+    const existing = areas.find((a: any) => getField(a, 'id') === id)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    // Guard every field: an omitted field is never coerced away.
+    // '' clears an OPTIONAL field. A name is not optional, so a blank one would
+    // leave an area nobody can identify — omit the field to leave it alone.
+    if (params.name !== undefined) existing.set('name', params.name)
+    if (params.x !== undefined) existing.set('x', params.x)
+    if (params.y !== undefined) existing.set('y', params.y)
+    setOrClear(existing, 'parentAreaId', params.parentAreaId)
+    setOrClear(existing, 'owner', params.owner)
+  })
+
+  if (notFound) throw new Error(`Area not found: "${id}"`)
+  return { created, id }
+}
+
+/** Three across, then wrap. Enough to keep new areas off each other. */
+const AREA_GRID_COLUMNS = 3
+
+/**
+ * The first slot nothing sits on, reading three across then wrapping. Counting
+ * the areas instead would collide with any area the caller positioned by hand,
+ * and two areas on one slot draw exactly on top of each other.
+ */
+function nextFreeGridSlot(taken: { x: unknown; y: unknown }[]): { x: number; y: number } {
+  const occupied = new Set(taken.map((a) => `${a.x},${a.y}`))
+  for (let i = 0; ; i++) {
+    const slot = { x: i % AREA_GRID_COLUMNS, y: Math.floor(i / AREA_GRID_COLUMNS) }
+    if (!occupied.has(`${slot.x},${slot.y}`)) return slot
+  }
 }
 
 type FrameFields = {

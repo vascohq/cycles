@@ -3,7 +3,7 @@
 // returns the rendered map model. No React, no Liveblocks, no clock of its own,
 // the same shape as the cycle list engine.
 
-import type { Frame, FrameKind, FrameType } from '@/product-map-liveblocks.config'
+import type { Area, Frame, FrameKind, FrameType } from '@/product-map-liveblocks.config'
 
 // Kind is how much a problem hurts. It is the only axis with a color on the map.
 export const FRAME_KINDS = ['brand_burn', 'pain_point', 'unlock_win'] as const
@@ -47,19 +47,112 @@ export type RenderedPin = {
   daysSinceWoken: number | null
 }
 
+// An area's shape is GENERATED from its grid position, because an agent must be
+// able to create an area and an agent cannot draw. Nothing about the geometry is
+// stored, so the app stays free to redraw the land later.
+const AREA_WIDTH = 320
+const AREA_HEIGHT = 220
+export const AREA_GAP = 24
+/** Each level of nesting draws smaller, so a sub-area reads as inside its parent. */
+const SUB_AREA_SCALE = 0.7
+
+/** A region of the product, drawn from its position. Never colored by its frames. */
+export type RenderedArea = {
+  areaId: string
+  name: string
+  parentAreaId: string | null
+  /** Generated from the area's grid position. See AREA_WIDTH. */
+  shape: { x: number; y: number; width: number; height: number }
+  /** The suggested Frame owner for this area, and nothing more. */
+  owner: string | null
+  pins: RenderedPin[]
+  children: RenderedArea[]
+}
+
 export type ProductMapModel = {
   pins: RenderedPin[]
+  areas: RenderedArea[]
+  /** Frames that belong to no area. Unmapped is always a valid result. */
+  unmapped: RenderedPin[]
 }
 
 export function renderProductMap(input: {
+  /** Optional: a room root that predates the areas list still renders. */
+  areas?: Area[]
   frames: Frame[]
   today: string
 }): ProductMapModel {
-  return {
-    // A resolved frame leaves the map: a person decided the problem is gone.
-    // It is never deleted, so it stays readable through a filtered query.
-    pins: input.frames.filter((f) => !f.resolved).map((f) => renderPin(f, input.today)),
+  const areas = input.areas ?? []
+  // A resolved frame leaves the map: a person decided the problem is gone.
+  // It is never deleted, so it stays readable through a filtered query.
+  const pins = input.frames.filter((f) => !f.resolved).map((f) => renderPin(f, input.today))
+
+  const known = new Set(areas.map((a) => a.id))
+  const pinsByArea = new Map<string, RenderedPin[]>()
+  const unmapped: RenderedPin[] = []
+  for (const pin of pins) {
+    // A dangling area id is not a home, so the frame falls to Unmapped rather
+    // than vanishing with the area that used to hold it.
+    if (!known.has(pin.areaId)) {
+      unmapped.push(pin)
+      continue
+    }
+    const bucket = pinsByArea.get(pin.areaId)
+    if (bucket) bucket.push(pin)
+    else pinsByArea.set(pin.areaId, [pin])
   }
+
+  return { pins, areas: buildAreaTree(areas, pinsByArea), unmapped }
+}
+
+function buildAreaTree(
+  areas: Area[],
+  pinsByArea: Map<string, RenderedPin[]>
+): RenderedArea[] {
+  const known = new Set(areas.map((a) => a.id))
+  const childrenOf = new Map<string, Area[]>()
+  for (const area of areas) {
+    const parent = area.parentAreaId
+    if (!parent || !known.has(parent)) continue
+    const siblings = childrenOf.get(parent)
+    if (siblings) siblings.push(area)
+    else childrenOf.set(parent, [area])
+  }
+
+  const drawn = new Set<string>()
+  const render = (area: Area, depth: number): RenderedArea => {
+    drawn.add(area.id)
+    return {
+      areaId: area.id,
+      name: area.name,
+      parentAreaId: area.parentAreaId ?? null,
+      shape: areaShape(area, depth),
+      owner: area.owner ?? null,
+      pins: pinsByArea.get(area.id) ?? [],
+      children: (childrenOf.get(area.id) ?? [])
+        .filter((child) => !drawn.has(child.id))
+        .map((child) => render(child, depth + 1)),
+    }
+  }
+
+  // An area whose parent is gone is promoted rather than lost. The second pass
+  // catches anything a parent loop left undrawn, so storage can never hide land.
+  const roots = areas
+    .filter((a) => !a.parentAreaId || !known.has(a.parentAreaId))
+    .map((a) => render(a, 0))
+  // Checked one at a time, because rendering one area draws its children too.
+  const rescued: RenderedArea[] = []
+  for (const area of areas) {
+    if (!drawn.has(area.id)) rescued.push(render(area, 0))
+  }
+  return [...roots, ...rescued]
+}
+
+function areaShape(area: Area, depth: number): RenderedArea['shape'] {
+  const scale = SUB_AREA_SCALE ** depth
+  const width = AREA_WIDTH * scale
+  const height = AREA_HEIGHT * scale
+  return { x: area.x * (width + AREA_GAP), y: area.y * (height + AREA_GAP), width, height }
 }
 
 function renderPin(frame: Frame, today: string): RenderedPin {

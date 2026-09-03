@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListFrames, handleUpsertFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -28,6 +28,7 @@ vi.mock('./liveblocks-writer', () => ({
   markSlackDelivered: vi.fn(),
   upsertSquad: vi.fn(),
   deleteSquad: vi.fn(),
+  upsertArea: vi.fn(),
   upsertFrame: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
@@ -48,7 +49,7 @@ vi.mock('@/lib/users', async (importOriginal) => ({
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertFrame } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -791,7 +792,7 @@ describe('tool annotations', () => {
     return tools
   }
 
-  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_frames']
+  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_frames', 'map_list_areas']
   const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
@@ -1053,6 +1054,130 @@ describe('task assignment & reordering via registered tools', () => {
 })
 
 // ── Product Map tools ──
+
+describe('map_list_areas', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockGetMap = vi.mocked(getProductMapStorage)
+
+  it("returns the areas of the caller's organization", async () => {
+    mockGetMap.mockResolvedValue({
+      areas: [
+        { id: 'a1', name: 'Integrations', x: 0, y: 0 },
+        { id: 'a2', name: 'HubSpot', parentAreaId: 'a1', x: 1, y: 0 },
+      ],
+      frames: [],
+    })
+
+    const result = await handleListAreas(ORG_ID)
+
+    expect(mockGetMap).toHaveBeenCalledWith(ORG_ID)
+    const parsed = JSON.parse(result.content[0].text) as { areas: { name: string }[] }
+    expect(parsed.areas.map((a) => a.name)).toEqual(['Integrations', 'HubSpot'])
+  })
+
+  it('answers with an empty list for an organization with no map yet', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], frames: [] })
+
+    const result = await handleListAreas(ORG_ID)
+
+    expect(JSON.parse(result.content[0].text)).toEqual({ areas: [] })
+  })
+})
+
+describe('map_upsert_area', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockUpsertArea = vi.mocked(upsertArea)
+
+  it('creates an area from a name alone', async () => {
+    mockUpsertArea.mockResolvedValue({ created: true, id: 'a9' })
+
+    const result = await handleUpsertArea(ORG_ID, { name: 'Billing' })
+
+    expect(result.isError).toBeFalsy()
+    expect(mockUpsertArea).toHaveBeenCalledWith(
+      `${ORG_ID}:product-map`,
+      expect.objectContaining({ name: 'Billing' })
+    )
+  })
+
+  it('refuses a create with no name', async () => {
+    const result = await handleUpsertArea(ORG_ID, { owner: 'user_9' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('name')
+    expect(mockUpsertArea).not.toHaveBeenCalled()
+  })
+
+  it('lets an update omit the name, because the area already has one', async () => {
+    mockUpsertArea.mockResolvedValue({ created: false, id: 'a1' })
+
+    const result = await handleUpsertArea(ORG_ID, { id: 'a1', owner: 'user_9' })
+
+    expect(result.isError).toBeFalsy()
+    expect(mockUpsertArea).toHaveBeenCalledWith(
+      `${ORG_ID}:product-map`,
+      expect.objectContaining({ id: 'a1', owner: 'user_9' })
+    )
+  })
+
+  // ADR 0011: the handler forwards undefined for anything the caller omitted,
+  // so the writer can tell "leave unchanged" from "clear".
+  it('forwards undefined for every field the caller omitted', async () => {
+    mockUpsertArea.mockResolvedValue({ created: false, id: 'a1' })
+
+    await handleUpsertArea(ORG_ID, { id: 'a1', x: 2 })
+
+    const [, params] = mockUpsertArea.mock.calls[0]
+    expect(params.x).toBe(2)
+    expect(params.name).toBeUndefined()
+    expect(params.y).toBeUndefined()
+    expect(params.parentAreaId).toBeUndefined()
+    expect(params.owner).toBeUndefined()
+  })
+
+  it('maps the snake_case parent argument onto the stored field', async () => {
+    mockUpsertArea.mockResolvedValue({ created: false, id: 'a2' })
+
+    await handleUpsertArea(ORG_ID, { id: 'a2', parent_area_id: 'a1' })
+
+    const [, params] = mockUpsertArea.mock.calls[0]
+    expect(params.parentAreaId).toBe('a1')
+  })
+
+  it('reports a writer failure as a tool error', async () => {
+    mockUpsertArea.mockRejectedValue(new Error('Area not found: "nope"'))
+
+    const result = await handleUpsertArea(ORG_ID, { id: 'nope', name: 'x' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('Area not found')
+  })
+})
+
+// An agent must be able to run the whole flow through MCP alone: draw the land,
+// then file a problem onto it.
+describe('an agent creating an area and filing a frame into it', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('files the new frame into the area it just created', async () => {
+    vi.mocked(upsertArea).mockResolvedValue({ created: true, id: 'a_new' })
+    vi.mocked(upsertFrame).mockResolvedValue({ created: true, id: 'f_new' })
+
+    const area = await handleUpsertArea(ORG_ID, { name: 'Integrations' })
+    const areaId = (JSON.parse(area.content[0].text) as { id: string }).id
+
+    await handleUpsertFrame(ORG_ID, {
+      type: 'bug',
+      problem: 'HubSpot deals stop syncing after a token refresh',
+      area_id: areaId,
+    })
+
+    const [, params] = vi.mocked(upsertFrame).mock.calls[0]
+    expect(params.areaId).toBe('a_new')
+  })
+})
 
 describe('map_list_frames', () => {
   beforeEach(() => vi.clearAllMocks())
