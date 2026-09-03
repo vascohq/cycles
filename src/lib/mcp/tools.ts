@@ -54,6 +54,8 @@ import {
   linkPointer,
   wakeFrame,
   resolveFrame,
+  deleteFrame,
+  deleteArea,
 } from './liveblocks-writer'
 import {
   getOrganizationUsers,
@@ -830,6 +832,30 @@ export async function handleResolveFrame(
       resolved: params.resolved,
     })
     return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleDeleteFrame(orgId: string, params: { id?: string }): Promise<ToolResult> {
+  if (!params.id) {
+    return errorResult('Which frame? Pass "id" — map_list_frames names them.')
+  }
+  try {
+    await deleteFrame(productMapRoomId(orgId), params.id)
+    return jsonResult({ deleted: true, id: params.id })
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleDeleteArea(orgId: string, params: { id?: string }): Promise<ToolResult> {
+  if (!params.id) {
+    return errorResult('Which area? Pass "id" — map_list_areas names them.')
+  }
+  try {
+    await deleteArea(productMapRoomId(orgId), params.id)
+    return jsonResult({ deleted: true, id: params.id })
   } catch (err) {
     return errorResult((err as Error).message)
   }
@@ -2084,6 +2110,46 @@ export function registerCyclesTools(server: any): void {
       const resolvedOrg = resolveOrg(memberships, org)
       if (!resolvedOrg.ok) return errorResult(resolvedOrg.error)
       return handleResolveFrame(resolvedOrg.org.id, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_delete_frame',
+    'Delete a frame for good, because it should never have been on the map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the map: a problem somebody fixed gets map_resolve_frame, which keeps the frame and its record. Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any frame that named this one as its origin simply loses that pointer.',
+    { ...orgArg, id: z.string().describe('Frame id to delete. map_list_frames names them.') },
+    {
+      title: 'Delete a frame',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ org, ...params }: { org?: string; id?: string }, extra: ToolExtra) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleDeleteFrame(resolved.org.id, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_delete_area',
+    'Delete an area of the Product Map. Nothing inside it is deleted: its frames go back to Unmapped and its sub-areas lift to the top level, so losing the place never loses the problems. Rename with map_upsert_area instead when the region still exists under another name.',
+    { ...orgArg, id: z.string().describe('Area id to delete. map_list_areas names them.') },
+    {
+      title: 'Delete an area',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ org, ...params }: { org?: string; id?: string }, extra: ToolExtra) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleDeleteArea(resolved.org.id, params)
     }
   )
 }

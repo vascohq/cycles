@@ -1420,6 +1420,70 @@ export async function resolveFrame(
   return { frameId: params.frameId, resolved }
 }
 
+/**
+ * Delete a frame outright, because it should never have been captured — a
+ * duplicate, a test, a mistake. This is NOT how a solved problem leaves the
+ * map: that is map_resolve_frame, which keeps the record (ADR 0025).
+ *
+ * Any frame that named this one as its origin loses that pointer, so the map
+ * keeps no reference to a frame that is gone.
+ */
+export async function deleteFrame(
+  roomId: string,
+  id: string,
+  injectedRoot?: any
+): Promise<void> {
+  let notFound = false
+
+  await withRoot(roomId, injectedRoot, (root: any) => {
+    const frames = root.get('frames')
+    const idx = frames.findIndex((f: any) => getField(f, 'id') === id)
+    if (idx === -1) {
+      notFound = true
+      return
+    }
+    frames.delete(idx)
+
+    for (const f of frames) {
+      if (getField(f, 'originFrameId') === id) f.delete('originFrameId')
+    }
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${id}"`)
+}
+
+/**
+ * Delete an area. Nothing inside it is deleted: its frames go back to Unmapped
+ * and its sub-areas lift to the top level, because an area is a place on the
+ * map and losing the place must not lose the problems.
+ */
+export async function deleteArea(
+  roomId: string,
+  id: string,
+  injectedRoot?: any
+): Promise<void> {
+  let notFound = false
+
+  await withRoot(roomId, injectedRoot, (root: any) => {
+    const areas = root.get('areas')
+    const idx = areas.findIndex((a: any) => getField(a, 'id') === id)
+    if (idx === -1) {
+      notFound = true
+      return
+    }
+    areas.delete(idx)
+
+    for (const a of areas) {
+      if (getField(a, 'parentAreaId') === id) a.delete('parentAreaId')
+    }
+    for (const f of root.get('frames')) {
+      if (getField(f, 'areaId') === id) f.delete('areaId')
+    }
+  })
+
+  if (notFound) throw new Error(`Area not found: "${id}"`)
+}
+
 /** The owner of the area a frame is filed in, or '' when there is none to suggest. */
 function areaOwner(root: any, areaId: string | undefined): string {
   if (!areaId) return ''
