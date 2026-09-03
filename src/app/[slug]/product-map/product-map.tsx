@@ -26,7 +26,6 @@ import {
   DEFAULT_LENS,
   FRAME_KINDS,
   FRAME_TYPES,
-  HEAT_LENSES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
   renderProductMap,
@@ -79,12 +78,6 @@ const TYPE_LABELS: Record<FrameType, string> = {
   request: 'Request',
   security: 'Security',
   irritant: 'Irritant',
-}
-
-const LENS_LABELS: Record<HeatLens, string> = {
-  all: 'Everyone',
-  internal: 'Internal only',
-  customer: 'Customers only',
 }
 
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
@@ -170,16 +163,28 @@ const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
 /** The cycles a frame can be bet into. Read once, at the page boundary. */
 const CyclesContext = createContext<CycleWindow[]>([])
 
+/**
+ * `full` is the Product Map's own page: the land, plus capture, plus every list
+ * that reaches a frame the land does not show.
+ *
+ * `canvas` is the land and nothing else, for embedding somewhere the map is not
+ * the subject — the cycles home page. Clicking a pin still opens its frame,
+ * because a map you cannot read from is decoration.
+ */
+export type ProductMapVariant = 'full' | 'canvas'
+
 export function ProductMap({
   roomId,
   organizationUsers,
   cycles,
   shapes,
+  variant = 'full',
 }: {
   roomId: string
   organizationUsers: OrganizationUser[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
+  variant?: ProductMapVariant
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -189,7 +194,7 @@ export function ProductMap({
         initialStorage={productMapInitialStorage()}
       >
         <ClientSideSuspense fallback={<ProductMapSkeleton />}>
-          {() => <ProductMapView cycles={cycles} shapes={shapes} />}
+          {() => <ProductMapView cycles={cycles} shapes={shapes} variant={variant} />}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
@@ -199,16 +204,21 @@ export function ProductMap({
 function ProductMapView({
   cycles,
   shapes,
+  variant,
 }: {
   cycles: CycleWindow[]
   shapes: LinkedShape[]
+  variant: ProductMapVariant
 }) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
   const [openFrameId, setOpenFrameId] = useState<string | null>(null)
-  const [lens, setLens] = useState<HeatLens>(DEFAULT_LENS)
+  // No control on the page for this. The engine still computes every lens, and
+  // MCP callers still filter by one, so the switch can come back without a
+  // change to the model.
+  const lens: HeatLens = DEFAULT_LENS
 
   // Today is a parameter of the engine, never a clock inside it. Resolved here
   // in the team timezone, the same as every other date-derived surface.
@@ -229,14 +239,36 @@ function ProductMapView({
       (pin) => pin.frameId === openFrameId
     ) ?? null
 
+  // The land only. No capture, and none of the lists that reach a frame the
+  // land does not show — those belong to the Product Map's own page, not to a
+  // page where the map is a view onto somewhere else.
+  if (variant === 'canvas') {
+    return (
+      <OpenFrameContext.Provider value={setOpenFrameId}>
+        <CyclesContext.Provider value={cycles}>
+          {model.areas.length > 0 ? (
+            <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
+          ) : (
+            <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No Product Map yet. Describe your product to Claude and it will
+              draw the land.
+            </div>
+          )}
+          <FrameDetail
+            pin={open}
+            onClose={() => setOpenFrameId(null)}
+            areas={options}
+          />
+        </CyclesContext.Provider>
+      </OpenFrameContext.Provider>
+    )
+  }
+
   return (
     <OpenFrameContext.Provider value={setOpenFrameId}>
       <CyclesContext.Provider value={cycles}>
         <Shell>
           <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <LensToggle lens={lens} onChange={setLens} />
-          </div>
           {model.pins.length === 0 && model.areas.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
               <p className="font-display text-lg">Nothing on the Product Map yet</p>
@@ -549,41 +581,6 @@ function StillHurtsButton({ onWake }: { onWake: () => void }) {
  * else — a frame keeps one freshness clock whatever the lens says. Comparing
  * the internal lens with the customer lens is how a team finds pain it is
  * ignoring.
- */
-function LensToggle({
-  lens,
-  onChange,
-}: {
-  lens: HeatLens
-  onChange: (lens: HeatLens) => void
-}) {
-  return (
-    <div className="ml-auto flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Heat from</span>
-      <Select value={lens} onValueChange={(v) => onChange(v as HeatLens)}>
-        <SelectTrigger className="w-40" aria-label="Heat lens">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {HEAT_LENSES.map((l) => (
-            <SelectItem key={l} value={l}>
-              {LENS_LABELS[l]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
-
-/**
- * The frame detail. This is where a shaper writes the problem, the appetite and
- * the business case, so the betting table can judge the frame. It holds NO
- * outcome: the Product Map stays about problems, and shaping stays about solutions.
- *
- * Every field writes straight to storage. There is no save button, because a
- * half-typed frame is a normal state here — a frame sits rough until somebody
- * sharpens it.
  */
 function FrameDetail({
   pin,
