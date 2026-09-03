@@ -11,6 +11,13 @@ const Tooltip = TooltipPrimitive.Root
 
 const TooltipTrigger = TooltipPrimitive.Trigger
 
+/**
+ * Renders the content at the end of <body> instead of beside the trigger.
+ * Required whenever the trigger is inside an <svg>: an HTML div placed in SVG
+ * gets no layout at all, so the tooltip measures 0x0 and never appears.
+ */
+const TooltipPortal = TooltipPrimitive.Portal
+
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
@@ -27,4 +34,4 @@ const TooltipContent = React.forwardRef<
 ))
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipPortal, TooltipProvider }

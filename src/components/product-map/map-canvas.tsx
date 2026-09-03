@@ -5,11 +5,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   clusterForViewport,
   descendantPins,
+  KIND_COLORS,
   type CanvasNode,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
 import { unionBounds, type Bounds } from '@/lib/product-map-geometry'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 /**
  * The land, drawn. One SVG, one viewBox, wheel and drag against it — the same
@@ -19,6 +27,28 @@ import { unionBounds, type Bounds } from '@/lib/product-map-geometry'
  * merged silhouette of the leaves underneath them, fused by a blur-and-threshold
  * filter. Nothing about those two is stored or computed as a polygon.
  */
+
+/** Plain words for the tooltip. The engine holds rules; the view holds prose. */
+const KIND_WORDS: Record<RenderedPin['kind'], string> = {
+  brand_burn: 'Brand burn',
+  pain_point: 'Pain point',
+  unlock_win: 'Win to unlock',
+}
+
+const TYPE_WORDS: Record<RenderedPin['type'], string> = {
+  bug: 'bug',
+  idea: 'idea',
+  request: 'request',
+  security: 'security',
+  irritant: 'irritant',
+}
+
+/** A bubble carries a color, not a Kind, so it is read back from the color. */
+const WORST_WORDS: Record<string, string> = {
+  [KIND_COLORS.brand_burn]: 'brand burn',
+  [KIND_COLORS.pain_point]: 'a pain point',
+  [KIND_COLORS.unlock_win]: 'a win to unlock',
+}
 
 /** Breathing room round the fitted map, as a fraction of its size. */
 const FIT_PAD = 0.12
@@ -221,10 +251,11 @@ export function MapCanvas({
   const k = 1 / scale
 
   return (
-    <div
-      ref={hostRef}
-      className="relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20"
-    >
+    <TooltipProvider delayDuration={80}>
+      <div
+        ref={hostRef}
+        className="relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20"
+      >
       {/*
         Absolutely positioned, so the SVG is OUT OF FLOW. An SVG carries an
         intrinsic size from its viewBox, and inside a shrink-to-fit parent that
@@ -301,8 +332,9 @@ export function MapCanvas({
             />
           )
         )}
-      </svg>
-    </div>
+        </svg>
+      </div>
+    </TooltipProvider>
   )
 }
 
@@ -508,39 +540,51 @@ function Pin({
   const dot = 4.5 * k
 
   return (
-    <g
-      onClick={(e) => {
-        e.stopPropagation()
-        onOpen(pin.frameId)
-      }}
-      onKeyDown={activate(() => onOpen(pin.frameId))}
-      className="cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
-      opacity={pin.opacity}
-      role="button"
-      tabIndex={0}
-      aria-label={pin.problem}
-    >
-      {/* The browser's own tooltip. Costs a line and no JavaScript. */}
-      <title>{`${pin.problem}${pin.reportCount > 0 ? ` — ${pin.reportCount} report${pin.reportCount === 1 ? '' : 's'}` : ''}`}</title>
-      <circle cx={x} cy={y} r={halo} fill={pin.color} opacity={0.18} />
-      {pin.outline !== 'none' && (
-        <circle
-          cx={x}
-          cy={y}
-          r={halo}
-          fill="none"
-          stroke={pin.color}
-          strokeWidth={1.5}
-          strokeDasharray={pin.outline === 'dashed' ? '4 3' : undefined}
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-      <circle cx={x} cy={y} r={dot} fill={pin.color} />
-      {/* Investment shows as a mark and never as a number: sunk cost must not read as priority. */}
-      {pin.worked && (
-        <circle cx={x} cy={y} r={dot * 0.4} fill="white" opacity={0.9} />
-      )}
-    </g>
+    <Tooltip>
+      {/* asChild, so the trigger IS the mark. Radix measures an SVG group for
+          positioning exactly as it would a div. */}
+      <TooltipTrigger asChild>
+        <g
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen(pin.frameId)
+          }}
+          onKeyDown={activate(() => onOpen(pin.frameId))}
+          className="cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          opacity={pin.opacity}
+          role="button"
+          tabIndex={0}
+          aria-label={pin.problem}
+        >
+          <circle cx={x} cy={y} r={halo} fill={pin.color} opacity={0.18} />
+          {pin.outline !== 'none' && (
+            <circle
+              cx={x}
+              cy={y}
+              r={halo}
+              fill="none"
+              stroke={pin.color}
+              strokeWidth={1.5}
+              strokeDasharray={pin.outline === 'dashed' ? '4 3' : undefined}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          <circle cx={x} cy={y} r={dot} fill={pin.color} />
+          {/* Investment shows as a mark and never as a number: sunk cost must not read as priority. */}
+          {pin.worked && <circle cx={x} cy={y} r={dot * 0.4} fill="white" opacity={0.9} />}
+        </g>
+      </TooltipTrigger>
+      <TooltipPortal>
+        <TooltipContent side="top" className="max-w-[260px] px-2.5 py-1.5">
+          <p className="text-xs font-medium leading-snug">{pin.problem}</p>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {KIND_WORDS[pin.kind]} · {TYPE_WORDS[pin.type]} ·{' '}
+            {pin.reportCount === 1 ? '1 report' : `${pin.reportCount} reports`}
+            {pin.dim ? ' · fading' : ''}
+          </p>
+        </TooltipContent>
+      </TooltipPortal>
+    </Tooltip>
   )
 }
 
@@ -557,53 +601,65 @@ function Bubble({
   const r = 19 * k
 
   return (
-    <g
-      onClick={(e) => {
-        e.stopPropagation()
-        onOpen()
-      }}
-      onKeyDown={activate(onOpen)}
-      className="cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
-      opacity={node.opacity}
-      role="button"
-      tabIndex={0}
-      aria-label={`${node.name}, ${node.count} frames. Zoom in.`}
-    >
-      <title>{`${node.name} — ${node.count} frame${node.count === 1 ? '' : 's'}. Click to zoom in.`}</title>
-      <circle cx={x} cy={y} r={r * 1.45} fill={node.color} opacity={0.16} />
-      <circle cx={x} cy={y} r={r} fill={node.color} />
-      {node.outline !== 'none' && (
-        <circle
-          cx={x}
-          cy={y}
-          r={r * 1.45}
-          fill="none"
-          stroke={node.color}
-          strokeWidth={1.5}
-          strokeDasharray={node.outline === 'dashed' ? '4 3' : undefined}
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-      <text
-        x={x}
-        y={y + 5.5 * k}
-        textAnchor="middle"
-        fill="white"
-        className="pointer-events-none select-none font-semibold"
-        style={{ fontSize: 16 * k }}
-      >
-        {node.count}
-      </text>
-      <text
-        x={x}
-        y={y + r * 1.45 + 15 * k}
-        textAnchor="middle"
-        className="pointer-events-none select-none fill-foreground font-display"
-        style={{ fontSize: 13 * k }}
-      >
-        {node.name}
-      </text>
-    </g>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <g
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen()
+          }}
+          onKeyDown={activate(onOpen)}
+          className="cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          opacity={node.opacity}
+          role="button"
+          tabIndex={0}
+          aria-label={`${node.name}, ${node.count} frames. Zoom in.`}
+        >
+          <circle cx={x} cy={y} r={r * 1.45} fill={node.color} opacity={0.16} />
+          <circle cx={x} cy={y} r={r} fill={node.color} />
+          {node.outline !== 'none' && (
+            <circle
+              cx={x}
+              cy={y}
+              r={r * 1.45}
+              fill="none"
+              stroke={node.color}
+              strokeWidth={1.5}
+              strokeDasharray={node.outline === 'dashed' ? '4 3' : undefined}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          <text
+            x={x}
+            y={y + 5.5 * k}
+            textAnchor="middle"
+            fill="white"
+            className="pointer-events-none select-none font-semibold"
+            style={{ fontSize: 16 * k }}
+          >
+            {node.count}
+          </text>
+          <text
+            x={x}
+            y={y + r * 1.45 + 15 * k}
+            textAnchor="middle"
+            className="pointer-events-none select-none fill-foreground font-display"
+            style={{ fontSize: 13 * k }}
+          >
+            {node.name}
+          </text>
+        </g>
+      </TooltipTrigger>
+      <TooltipPortal>
+        <TooltipContent side="top" className="max-w-[260px] px-2.5 py-1.5">
+          <p className="text-xs font-medium leading-snug">{node.name}</p>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {node.count === 1 ? '1 frame' : `${node.count} frames`} · worst is{' '}
+            {WORST_WORDS[node.color] ?? 'a problem'} · click to zoom in
+          </p>
+        </TooltipContent>
+      </TooltipPortal>
+    </Tooltip>
   )
 }
 
