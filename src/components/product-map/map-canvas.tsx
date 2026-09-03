@@ -236,8 +236,8 @@ export function MapCanvas({
             leaves the coastline as a ring rather than a fill — areas are never
             colored by their frames.
           */}
-          <Coast id="coast-island" blur={13} erode={2.2} />
-          <Coast id="coast-archipelago" blur={30} erode={1.6} />
+          <Coast id="coast-island" blur={13} erode={2.2} k={k} />
+          <Coast id="coast-archipelago" blur={30} erode={1.6} k={k} />
           {/* Hand-drawn character, on the drawn coastlines only. */}
           <filter id="pm-wobble" x="-12%" y="-12%" width="124%" height="124%">
             <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="7" result="n" />
@@ -287,18 +287,43 @@ export function MapCanvas({
   )
 }
 
-/** The filter chain that turns a scatter of children into one coastline ring. */
-function Coast({ id, blur, erode }: { id: string; blur: number; erode: number }) {
+/**
+ * The filter chain that turns a scatter of children into one coastline ring.
+ *
+ * `blur` stays in WORLD units, so the silhouette's shape does not shift as the
+ * map is zoomed: it is the fusion distance, not a line weight.
+ *
+ * The alpha matrix has to be steep. A gentle one leaves the blur's gradient
+ * behind as a soft grey shoulder outside the line, which reads as a second,
+ * fatter outline round every island.
+ *
+ * `erode` is the line weight, so it scales with `k` (1 / zoom) to hold a
+ * constant thickness on screen. In world units it would grow with the zoom
+ * until the coastline was a 40-pixel smear.
+ */
+function Coast({
+  id,
+  blur,
+  erode,
+  k,
+}: {
+  id: string
+  blur: number
+  erode: number
+  k: number
+}) {
+  // feMorphology with a radius at or near zero produces no ring at all.
+  const weight = Math.max(0.15, erode * k)
   return (
     <filter id={id} x="-25%" y="-25%" width="150%" height="150%">
       <feGaussianBlur in="SourceGraphic" stdDeviation={blur} result="haze" />
       <feColorMatrix
         in="haze"
         type="matrix"
-        values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 22 -9"
+        values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 160 -72"
         result="goo"
       />
-      <feMorphology in="goo" operator="erode" radius={erode} result="inner" />
+      <feMorphology in="goo" operator="erode" radius={weight} result="inner" />
       <feComposite in="goo" in2="inner" operator="out" />
     </filter>
   )
