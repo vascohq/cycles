@@ -35,6 +35,7 @@ import {
   attachReport,
   linkPointer,
   wakeFrame,
+  resolveFrame,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -2108,5 +2109,53 @@ describe('upsertPitch frame pointer', () => {
     await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', frameId: '' })
 
     expect(storage.pitches.find(() => true)!.get('frameId')).toBeUndefined()
+  })
+})
+
+describe('resolveFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('sets the resolved flag', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await resolveFrame(MAP_ROOM, { frameId: 'f1' })
+
+    expect(result).toEqual({ frameId: 'f1', resolved: true })
+    expect(storage.frames.find(() => true)!.get('resolved')).toBe(true)
+  })
+
+  it('changes nothing else, because nothing is ever deleted', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await resolveFrame(MAP_ROOM, { frameId: 'f1' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('reports')).toHaveLength(1)
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+  })
+
+  it('puts a frame back on the map when the caller passes false', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ resolved: true })] })
+
+    await resolveFrame(MAP_ROOM, { frameId: 'f1', resolved: false })
+
+    expect(storage.frames.find(() => true)!.get('resolved')).toBe(false)
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(resolveFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
+      'Frame not found: "nope"'
+    )
   })
 })

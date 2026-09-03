@@ -19,6 +19,7 @@ import {
   inCooldown,
   isPointerKind,
   linkedShapesFrom,
+  originChain,
   pinOutline,
   pinOpacity,
   pinSize,
@@ -934,5 +935,128 @@ describe('a frame that has been bet on', () => {
       today: '2026-09-02',
     })
     expect(model.pins[0].shapes.map((s) => s.cycleSlug)).toEqual(['2024-q1', '2026-q3'])
+  })
+})
+
+describe('monitoring', () => {
+  const released = makeShape({ stage: 'done', currentCycle: false })
+
+  it('has no end condition: a released frame stays there until a person acts', () => {
+    const frame = makeFrame({ appetite: '6 weeks' })
+    expect(frameState(frame, [released])).toBe('monitoring')
+    // Years later, nothing has moved it on by itself.
+    expect(frameState(frame, [released])).toBe('monitoring')
+  })
+
+  it('ends only when a person resolves the frame', () => {
+    const frame = makeFrame({ appetite: '6 weeks', resolved: true })
+    expect(frameState(frame, [released])).toBe('resolved')
+  })
+
+  // A quiet release leaves the map quietly (ADR 0024).
+  it('keeps the dormancy clock running, so a quiet release goes to sleep', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ id: 'f1', appetite: '6 weeks', last_woken: '2026-01-20' })],
+      shapes: [makeShape({ frameId: 'f1', stage: 'done', currentCycle: false })],
+      cycles: CYCLES,
+      today: '2026-03-31',
+    })
+    expect(model.pins).toHaveLength(0)
+    expect(model.dormantReview).toHaveLength(1)
+  })
+})
+
+describe('the origin chain', () => {
+  const origin = makeFrame({ id: 'f1', problem: 'Imports fail silently' })
+  const followOn = makeFrame({
+    id: 'f2',
+    problem: 'The new importer is too slow',
+    originFrameId: 'f1',
+  })
+
+  it('names the frame whose monitoring surfaced this one', () => {
+    expect(originChain(followOn, [origin, followOn])).toEqual([
+      { frameId: 'f1', problem: 'Imports fail silently' },
+    ])
+  })
+
+  it('is empty for a frame nothing surfaced', () => {
+    expect(originChain(origin, [origin, followOn])).toEqual([])
+  })
+
+  it('walks two links back, nearest first', () => {
+    const third = makeFrame({ id: 'f3', problem: 'Nobody uses the new importer', originFrameId: 'f2' })
+    expect(originChain(third, [origin, followOn, third]).map((l) => l.frameId)).toEqual([
+      'f2',
+      'f1',
+    ])
+  })
+
+  it('stops at a missing origin rather than throwing', () => {
+    const orphan = makeFrame({ id: 'f9', originFrameId: 'gone' })
+    expect(originChain(orphan, [orphan])).toEqual([])
+  })
+
+  it('stops on a chain that loops, so bad data cannot hang the map', () => {
+    const a = makeFrame({ id: 'a', originFrameId: 'b' })
+    const b = makeFrame({ id: 'b', originFrameId: 'a' })
+    expect(originChain(a, [a, b]).map((l) => l.frameId)).toEqual(['b'])
+  })
+
+  // Creating the follow-on frame never reopens the origin (ADR 0025).
+  it('leaves the origin frame in monitoring', () => {
+    const model = renderProductMap({
+      frames: [{ ...origin, appetite: '6 weeks' }, followOn],
+      shapes: [makeShape({ frameId: 'f1', stage: 'done', currentCycle: false })],
+      today: '2026-09-02',
+    })
+    const [first, second] = model.pins
+    expect(first.state).toBe('monitoring')
+    expect(second.originChain[0].frameId).toBe('f1')
+  })
+})
+
+describe('a resolved frame', () => {
+  const area = makeArea({ id: 'a1' })
+
+  it('leaves the map view', () => {
+    const model = renderProductMap({
+      areas: [area],
+      frames: [makeFrame({ id: 'f1', areaId: 'a1', resolved: true })],
+      today: '2026-09-02',
+    })
+    expect(model.pins).toEqual([])
+    expect(model.areas[0].pins).toEqual([])
+    expect(model.unmapped).toEqual([])
+  })
+
+  it('stays on its area, with the shapes that resolved it', () => {
+    const model = renderProductMap({
+      areas: [area],
+      frames: [makeFrame({ id: 'f1', areaId: 'a1', appetite: '6 weeks', resolved: true })],
+      shapes: [makeShape({ frameId: 'f1', stage: 'done', currentCycle: false })],
+      today: '2026-09-02',
+    })
+    expect(model.areas[0].resolved).toHaveLength(1)
+    expect(model.areas[0].resolved[0].shapes[0].title).toBe('Silent import failures')
+    expect(model.resolved).toHaveLength(1)
+  })
+
+  it('is never deleted, so it stays readable even with no area', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ id: 'f1', resolved: true })],
+      today: '2026-09-02',
+    })
+    expect(model.resolved).toHaveLength(1)
+    expect(model.unmapped).toEqual([])
+  })
+
+  it('never lands in the dormant review, because it is not asleep', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ id: 'f1', resolved: true, last_woken: '2026-01-20' })],
+      cycles: CYCLES,
+      today: '2026-03-31',
+    })
+    expect(model.dormantReview).toEqual([])
   })
 })

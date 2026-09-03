@@ -1373,6 +1373,35 @@ export async function wakeFrame(
   return { frameId: params.frameId, wokenOn }
 }
 
+/**
+ * Resolve a frame, because a person decided the problem is gone. Only a person
+ * does this. Nothing resolves on a timer, and shipping something never silently
+ * claims the pain is over (ADR 0025).
+ *
+ * This writes ONE field. A resolved frame is not deleted: it leaves the map and
+ * stays on its area, with the shapes that resolved it. Pass `resolved: false`
+ * to put it back.
+ */
+export async function resolveFrame(
+  roomId: string,
+  params: { frameId: string; resolved?: boolean }
+): Promise<{ frameId: string; resolved: boolean }> {
+  const resolved = params.resolved ?? true
+  let notFound = false
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    existing.set('resolved', resolved)
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, resolved }
+}
+
 function setOrClear(item: any, key: string, value: string | undefined): void {
   if (value === undefined) return
   if (value === '') item.delete(key)

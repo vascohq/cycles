@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleWakeFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleWakeFrame, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -33,6 +33,7 @@ vi.mock('./liveblocks-writer', () => ({
   attachReport: vi.fn(),
   linkPointer: vi.fn(),
   wakeFrame: vi.fn(),
+  resolveFrame: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
   openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
@@ -52,7 +53,7 @@ vi.mock('@/lib/users', async (importOriginal) => ({
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame, resolveFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -1691,5 +1692,47 @@ describe('upsert_pitch frame pointer', () => {
 
     expect(schema.parse(base).frame_id).toBeUndefined()
     expect(schema.parse({ ...base, frame_id: 'f1' }).frame_id).toBe('f1')
+  })
+})
+
+describe('handleResolveFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockResolveFrame = vi.mocked(resolveFrame)
+
+  it('resolves a frame by id', async () => {
+    mockResolveFrame.mockResolvedValue({ frameId: 'f1', resolved: true })
+
+    const result = await handleResolveFrame(ORG_ID, { frame_id: 'f1' })
+
+    expect(mockResolveFrame).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      frameId: 'f1',
+      resolved: undefined,
+    })
+    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', resolved: true })
+  })
+
+  it('rejects a resolve with no frame, and writes nothing', async () => {
+    const result = await handleResolveFrame(ORG_ID, {})
+
+    expect(result.isError).toBe(true)
+    expect(mockResolveFrame).not.toHaveBeenCalled()
+  })
+
+  it('passes false through, so a frame can come back onto the map', async () => {
+    mockResolveFrame.mockResolvedValue({ frameId: 'f1', resolved: false })
+
+    await handleResolveFrame(ORG_ID, { frame_id: 'f1', resolved: false })
+
+    expect(mockResolveFrame.mock.calls[0][1].resolved).toBe(false)
+  })
+
+  it('reports a writer failure as an error, not a success', async () => {
+    mockResolveFrame.mockRejectedValue(new Error('Frame not found: "nope"'))
+
+    const result = await handleResolveFrame(ORG_ID, { frame_id: 'nope' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Frame not found: "nope"')
   })
 })

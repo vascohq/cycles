@@ -166,7 +166,12 @@ function ProductMapView({
   })
   const options = areaOptions(model.areas)
   // Opening a frame reads it and nothing more. It never wakes it (ADR 0024).
-  const open = model.pins.find((pin) => pin.frameId === openFrameId) ?? null
+  // Searched across every rendered frame, not only the ones on the map: an
+  // origin link can point at a frame that is asleep or already resolved.
+  const open =
+    [...model.pins, ...model.dormantReview, ...model.resolved].find(
+      (pin) => pin.frameId === openFrameId
+    ) ?? null
 
   return (
     <OpenFrameContext.Provider value={setOpenFrameId}>
@@ -258,6 +263,7 @@ function AreaRegion({ area, options }: { area: RenderedArea; options: AreaOption
           <PinDot key={pin.frameId} pin={pin} options={options} />
         ))}
       </ul>
+      <ResolvedList pins={area.resolved} />
       {area.children.length > 0 && (
         <div className="relative mt-2" style={{ height: subAreaHeight(area) }}>
           {area.children.map((child) => (
@@ -266,6 +272,34 @@ function AreaRegion({ area, options }: { area: RenderedArea; options: AreaOption
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * The frames this area's team resolved, with the shapes that resolved them. Off
+ * the map and still on record: the map must never lie about what we know.
+ */
+function ResolvedList({ pins }: { pins: RenderedPin[] }) {
+  if (pins.length === 0) return null
+  return (
+    <details className="mt-2">
+      <summary className="cursor-pointer text-xs text-muted-foreground">
+        Resolved ({pins.length})
+      </summary>
+      <ul className="mt-1.5 flex flex-col gap-1.5">
+        {pins.map((pin) => (
+          <li key={pin.frameId} className="text-xs">
+            <span className="line-through">{pin.problem}</span>
+            {pin.shapes.length > 0 && (
+              <span className="text-muted-foreground">
+                {' '}
+                — {pin.shapes.map((s) => `${s.title} (${s.cycleTitle})`).join(', ')}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 
@@ -596,16 +630,154 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
           </Select>
         </Field>
 
+        <Origin pin={pin} />
         <Shapes pin={pin} />
         <StillHurts pin={pin} />
         <Pointers pin={pin} />
         <Reports pin={pin} />
+        <Resolve pin={pin} onClose={onClose} />
       </SheetContent>
     </Sheet>
   )
 }
 
 type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+
+/**
+ * The origin chain, and the way to add to it.
+ *
+ * A quality or an adoption problem found while monitoring a release becomes a
+ * NEW frame with a pointer back — never a reopening of this one. One frame text
+ * cannot hold two differently-framed problems, and each deserves its own
+ * appetite (ADR 0025). The chain then shows which releases create follow-on
+ * pain, and nobody maintains it.
+ */
+function Origin({ pin }: { pin: RenderedPin }) {
+  const openFrame = useContext(OpenFrameContext)
+  const { userId } = useAuth()
+  const [problem, setProblem] = useState('')
+  const [type, setType] = useState<FrameType>('bug')
+
+  const captureFrame = useProductMapMutation(({ storage }, frame: Frame) => {
+    storage.get('frames').push(new LiveObject(frame))
+  }, [])
+
+  function onSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    const text = problem.trim()
+    if (!text) return
+    captureFrame({
+      id: nanoid(),
+      kind: DEFAULT_KIND,
+      type,
+      problem: text,
+      appetite: '',
+      business_case: '',
+      ...(pin.areaId ? { areaId: pin.areaId } : {}),
+      ...(pin.owner ? { owner: pin.owner } : userId ? { owner: userId } : {}),
+      // The pointer back. Capturing it never touches this frame: the origin
+      // frame is not reopened, and it stays in monitoring.
+      originFrameId: pin.frameId,
+      reports: [],
+      pointers: [],
+      last_woken: getTeamToday(new Date()),
+      resolved: false,
+    })
+    setProblem('')
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t pt-4">
+      {pin.originChain.length > 0 && (
+        <>
+          <Label>Came out of</Label>
+          <ol className="flex flex-col gap-1">
+            {pin.originChain.map((link) => (
+              <li key={link.frameId} className="text-sm">
+                <button
+                  type="button"
+                  className="text-left underline"
+                  onClick={() => openFrame(link.frameId)}
+                >
+                  {link.problem}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      {(pin.state === 'released' || pin.state === 'monitoring') && (
+        <form onSubmit={onSubmit} className="flex flex-col gap-2">
+          <Label>Found a problem in this release?</Label>
+          <p className="text-xs text-muted-foreground">
+            It becomes a new frame pointing back at this one, with its own
+            appetite. This frame stays in monitoring.
+          </p>
+          <Input
+            placeholder="What is wrong now?"
+            aria-label="Follow-on problem"
+            value={problem}
+            onChange={(e) => setProblem(e.target.value)}
+          />
+          <div className="flex items-center gap-2">
+            <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
+              <SelectTrigger className="w-36" aria-label="Follow-on Type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FRAME_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {TYPE_LABELS[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="submit" variant="outline" disabled={!problem.trim()}>
+              Capture it
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Resolve. Only a person does this, and nothing does it on a timer — shipping a
+ * shape never silently claims the pain is over. Monitoring has no end condition,
+ * so this is the only way out of it.
+ */
+function Resolve({ pin, onClose }: { pin: RenderedPin; onClose: () => void }) {
+  const setResolved = useProductMapMutation(
+    ({ storage }, frameId: string, resolved: boolean) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      frame.set('resolved', resolved)
+    },
+    []
+  )
+
+  return (
+    <div className="flex items-center justify-between gap-2 border-t pt-4">
+      <p className="text-xs text-muted-foreground">
+        {pin.state === 'monitoring' || pin.state === 'released'
+          ? 'Released. It stays in monitoring until somebody says the problem is gone.'
+          : 'Resolve this when the problem is gone. Nothing resolves on a timer.'}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-8 shrink-0"
+        onClick={() => {
+          setResolved(pin.frameId, true)
+          onClose()
+        }}
+      >
+        Resolve
+      </Button>
+    </div>
+  )
+}
 
 /**
  * Every shape that attacked this frame, with its cycle, plus the way to bet on

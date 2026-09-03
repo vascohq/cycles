@@ -75,6 +75,34 @@ export type LinkedShape = {
   currentCycle: boolean
 }
 
+/** One link in a frame's origin chain: the frame whose monitoring surfaced it. */
+export type OriginLink = { frameId: string; problem: string }
+
+/**
+ * The chain of origin frames behind this one, nearest first.
+ *
+ * A quality or adoption problem found while monitoring a release becomes a NEW
+ * frame with a pointer back, never a reopening of the old one (ADR 0025). The
+ * chain is what makes "which releases create follow-on pain" visible, and
+ * nobody maintains it: the pointer is set once, at capture.
+ */
+export function originChain(frame: Frame, frames: Frame[]): OriginLink[] {
+  const byId = new Map(frames.map((f) => [f.id, f]))
+  const chain: OriginLink[] = []
+  // A chain that loops back on itself would spin forever, and bad data is not a
+  // reason to hang the map.
+  const seen = new Set<string>([frame.id])
+  let current = frame.originFrameId
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const origin = byId.get(current)
+    if (!origin) break
+    chain.push({ frameId: origin.id, problem: origin.problem })
+    current = origin.originFrameId
+  }
+  return chain
+}
+
 /**
  * Engagement, the fourth and last pin channel:
  *
@@ -413,6 +441,8 @@ export type RenderedPin = {
    * investment must never read as priority (ADR 0024).
    */
   worked: boolean
+  /** The frames whose monitoring surfaced this one, nearest first. */
+  originChain: OriginLink[]
   /** Built from the problem and the appetite. null for a rough frame. */
   candidateStatement: string | null
   /**
@@ -452,6 +482,11 @@ export type RenderedArea = {
   /** The suggested Frame owner for this area, and nothing more. */
   owner: string | null
   pins: RenderedPin[]
+  /**
+   * The frames this area's team resolved. They are off the map and still on
+   * record here, with the shapes that resolved them (ADR 0025).
+   */
+  resolved: RenderedPin[]
   children: RenderedArea[]
 }
 
@@ -461,6 +496,11 @@ export type ProductMapModel = {
   areas: RenderedArea[]
   /** Frames that belong to no area. Unmapped is always a valid result. */
   unmapped: RenderedPin[]
+  /**
+   * Frames a person resolved. Off the map, never deleted, and still readable so
+   * the map does not lie about what the team knows.
+   */
+  resolved: RenderedPin[]
   /**
    * The sweep's review queue: frames that just went to sleep, capped, and shown
    * only during cooldown. It exists so a wake the transcript missed is
@@ -489,16 +529,26 @@ export function renderProductMap(input: {
   const cycles = input.cycles ?? []
   const config = { ...DEFAULT_FRESHNESS, ...input.freshness }
   const shapesByFrame = groupShapesByFrame(input.shapes ?? [])
-  // A resolved frame leaves the map: a person decided the problem is gone.
-  // It is never deleted, so it stays readable through a filtered query.
-  const live = input.frames
-    .filter((f) => !f.resolved)
-    .map((f) =>
-      renderPin(f, input.today, shapesByFrame.get(f.id) ?? [], lens, cycles, config)
+  const rendered = input.frames.map((f) =>
+    renderPin(
+      f,
+      input.today,
+      shapesByFrame.get(f.id) ?? [],
+      lens,
+      cycles,
+      config,
+      input.frames
     )
+  )
 
-  // A dormant frame leaves the view. Past investment gets no say in this: sunk
-  // cost must never set priority (ADR 0024).
+  // A resolved frame leaves the map, because a person decided the problem is
+  // gone. It is never deleted: it stays on its area, with the shapes that
+  // resolved it.
+  const resolved = rendered.filter((p) => p.state === 'resolved')
+  const live = rendered.filter((p) => p.state !== 'resolved')
+
+  // A dormant frame leaves the view too. Past investment gets no say in this:
+  // sunk cost must never set priority (ADR 0024).
   const pins = live.filter((p) => !p.dormant)
   const asleep = live.filter((p) => p.dormant)
   // The sweep runs at the end of a cycle, in cooldown, where housekeeping
@@ -508,26 +558,38 @@ export function renderProductMap(input: {
     : []
 
   const known = new Set(areas.map((a) => a.id))
-  const pinsByArea = new Map<string, RenderedPin[]>()
-  const unmapped: RenderedPin[] = []
-  for (const pin of pins) {
-    // A dangling area id is not a home, so the frame falls to Unmapped rather
-    // than vanishing with the area that used to hold it.
-    if (!known.has(pin.areaId)) {
-      unmapped.push(pin)
-      continue
-    }
-    const bucket = pinsByArea.get(pin.areaId)
-    if (bucket) bucket.push(pin)
-    else pinsByArea.set(pin.areaId, [pin])
-  }
+  // A dangling area id is not a home, so the frame falls to Unmapped rather
+  // than vanishing with the area that used to hold it.
+  const home = (pin: RenderedPin) => (known.has(pin.areaId) ? pin.areaId : '')
+  const pinsByArea = groupBy(pins, home)
+  const resolvedByArea = groupBy(resolved, home)
 
-  return { pins, areas: buildAreaTree(areas, pinsByArea), unmapped, dormantReview }
+  return {
+    pins,
+    areas: buildAreaTree(areas, pinsByArea, resolvedByArea),
+    unmapped: pinsByArea.get('') ?? [],
+    resolved,
+    dormantReview,
+  }
+}
+
+function groupBy(
+  pins: RenderedPin[],
+  key: (pin: RenderedPin) => string
+): Map<string, RenderedPin[]> {
+  const grouped = new Map<string, RenderedPin[]>()
+  for (const pin of pins) {
+    const bucket = grouped.get(key(pin))
+    if (bucket) bucket.push(pin)
+    else grouped.set(key(pin), [pin])
+  }
+  return grouped
 }
 
 function buildAreaTree(
   areas: Area[],
-  pinsByArea: Map<string, RenderedPin[]>
+  pinsByArea: Map<string, RenderedPin[]>,
+  resolvedByArea: Map<string, RenderedPin[]>
 ): RenderedArea[] {
   const known = new Set(areas.map((a) => a.id))
   const childrenOf = new Map<string, Area[]>()
@@ -549,6 +611,7 @@ function buildAreaTree(
       shape: areaShape(area, depth),
       owner: area.owner ?? null,
       pins: pinsByArea.get(area.id) ?? [],
+      resolved: resolvedByArea.get(area.id) ?? [],
       children: (childrenOf.get(area.id) ?? [])
         .filter((child) => !drawn.has(child.id))
         .map((child) => render(child, depth + 1)),
@@ -581,7 +644,8 @@ function renderPin(
   shapes: LinkedShape[],
   lens: HeatLens,
   cycles: CycleWindow[],
-  config: FreshnessConfig
+  config: FreshnessConfig,
+  allFrames: Frame[]
 ): RenderedPin {
   const kind = isFrameKind(frame.kind) ? frame.kind : DEFAULT_KIND
   const count = reportCount(frame, lens)
@@ -607,6 +671,7 @@ function renderPin(
     outline: pinOutline(shapes),
     shapes,
     worked: shapes.length > 0,
+    originChain: originChain(frame, allFrames),
     candidateStatement: candidateStatement(frame),
     daysSinceWoken: days,
     cyclesSinceWoken: elapsed,

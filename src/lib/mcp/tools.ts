@@ -49,6 +49,7 @@ import {
   attachReport,
   linkPointer,
   wakeFrame,
+  resolveFrame,
 } from './liveblocks-writer'
 import {
   getOrganizationUsers,
@@ -831,6 +832,24 @@ export async function handleLinkPointer(
       url: params.url,
       kind: params.kind as never,
       label: params.label,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleResolveFrame(
+  orgId: string,
+  params: { frame_id?: string; resolved?: boolean }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  try {
+    const result = await resolveFrame(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      resolved: params.resolved,
     })
     return jsonResult(result)
   } catch (err) {
@@ -2056,6 +2075,37 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleWakeFrame(resolved.org.id, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_resolve_frame',
+    'Resolve a frame, because the problem is gone. Do this ONLY when a person has decided it — shipping a shape never resolves a frame on its own, and nothing resolves on a timer. A released frame stays in monitoring until somebody resolves it. This writes one field and changes nothing else: the frame leaves the map view, keeps everything, and stays on record with the shapes that resolved it. If monitoring turned up a quality or an adoption problem, do NOT reopen this frame — capture a NEW one with map_upsert_frame and pass "origin_frame_id", so each problem gets its own appetite.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame whose problem is gone.'),
+      resolved: z
+        .boolean()
+        .optional()
+        .describe('Defaults to true. Pass false to put a frame back on the map.'),
+    },
+    {
+      title: 'Resolve a frame',
+      readOnlyHint: false,
+      // It takes a frame off the map view. Nothing is deleted, and it reverses.
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, ...params }: { org?: string; frame_id?: string; resolved?: boolean },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolvedOrg = resolveOrg(memberships, org)
+      if (!resolvedOrg.ok) return errorResult(resolvedOrg.error)
+      return handleResolveFrame(resolvedOrg.org.id, params)
     }
   )
 }
