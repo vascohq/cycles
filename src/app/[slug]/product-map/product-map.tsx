@@ -145,6 +145,9 @@ function PillSelect({
   )
 }
 
+/** One wording, so the field reads the same whether a frame is being made or read. */
+const WHY_LABEL = 'Why does this matter to Vasco?'
+
 const KIND_OPTIONS = FRAME_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))
 const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))
 
@@ -256,7 +259,7 @@ function ProductMapView({
             options={options}
           />
           <DormantReview pins={model.dormantReview} options={options} />
-          <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} />
+          <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} areas={options} />
         </Shell>
       </CyclesContext.Provider>
     </OpenFrameContext.Provider>
@@ -582,7 +585,15 @@ function LensToggle({
  * half-typed frame is a normal state here — a frame sits rough until somebody
  * sharpens it.
  */
-function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () => void }) {
+function FrameDetail({
+  pin,
+  onClose,
+  areas,
+}: {
+  pin: RenderedPin | null
+  onClose: () => void
+  areas: AreaOption[]
+}) {
   const users = useOrganizationUsers()
 
   const editFrame = useProductMapMutation(
@@ -590,8 +601,9 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
       const frame = storage.get('frames').find((f) => f.get('id') === frameId)
       if (!frame) return
       // '' clears an optional field: the key goes away rather than sitting there
-      // as an empty string nobody can tell from "unset".
-      if (field === 'owner' && value === '') frame.delete('owner')
+      // as an empty string nobody can tell from "unset". A frame with no areaId
+      // is Unmapped, which is always a valid answer.
+      if ((field === 'owner' || field === 'areaId') && value === '') frame.delete(field)
       else frame.set(field, value as never)
     },
     []
@@ -636,6 +648,17 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
             label="Type"
             options={TYPE_OPTIONS}
           />
+          {areas.length > 0 && (
+            <PillSelect
+              value={pin.areaId || UNMAPPED}
+              onChange={(v) => set('areaId')(v === UNMAPPED ? '' : v)}
+              label="Area"
+              options={[
+                { value: UNMAPPED, label: 'Unmapped' },
+                ...areas.map((a) => ({ value: a.id, label: a.label })),
+              ]}
+            />
+          )}
           <PillSelect
             value={pin.owner ?? NOBODY}
             onChange={(v) => set('owner')(v === NOBODY ? '' : v)}
@@ -673,7 +696,13 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
+          {/* The same order and the same question as capture. A field that means
+              one thing must not move between creating a frame and reading it. */}
           <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
+            <Field label={WHY_LABEL} hint="Who is affected, what it is worth, why now.">
+              <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
+            </Field>
+
             <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
               <DraftInput value={pin.appetite} onCommit={set('appetite')} />
             </Field>
@@ -683,11 +712,6 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
                 {pin.candidateStatement}
               </p>
             )}
-
-            <Field label="Business case" hint="Who is affected, what it is worth, why now.">
-              <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
-            </Field>
-
           </TabsContent>
 
           <TabsContent value="reports" className="flex flex-col gap-3 pt-2">
@@ -713,7 +737,14 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
   )
 }
 
-type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+type EditableField =
+  | 'problem'
+  | 'appetite'
+  | 'business_case'
+  | 'kind'
+  | 'type'
+  | 'owner'
+  | 'areaId'
 
 /**
  * The origin chain, and the way to add to it.
@@ -1352,7 +1383,7 @@ function CaptureForm({
       <DialogTrigger asChild>
         <Button className="mb-3">Capture a frame</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg gap-3 p-5">
+      <DialogContent className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5">
         <DialogTitle className="sr-only">Capture a frame</DialogTitle>
         <textarea
           autoFocus
@@ -1372,48 +1403,8 @@ function CaptureForm({
           className={TITLE_INPUT}
         />
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">
-            What is the customer struggling with?
-          </Label>
-          <Textarea
-            rows={2}
-            value={struggle}
-            onChange={(e) => setStruggle(e.target.value)}
-            placeholder="What they cannot do today, in their words."
-          />
-          <Input
-            className="h-8 text-sm"
-            value={customer}
-            onChange={(e) => setCustomer(e.target.value)}
-            placeholder="Which customer? Leave empty if this came from us."
-            aria-label="Customer"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Why does this matter to Vasco?</Label>
-          <Textarea
-            rows={2}
-            value={why}
-            onChange={(e) => setWhy(e.target.value)}
-            placeholder="The business case. Free text — nobody scores this."
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Appetite</Label>
-          <Input
-            className="h-8 text-sm"
-            value={appetite}
-            onChange={(e) => setAppetite(e.target.value)}
-            placeholder="Two weeks, six weeks… a frame is sharp once it has one."
-            aria-label="Appetite"
-          />
-        </div>
-
-        {/* The same pills the frame form uses, so capturing and reading a frame
-            are the same gesture. */}
+        {/* The same pills the frame form uses, in the same place: directly under
+            the title. Capturing a frame and reading one are the same gesture. */}
         <div className="flex flex-wrap items-center gap-2">
           <PillSelect
             value={kind}
@@ -1440,6 +1431,70 @@ function CaptureForm({
             />
           )}
         </div>
+
+        {/*
+          The same tab row the frame form has. Reports, pointers and history all
+          need a frame to point at, so they are shown and disabled rather than
+          hidden: what a frame will hold is visible from the moment it is made.
+        */}
+        <Tabs value="framing" className="mt-1">
+          <TabsList>
+            <TabsTrigger value="framing">Framing</TabsTrigger>
+            <TabsTrigger value="reports" disabled title="Once the frame exists">
+              Reports
+            </TabsTrigger>
+            <TabsTrigger value="pointers" disabled title="Once the frame exists">
+              Pointers
+            </TabsTrigger>
+            <TabsTrigger value="history" disabled title="Once the frame exists">
+              History
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
+            <Field label={WHY_LABEL} hint="Who is affected, what it is worth, why now.">
+              <Textarea
+                rows={3}
+                value={why}
+                onChange={(e) => setWhy(e.target.value)}
+                placeholder="Free text — nobody scores this."
+              />
+            </Field>
+
+            <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
+              <Input
+                value={appetite}
+                onChange={(e) => setAppetite(e.target.value)}
+                placeholder="Two weeks, six weeks… a frame is sharp once it has one."
+                aria-label="Appetite"
+              />
+            </Field>
+
+            {/*
+              The struggle is the frame's first report, so it belongs to the
+              Reports tab — but that tab cannot exist yet, and capture has to
+              stay one screen. It sits here, named for what it becomes.
+            */}
+            <Field
+              label="First report — what is the customer struggling with?"
+              hint="Name a customer and it counts as a customer report, which is what the customer Heat lens reads."
+            >
+              <Textarea
+                rows={2}
+                value={struggle}
+                onChange={(e) => setStruggle(e.target.value)}
+                placeholder="What they cannot do today, in their words."
+              />
+              <Input
+                className="mt-1.5"
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                placeholder="Which customer? Leave empty if this came from us."
+                aria-label="Customer"
+              />
+            </Field>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="border-t border-border pt-3">
           <Button onClick={create} disabled={!problem.trim()}>
