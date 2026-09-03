@@ -62,10 +62,24 @@ _Avoid_: Kind (that is severity), category, label
 
 **Playbook**:
 The workflow for one **Type**. A bug playbook skips full shaping. A feature playbook runs Shape Up or Kanban. A security playbook wants one pull request per service. A playbook names the **Pointers** its frames expect.
+
+Each **Type** expects these pointer kinds. A new Type with no playbook is a bug ([ADR 0025](docs/adr/0025-type-selects-the-playbook.md)):
+
+| Type | Expects |
+| --- | --- |
+| `bug` | `issue`, `pull_request` |
+| `idea` | `research`, `shaped_doc`, `pull_request` |
+| `request` | `conversation`, `shaped_doc` |
+| `security` | `issue`, `pull_request` |
+| `irritant` | nothing |
+
+A bug expects less than an idea, so a small fix carries no Shape Up ceremony. An irritant is a note and not a project, so it expects nothing. The security playbook wants one pull request per service. The **Gap list** asks for the first one, because there is no service record to count against.
 _Avoid_: Process, workflow, template
 
 **Pointer**:
 An outbound link that a frame packages: a url, a label, and a kind. A frame holds only pointers. The artifacts live elsewhere, in GitHub, in Notion, or in a wayfinder map. A frame never imports, never syncs, and never mirrors state.
+
+There are six pointer kinds: `issue`, `wayfinder`, `research`, `shaped_doc`, `pull_request`, and `conversation`. There is no kind for a **Shape**. A shape points at its frame, and not the reverse, so the app reads a frame's shape list from the cycle rooms ([ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)).
 _Avoid_: Attachment, child, document, embed
 
 **Gap list**:

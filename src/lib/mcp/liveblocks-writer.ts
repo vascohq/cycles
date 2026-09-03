@@ -9,13 +9,22 @@ import type {
   PitchUpdate,
   Squad,
 } from '@/cycle-liveblocks.config'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type {
+  Area,
+  Frame,
+  FramePointer,
+  FrameReport,
+  PointerKind,
+} from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
   FRAME_KINDS,
   FRAME_TYPES,
+  POINTER_KINDS,
+  POINTER_KIND_LABELS,
   isFrameKind,
   isFrameType,
+  isPointerKind,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
@@ -229,6 +238,10 @@ export async function upsertPitch(
     squad?: string
     // Pitch view (see ADR 0018). undefined = leave unchanged / default on create.
     view?: 'scope_map' | 'kanban'
+    // The Frame on the Product Map this shape attacks (ADR 0022). '' clears it.
+    // Writing it never touches the frame: the shape points at the frame, not
+    // the reverse.
+    frame_id?: string
   },
   injectedRoot?: any
 ): Promise<UpsertResult> {
@@ -270,6 +283,7 @@ export async function upsertPitch(
         notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
         ...(params.view ? { view: params.view } : {}),
+        ...(params.frame_id ? { frame_id: params.frame_id } : {}),
       }
       resultStart = pitch.timebox_start
       resultEnd = pitch.timebox_end
@@ -292,6 +306,7 @@ export async function upsertPitch(
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       if (params.view !== undefined) existing.set('view', params.view)
+      setOrClear(existing, 'frame_id', params.frame_id)
       resultStart = getField(existing, 'timebox_start') ?? ''
       resultEnd = getField(existing, 'timebox_end') ?? ''
       // squadId: null = clear (remove key), string = assign, undefined = leave.
@@ -1181,6 +1196,11 @@ export async function upsertFrame(
     const frames = root.get('frames')
 
     if (created) {
+      // Every frame wants an owner: somebody has to care that it gets
+      // addressed. The area owner is the default the app suggests, and nothing
+      // more — the capturer can change it. The in-app capture form does the
+      // same, so an agent capture is not left ownerless (#221).
+      const owner = params.owner || areaOwner(root, params.areaId)
       const frame: Frame = {
         id,
         kind: params.kind ?? DEFAULT_KIND,
@@ -1189,7 +1209,7 @@ export async function upsertFrame(
         appetite: params.appetite ?? '',
         business_case: params.business_case ?? '',
         ...(params.areaId ? { areaId: params.areaId } : {}),
-        ...(params.owner ? { owner: params.owner } : {}),
+        ...(owner ? { owner } : {}),
         ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
         reports: [],
         pointers: [],
@@ -1222,6 +1242,191 @@ export async function upsertFrame(
 
   if (notFound) throw new Error(`Frame not found: "${id}"`)
   return { created, id }
+}
+
+/**
+ * Attach a report to a frame. A report is one record of the problem happening,
+ * and it is the only thing that grows a pin.
+ *
+ * This writes exactly two fields: the report goes onto the list, and the wake
+ * clock resets. Nothing else on the frame is read or rewritten, so a report can
+ * never erase the problem, the appetite, the pointers or the owner.
+ *
+ * A new report is one of the three things that wake a frame (ADR 0024).
+ */
+export async function attachReport(
+  roomId: string,
+  params: {
+    frameId: string
+    capturer: string
+    source?: FrameReport['source']
+    customer?: string
+    link?: string
+    text: string
+    date?: string
+  }
+): Promise<{ frameId: string; reportCount: number }> {
+  if (!params.text.trim()) {
+    throw new Error('A report needs text — one line saying what happened.')
+  }
+  if (params.source !== undefined && params.source !== 'internal' && params.source !== 'customer') {
+    throw new Error(`Invalid source: "${params.source}". One of: internal, customer.`)
+  }
+
+  let notFound = false
+  let reportCount = 0
+  // Two different dates. The report carries the day the problem happened, so a
+  // support person can record last week's call. The wake carries the day
+  // somebody reported it, which is now — reporting an old incident is a fresh
+  // mention, and must never age the frame towards Dormant (ADR 0024).
+  const today = getTeamToday(new Date())
+  const reportedOn = params.date?.trim() || today
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    const report: FrameReport = {
+      capturer: params.capturer,
+      // Internal is the quieter claim, so it is the safe default: a report only
+      // counts under the customer lens when somebody said it came from one.
+      source: params.source ?? 'internal',
+      ...(params.customer?.trim() ? { customer: params.customer.trim() } : {}),
+      ...(params.link?.trim() ? { link: params.link.trim() } : {}),
+      text: params.text.trim(),
+      date: reportedOn,
+    }
+    const reports = (getField(existing, 'reports') ?? []) as FrameReport[]
+    existing.set('reports', [...reports, report])
+    existing.set('last_woken', today)
+    reportCount = reports.length + 1
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, reportCount }
+}
+
+/**
+ * Attach a pointer to a frame. A frame packages pointers; the artifact stays
+ * where it lives, so the Product Map never becomes a second copy that drifts.
+ *
+ * This writes ONE field: the pointer list. It does not wake the frame, because
+ * only three things do and filing a link is not one of them (ADR 0024).
+ */
+export async function linkPointer(
+  roomId: string,
+  params: { frameId: string; url: string; kind: PointerKind; label?: string }
+): Promise<{ frameId: string; pointerCount: number }> {
+  if (!params.url.trim()) {
+    throw new Error('A pointer needs a url — the artifact lives at the other end of it.')
+  }
+  if (!isPointerKind(params.kind)) {
+    throw new Error(
+      `Invalid pointer kind: "${params.kind}". One of: ${POINTER_KINDS.join(', ')}.`
+    )
+  }
+
+  let notFound = false
+  let pointerCount = 0
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    const pointer: FramePointer = {
+      url: params.url.trim(),
+      // A pointer with no label still needs something to click. The kind is the
+      // honest fallback, and a caller can rename it later.
+      label: params.label?.trim() || POINTER_KIND_LABELS[params.kind],
+      kind: params.kind,
+    }
+    const pointers = (getField(existing, 'pointers') ?? []) as FramePointer[]
+    existing.set('pointers', [...pointers, pointer])
+    pointerCount = pointers.length + 1
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, pointerCount }
+}
+
+/**
+ * Wake a frame. This writes ONE field, the freshness clock, and it must never
+ * erase a frame: the problem, the appetite, the reports, the pointers and the
+ * owner all stay exactly as they were.
+ *
+ * A wake is a mention. It carries no note, because a wake with evidence behind
+ * it is a Report — use attachReport for that (ADR 0024).
+ */
+export async function wakeFrame(
+  roomId: string,
+  params: { frameId: string; date?: string }
+): Promise<{ frameId: string; wokenOn: string }> {
+  const mentionedOn = params.date?.trim() || getTeamToday(new Date())
+  let notFound = false
+  let wokenOn = mentionedOn
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    // The clock only ever moves forward. An agent replaying older table notes
+    // must never age a frame that something more recent already woke, so a
+    // back-dated mention is recorded as a no-op rather than a regression.
+    // ISO dates compare lexically, the same trick the cycle list engine uses.
+    const current = String(getField(existing, 'last_woken') ?? '')
+    if (current && current >= mentionedOn) {
+      wokenOn = current
+      return
+    }
+    existing.set('last_woken', mentionedOn)
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, wokenOn }
+}
+
+/**
+ * Resolve a frame, because a person decided the problem is gone. Only a person
+ * does this. Nothing resolves on a timer, and shipping something never silently
+ * claims the pain is over (ADR 0025).
+ *
+ * This writes ONE field. A resolved frame is not deleted: it leaves the Product Map and
+ * stays on its area, with the shapes that resolved it. Pass `resolved: false`
+ * to put it back.
+ */
+export async function resolveFrame(
+  roomId: string,
+  params: { frameId: string; resolved?: boolean }
+): Promise<{ frameId: string; resolved: boolean }> {
+  const resolved = params.resolved ?? true
+  let notFound = false
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    existing.set('resolved', resolved)
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, resolved }
+}
+
+/** The owner of the area a frame is filed in, or '' when there is none to suggest. */
+function areaOwner(root: any, areaId: string | undefined): string {
+  if (!areaId) return ''
+  const areas = root.get('areas')
+  if (!areas) return ''
+  const area = areas.find((a: any) => getField(a, 'id') === areaId)
+  return area ? String(getField(area, 'owner') ?? '') : ''
 }
 
 function setOrClear(item: any, key: string, value: string | undefined): void {

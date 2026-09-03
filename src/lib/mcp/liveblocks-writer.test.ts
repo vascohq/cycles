@@ -32,6 +32,10 @@ import {
   deleteSquad,
   upsertArea,
   upsertFrame,
+  attachReport,
+  linkPointer,
+  wakeFrame,
+  resolveFrame,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -1654,6 +1658,41 @@ describe('upsertFrame', () => {
     expect(frame.get('resolved')).toBe(false)
   })
 
+  // Every frame wants an owner, and the area owner is the default the app
+  // suggests — nothing more. The agent capture path gets the same deal the
+  // in-app form gets (#221).
+  it('fills the frame owner from the area owner on capture', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
+
+    expect(storage.frames.find(() => true)!.get('owner')).toBe('user_9')
+  })
+
+  it('lets the capturer name an owner instead of the area owner', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, {
+      type: 'bug',
+      problem: 'Slow',
+      areaId: 'a1',
+      owner: 'user_3',
+    })
+
+    expect(storage.frames.find(() => true)!.get('owner')).toBe('user_3')
+  })
+
+  it('leaves an Unmapped capture unowned rather than guessing', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+
+    expect(storage.frames.find(() => true)!.get('owner')).toBeUndefined()
+  })
+
   it('defaults the Kind to pain_point, so capture never has to pick a severity', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
@@ -1798,5 +1837,390 @@ describe('upsertFrame validation', () => {
     await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
 
     expect(storage.frames.find(() => true)!.get('type')).toBe('bug')
+  })
+})
+
+describe('attachReport', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('adds the report and reports the new count', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      source: 'customer',
+      customer: 'Acme',
+      link: 'https://example.test/call',
+      text: 'Their nightly import dropped 400 rows',
+      date: '2026-09-02',
+    })
+
+    expect(result).toEqual({ frameId: 'f1', reportCount: 2 })
+    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(reports).toHaveLength(2)
+    expect(reports[1]).toEqual({
+      capturer: 'user_2',
+      source: 'customer',
+      customer: 'Acme',
+      link: 'https://example.test/call',
+      text: 'Their nightly import dropped 400 rows',
+      date: '2026-09-02',
+    })
+  })
+
+  // The core ADR 0011 guarantee for this tool: a report is additive and nothing
+  // else on the frame is rewritten.
+  it('leaves the problem, the appetite, the pointers and the owner untouched', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('kind')).toBe('pain_point')
+    expect(frame.get('type')).toBe('bug')
+    expect(frame.get('resolved')).toBe(false)
+  })
+
+  // A new report is one of the three things that wake a frame (ADR 0024).
+  it('wakes the frame', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
+
+    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+
+    const woken = storage.frames.find(() => true)!.get('last_woken') as string
+    expect(woken > '2026-01-01').toBe(true)
+  })
+
+  // Internal is the quieter claim, so a report only counts under the customer
+  // lens when somebody said so.
+  it('defaults the source to internal', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [] })] })
+
+    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+
+    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(reports[0].source).toBe('internal')
+  })
+
+  it('omits the customer label and the link rather than storing blanks', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [] })] })
+
+    await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      text: 'again',
+      customer: '   ',
+      link: '',
+    })
+
+    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(reports[0]).not.toHaveProperty('customer')
+    expect(reports[0]).not.toHaveProperty('link')
+  })
+
+  it('refuses a report with no text', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: '  ' })
+    ).rejects.toThrow('A report needs text')
+  })
+
+  it('refuses a source outside the vocabulary', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      attachReport(MAP_ROOM, {
+        frameId: 'f1',
+        capturer: 'user_2',
+        text: 'again',
+        source: 'slack' as never,
+      })
+    ).rejects.toThrow('Invalid source')
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      attachReport(MAP_ROOM, { frameId: 'nope', capturer: 'user_2', text: 'again' })
+    ).rejects.toThrow('Frame not found: "nope"')
+  })
+
+  // The report's date is history; the wake is the act of reporting. A support
+  // person filing last quarter's call must not push a live frame to sleep.
+  it('keeps the report date but wakes the frame today', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      frames: [makeFrameItem({ reports: [], last_woken: '2026-01-01' })],
+    })
+
+    await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      text: 'a call from last quarter',
+      date: '2026-01-05',
+    })
+
+    const frame = storage.frames.find(() => true)!
+    const reports = frame.get('reports') as any[]
+    expect(reports[0].date).toBe('2026-01-05')
+    expect(frame.get('last_woken')).not.toBe('2026-01-05')
+    expect(frame.get('last_woken')! > '2026-01-05').toBe(true)
+  })
+})
+
+describe('linkPointer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('attaches the pointer and reports the new count', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await linkPointer(MAP_ROOM, {
+      frameId: 'f1',
+      url: 'https://github.test/org/repo/pull/9',
+      kind: 'pull_request',
+      label: 'The fix',
+    })
+
+    expect(result).toEqual({ frameId: 'f1', pointerCount: 2 })
+    const pointers = storage.frames.find(() => true)!.get('pointers') as any[]
+    expect(pointers[1]).toEqual({
+      url: 'https://github.test/org/repo/pull/9',
+      label: 'The fix',
+      kind: 'pull_request',
+    })
+  })
+
+  // The core ADR 0011 guarantee for this tool.
+  it('leaves every other field untouched, and does not wake the frame', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await linkPointer(MAP_ROOM, {
+      frameId: 'f1',
+      url: 'https://notion.test/doc',
+      kind: 'shaped_doc',
+    })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('reports')).toHaveLength(1)
+    // Filing a link is not one of the three things that wake a frame (ADR 0024).
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+  })
+
+  it('falls back to the kind for a label, so there is always something to click', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ pointers: [] })] })
+
+    await linkPointer(MAP_ROOM, {
+      frameId: 'f1',
+      url: 'https://github.test/org/repo/issues/1',
+      kind: 'wayfinder',
+    })
+
+    const pointers = storage.frames.find(() => true)!.get('pointers') as any[]
+    expect(pointers[0].label).toBe('Wayfinder map')
+  })
+
+  // A shape points at its frame, not the reverse (ADR 0022), so the vocabulary
+  // has no kind for one and the writer refuses it.
+  it('refuses a pointer kind outside the vocabulary, a Shape included', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      linkPointer(MAP_ROOM, { frameId: 'f1', url: 'https://x.test', kind: 'shape' as never })
+    ).rejects.toThrow('Invalid pointer kind')
+  })
+
+  it('refuses a pointer with no url', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      linkPointer(MAP_ROOM, { frameId: 'f1', url: '  ', kind: 'issue' })
+    ).rejects.toThrow('A pointer needs a url')
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      linkPointer(MAP_ROOM, { frameId: 'nope', url: 'https://x.test', kind: 'issue' })
+    ).rejects.toThrow('Frame not found: "nope"')
+  })
+})
+
+describe('wakeFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('resets the freshness clock and reports the date', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
+
+    const result = await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-09-02' })
+
+    expect(result).toEqual({ frameId: 'f1', wokenOn: '2026-09-02' })
+    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+  })
+
+  // The guarantee that matters most for this tool: a wake must NEVER erase a
+  // frame (ADR 0011, ADR 0024).
+  it('leaves the problem, the appetite, the reports, the pointers and the owner alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-09-02' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('kind')).toBe('pain_point')
+    expect(frame.get('type')).toBe('bug')
+    expect(frame.get('reports')).toHaveLength(1)
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('resolved')).toBe(false)
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(wakeFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
+      'Frame not found: "nope"'
+    )
+  })
+
+  // An agent replaying older table notes must never age a frame that something
+  // more recent already woke. The clock only ever moves forward.
+  it('refuses to move the clock backwards, and reports the date that stands', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-09-02' })] })
+
+    const result = await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-06-01' })
+
+    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+    expect(result.wokenOn).toBe('2026-09-02')
+  })
+})
+
+describe('upsertPitch frame pointer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const ROOM = 'org_1:cycle:2026-q3'
+
+  it('stores the frame the shape attacks', async () => {
+    const storage = setupStorage()
+
+    await upsertPitch(ROOM, {
+      title: 'Fix silent imports',
+      stage: 'shaping',
+      frame_problem: 'Imports fail silently',
+      frame_id: 'f1',
+    })
+
+    const pitch = storage.pitches.find(() => true)!
+    expect(pitch.get('frame_id')).toBe('f1')
+    // The Frame as bet: a copy taken now, which the Product Map can never rewrite.
+    expect(pitch.get('frame_problem')).toBe('Imports fail silently')
+  })
+
+  it('leaves a shape created with no frame without one', async () => {
+    const storage = setupStorage()
+
+    await upsertPitch(ROOM, { title: 'Cooldown chores', stage: 'building' })
+
+    expect(storage.pitches.find(() => true)!.get('frame_id')).toBeUndefined()
+  })
+
+  it('leaves the frame pointer alone when the caller omits it (ADR 0011)', async () => {
+    const storage = setupStorage({
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frame_id: 'f1' })],
+    })
+
+    await upsertPitch(ROOM, { id: 'p1', title: 'Renamed', stage: 'building' })
+
+    expect(storage.pitches.find(() => true)!.get('frame_id')).toBe('f1')
+  })
+
+  it('clears the frame pointer on an empty string', async () => {
+    const storage = setupStorage({
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frame_id: 'f1' })],
+    })
+
+    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', frame_id: '' })
+
+    expect(storage.pitches.find(() => true)!.get('frame_id')).toBeUndefined()
+  })
+})
+
+describe('resolveFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('sets the resolved flag', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await resolveFrame(MAP_ROOM, { frameId: 'f1' })
+
+    expect(result).toEqual({ frameId: 'f1', resolved: true })
+    expect(storage.frames.find(() => true)!.get('resolved')).toBe(true)
+  })
+
+  it('changes nothing else, because nothing is ever deleted', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await resolveFrame(MAP_ROOM, { frameId: 'f1' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('reports')).toHaveLength(1)
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+  })
+
+  it('puts a frame back on the Product Map when the caller passes false', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ resolved: true })] })
+
+    await resolveFrame(MAP_ROOM, { frameId: 'f1', resolved: false })
+
+    expect(storage.frames.find(() => true)!.get('resolved')).toBe(false)
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(resolveFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
+      'Frame not found: "nope"'
+    )
   })
 })

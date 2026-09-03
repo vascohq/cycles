@@ -47,11 +47,26 @@ export type FrameReport = {
   date: string
 }
 
+/**
+ * The kind of artifact a pointer points at. A frame's Type selects a playbook,
+ * and the playbook names which of these it expects (product-map-engine).
+ *
+ * There is deliberately no kind for a Shape: a shape points at its frame, never
+ * the reverse (ADR 0022).
+ */
+export type PointerKind =
+  | 'issue'
+  | 'wayfinder'
+  | 'research'
+  | 'shaped_doc'
+  | 'pull_request'
+  | 'conversation'
+
 /** An outbound link a frame packages. The artifact itself is never stored. */
 export type FramePointer = {
   url: string
   label: string
-  kind: string
+  kind: PointerKind
 }
 
 /**
