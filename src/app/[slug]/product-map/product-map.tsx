@@ -50,19 +50,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
-import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -114,6 +108,45 @@ const STATE_LABELS: Record<FrameState, string> = {
  */
 const PILL =
   'inline-flex h-auto w-auto items-center gap-1.5 rounded-full border border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-0 focus:ring-offset-0'
+
+/**
+ * A pill that edits. Capture and the frame form use the same one, so a frame is
+ * read and written the same way and nothing has to be learned twice.
+ */
+function PillSelect({
+  value,
+  onChange,
+  label,
+  options,
+  dot,
+}: {
+  value: string
+  onChange: (value: string) => void
+  label: string
+  options: { value: string; label: string }[]
+  dot?: string
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={PILL} aria-label={label}>
+        {dot && (
+          <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: dot }} />
+        )}
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+const KIND_OPTIONS = FRAME_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))
+const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))
 
 /** A borderless title that reads as a heading, not an input. */
 const TITLE_INPUT =
@@ -569,118 +602,114 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
     editFrame(pin.frameId, field, value)
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
       {/* key: a fresh frame gets fresh local field state, so no draft leaks
           from the frame that was open before it. */}
-      <SheetContent key={pin.frameId} className="overflow-y-auto">
+      <DialogContent
+        key={pin.frameId}
+        className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5"
+      >
         {/*
           The problem IS the title, in the same language as capture and as the
           new-card modal: a big borderless line you type straight into, with the
           frame's facts as pills under it. A separate "Problem" field below a
           generic heading made the frame read like a form.
         */}
-        <SheetHeader className="space-y-2">
-          <SheetTitle className="sr-only">{pin.problem || 'Frame'}</SheetTitle>
-          <DraftTitle value={pin.problem} onCommit={set('problem')} />
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={PILL}>
-              <span
-                aria-hidden
-                className="size-2 rounded-full"
-                style={{ backgroundColor: pin.color }}
-              />
-              {KIND_LABELS[pin.kind]}
-            </span>
-            <span className={PILL}>{TYPE_LABELS[pin.type]}</span>
-            <span className={PILL}>{STATE_LABELS[pin.state]}</span>
-            {pin.worked && <span className={PILL}>Worked before</span>}
-            {pin.dim && <span className={PILL}>Fading</span>}
-          </div>
-          <SheetDescription>
-            {pin.sharp
-              ? 'Sharp — it has both a problem and an appetite, so it can be bet on.'
-              : 'Rough — a frame is sharp once it has both a problem and an appetite.'}
-          </SheetDescription>
-        </SheetHeader>
-
-        <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
-          <DraftInput value={pin.appetite} onCommit={set('appetite')} />
-        </Field>
-
-        {pin.candidateStatement && (
-          <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
-            {pin.candidateStatement}
-          </p>
-        )}
-
-        <Field
-          label="Business case"
-          hint="Who is affected, what it is worth, why now."
-        >
-          <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Kind" hint="How much it hurts.">
-            <Select value={pin.kind} onValueChange={set('kind')}>
-              <SelectTrigger aria-label="Kind">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FRAME_KINDS.map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {KIND_LABELS[k]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Type" hint="Selects the playbook.">
-            <Select value={pin.type} onValueChange={set('type')}>
-              <SelectTrigger aria-label="Type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FRAME_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-
-        <Field
-          label="Frame owner"
-          hint="The one person who cares that this gets addressed."
-        >
-          <Select
+        <DialogTitle className="sr-only">{pin.problem || 'Frame'}</DialogTitle>
+        <DraftTitle value={pin.problem} onCommit={set('problem')} />
+        {/*
+          The pills ARE the inputs, the same as capture. Kind, Type and the owner
+          are set right here; State, investment and fading are derived, so they
+          read as plain pills that nobody can set.
+        */}
+        <div className="flex flex-wrap items-center gap-2">
+          <PillSelect
+            value={pin.kind}
+            onChange={set('kind')}
+            label="Kind"
+            options={KIND_OPTIONS}
+            dot={pin.color}
+          />
+          <PillSelect
+            value={pin.type}
+            onChange={set('type')}
+            label="Type"
+            options={TYPE_OPTIONS}
+          />
+          <PillSelect
             value={pin.owner ?? NOBODY}
-            onValueChange={(v) => set('owner')(v === NOBODY ? '' : v)}
-          >
-            <SelectTrigger aria-label="Frame owner">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NOBODY}>Nobody yet</SelectItem>
-              {users.map((u) => (
-                <SelectItem key={u.userId} value={u.userId}>
-                  {u.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+            onChange={(v) => set('owner')(v === NOBODY ? '' : v)}
+            label="Frame owner"
+            options={[
+              { value: NOBODY, label: 'Nobody yet' },
+              ...users.map((u) => ({ value: u.userId, label: u.name })),
+            ]}
+          />
+          <span className={PILL}>{STATE_LABELS[pin.state]}</span>
+          {pin.worked && <span className={PILL}>Worked before</span>}
+          {pin.dim && <span className={PILL}>Fading</span>}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {pin.sharp
+            ? 'Sharp — it has both a problem and an appetite, so it can be bet on.'
+            : 'Rough — a frame is sharp once it has both a problem and an appetite.'}
+        </p>
 
-        <Origin pin={pin} />
-        <Shapes pin={pin} />
-        <StillHurts pin={pin} />
-        <Pointers pin={pin} />
-        <Reports pin={pin} />
-        <Resolve pin={pin} onClose={onClose} />
-      </SheetContent>
-    </Sheet>
+        {/*
+          Tabs, not one long scroll. A frame carries four different kinds of
+          thing — the framing, the evidence, the dossier, and the history — and
+          only one of them is ever the reason somebody opened it. The counts are
+          on the tabs so nothing hides behind an unopened one.
+        */}
+        <Tabs defaultValue="framing" className="mt-1">
+          <TabsList>
+            <TabsTrigger value="framing">Framing</TabsTrigger>
+            <TabsTrigger value="reports">
+              Reports{pin.reports.length > 0 ? ` (${pin.reports.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="pointers">
+              Pointers{pin.pointers.length > 0 ? ` (${pin.pointers.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
+            <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
+              <DraftInput value={pin.appetite} onCommit={set('appetite')} />
+            </Field>
+
+            {pin.candidateStatement && (
+              <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
+                {pin.candidateStatement}
+              </p>
+            )}
+
+            <Field label="Business case" hint="Who is affected, what it is worth, why now.">
+              <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
+            </Field>
+
+          </TabsContent>
+
+          <TabsContent value="reports" className="flex flex-col gap-3 pt-2">
+            <Reports pin={pin} />
+            {/* "Still hurts" belongs with the evidence: it is a mention without
+                a new report, and this is where somebody looking at the evidence
+                decides the problem is still live. */}
+            <StillHurts pin={pin} />
+          </TabsContent>
+
+          <TabsContent value="pointers" className="flex flex-col gap-3 pt-2">
+            <Pointers pin={pin} />
+          </TabsContent>
+
+          <TabsContent value="history" className="flex flex-col gap-3 pt-2">
+            <Shapes pin={pin} />
+            <Origin pin={pin} />
+            <Resolve pin={pin} onClose={onClose} />
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1383,50 +1412,32 @@ function CaptureForm({
           />
         </div>
 
+        {/* The same pills the frame form uses, so capturing and reading a frame
+            are the same gesture. */}
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={kind} onValueChange={(v) => setKind(v as FrameKind)}>
-            <SelectTrigger className={PILL} aria-label="Kind">
-              <span
-                aria-hidden
-                className="size-2 rounded-full"
-                style={{ backgroundColor: KIND_COLORS[kind] }}
-              />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FRAME_KINDS.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {KIND_LABELS[k]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
-            <SelectTrigger className={PILL} aria-label="Type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FRAME_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {TYPE_LABELS[t]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PillSelect
+            value={kind}
+            onChange={(v) => setKind(v as FrameKind)}
+            label="Kind"
+            options={KIND_OPTIONS}
+            dot={KIND_COLORS[kind]}
+          />
+          <PillSelect
+            value={type}
+            onChange={(v) => setType(v as FrameType)}
+            label="Type"
+            options={TYPE_OPTIONS}
+          />
           {areas.length > 0 && (
-            <Select value={areaId} onValueChange={setAreaId}>
-              <SelectTrigger className={PILL} aria-label="Area">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
-                {areas.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PillSelect
+              value={areaId}
+              onChange={setAreaId}
+              label="Area"
+              options={[
+                { value: UNMAPPED, label: 'Unmapped' },
+                ...areas.map((a) => ({ value: a.id, label: a.label })),
+              ]}
+            />
           )}
         </div>
 
