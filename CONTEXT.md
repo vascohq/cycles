@@ -41,8 +41,20 @@ How a frame is drawn on the Product Map. A pin is a marker and holds no data of 
 _Avoid_: Using "pin" for the record — the record is a **Frame**
 
 **Area**:
-A named region of the product on the Product Map, for example Integrations or Billing. An area can contain sub-areas. The app generates its shape, because an agent must be able to create an area and an agent cannot draw. An area is never colored by the health of its frames.
+A named region of the product on the Product Map, for example Integrations or Billing. An area can contain sub-areas. An agent draws the coastline of an area as a ring of points, from how the team describes the region. An area with no coastline gets one that the app generates, so land drawn before outlines existed still renders. An area is never colored by the health of its frames.
 _Avoid_: Territory, country, section, module, epic
+
+**Island**:
+An area that holds other areas. The Product Map stores no coastline for an island. It draws the merged silhouette of the areas inside it, so the outer shape always wraps its children.
+_Avoid_: Cluster (that is the zoom behavior), group, zone
+
+**Archipelago**:
+An area that holds islands. This is the largest region the Product Map draws. Its coastline is a merged silhouette too, and it draws fainter than an island. Three levels get their own coastline and no more, because a fourth is past the legibility ceiling.
+_Avoid_: Continent (islands do not sit on one), territory, group
+
+**Cluster** (Product Map):
+What the Product Map does when an area is too small on screen to read. The area becomes one bubble that carries the number of frames under it. A bubble stands for more than one frame: a bubble reading "1" would hide a pin behind a number. A cluster never crosses an area boundary.
+_Avoid_: Using "cluster" for a group of areas — that is an **Island** or an **Archipelago**
 
 **Area owner**:
 The person the app suggests as **Frame owner** for a new frame in that area. This is a default and nothing more. An area owner is not answerable for the area.
@@ -381,6 +393,7 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - An **Organization** has exactly one **Product Map**
 - A **Product Map** contains zero or more **Areas**; an **Area** contains zero or more sub-**Areas**
 - An **Area** contains zero or more **Frames**; a **Frame** with no **Area** is **Unmapped**
+- An **Area** that holds areas is an **Island**; an **Area** that holds islands is an **Archipelago**; both draw as a merged silhouette of the areas underneath
 - Each **Frame** is drawn on the map as one **Pin**
 - A **Frame** has one **Kind**, one **Type**, zero or one **Frame owner**, zero or more **Reports**, and zero or more **Pointers**
 - A **Frame**'s **Type** selects one **Playbook**; the playbook's expected **Pointers** minus the frame's own give its **Gap list**
@@ -419,6 +432,8 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **"frame"** now means two things at different lifetimes. Resolved: **Frame** is the living record on the **Product Map** (problem, appetite, business case). **Frame as bet** is the snapshot stored on a shape when the bet was made. The frame on the map keeps changing. The snapshot never does (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)).
 - **"pitch" vs "shape"** — Ryan Singer's later vocabulary uses **pitch** for the raw input that starts framing. This app used **Pitch** for the shaped bet, which is the opposite sense. Resolved in the glossary: the shaped bet is a **Shape**, and the raw input is a **Frame**. Deferred in code: the rename touches the stored type `CyclePitch`, every MCP tool name, the `[pitchSlug]` route, and every user's habit. It gets its own cycle and its own ADR. Until then, read "pitch" in code as **Shape**.
 - **"pin" vs "frame"** — the record is a **Frame** and the **Pin** is only how it is drawn. "Pin" named the marker, so it never names the thing. Resolved: capture produces a frame, the map shows a pin, and a pin holds no data of its own.
+- **"an agent cannot draw"** was the reason the app generated every area shape. It is wrong: an agent writes a ring of coordinates as easily as any other field. Resolved: an agent draws the coastline of an area, and a generated ring is only the fallback for an area nobody has drawn. The out-of-scope note in the pitch meant uploaded artwork, which an agent really cannot write into.
+- **"cluster"** names the zoom behavior and nothing else. Resolved: a **Cluster** is an area collapsing into one numbered bubble because it is too small on screen. A group of areas is an **Island**, and a group of islands is an **Archipelago**. Never use "cluster" for either.
 - **"kind" vs "type"** — two axes on one frame, and they answer different questions. Resolved: **Kind** is how much it hurts (`brand_burn`, `pain_point`, `unlock_win`) and is the only axis with a color. **Type** is where it came from and how it gets worked (`bug`, `idea`, `request`, `security`, `irritant`) and it selects the **Playbook**. Type gets no visual channel, because four channels is the legibility ceiling of a pin.
 - **"betting table" vs "Debating Table"** — a design session used "Debating Table" while Shape Up says betting table. Resolved: **betting table**, everywhere. Never write "Debating Table" in the glossary, the UI, or the skills.
 - **the area-owner alert** — a design session proposed alerting an **Area owner** when frames cluster in their area. This app defines an area owner as a default and nothing more. Deferred, not resolved: an alert makes the owner answerable for the region, which is a different role and needs its own decision.

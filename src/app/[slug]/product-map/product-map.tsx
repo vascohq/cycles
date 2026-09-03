@@ -21,7 +21,6 @@ import type {
   PointerKind,
 } from '@/product-map-liveblocks.config'
 import {
-  AREA_GAP,
   DEFAULT_KIND,
   DEFAULT_LENS,
   FRAME_KINDS,
@@ -37,6 +36,7 @@ import {
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
+import { MapCanvas } from '@/components/product-map/map-canvas'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
@@ -191,7 +191,12 @@ function ProductMapView({
               </p>
             </div>
           )}
-          {model.areas.length > 0 && <AreaField areas={model.areas} options={options} />}
+          {model.areas.length > 0 && (
+            <>
+              <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
+              <AreaList areas={model.areas} options={options} />
+            </>
+          )}
           <UnmappedGroup
             pins={model.unmapped}
             resolved={model.unmappedResolved}
@@ -226,57 +231,52 @@ function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
 }
 
 /**
- * The land. Every region is placed from the shape the engine generated, so no
- * geometry is stored and an agent that cannot draw still gets a drawn area.
+ * Every area as real DOM: its frames, and what its team resolved.
+ *
+ * This is the keyboard and screen-reader surface for the land. A pin on the
+ * canvas is focusable, but Chrome does not expose an SVG group to the
+ * accessibility tree at all, so the map alone would leave a mapped frame
+ * unreachable — and it is also where each area's resolved frames live, off the
+ * land, because a resolved pin would lie about where the product hurts.
  */
-function AreaField({ areas, options }: { areas: RenderedArea[]; options: AreaOption[] }) {
-  const height = Math.max(0, ...areas.map((a) => a.shape.y + a.shape.height))
-  const width = Math.max(0, ...areas.map((a) => a.shape.x + a.shape.width))
+function AreaList({ areas, options }: { areas: RenderedArea[]; options: AreaOption[] }) {
+  const flat = flattenAreas(areas).filter(
+    ({ area }) => area.pins.length > 0 || area.resolved.length > 0
+  )
+  if (flat.length === 0) return null
 
   return (
-    <div
-      className="relative overflow-x-auto rounded-xl border border-dashed p-4"
-      style={{ minHeight: height + AREA_GAP }}
-    >
-      <div className="relative" style={{ height, width }}>
-        {areas.map((area) => (
-          <AreaRegion key={area.areaId} area={area} options={options} />
+    <details className="mt-4">
+      <summary className="cursor-pointer text-sm text-muted-foreground">
+        All frames by area
+      </summary>
+      <div className="mt-3 flex flex-col gap-4">
+        {flat.map(({ area, depth }) => (
+          <section key={area.areaId} aria-label={area.name} style={{ marginLeft: depth * 16 }}>
+            <h2 className="mb-1.5 font-display text-sm">{area.name}</h2>
+            {area.pins.length > 0 && (
+              <ul className="flex flex-col gap-1.5">
+                {area.pins.map((pin) => (
+                  <PinDot key={pin.frameId} pin={pin} options={options} />
+                ))}
+              </ul>
+            )}
+            <ResolvedList pins={area.resolved} />
+          </section>
         ))}
       </div>
-    </div>
+    </details>
   )
 }
 
-// An area is never colored by the health of its frames — that would make the
-// individual pins unreadable. Every region gets the same neutral ground.
-function AreaRegion({ area, options }: { area: RenderedArea; options: AreaOption[] }) {
-  return (
-    <section
-      aria-label={area.name}
-      className="absolute overflow-auto rounded-xl border bg-muted/30 p-3"
-      style={{
-        left: area.shape.x,
-        top: area.shape.y,
-        width: area.shape.width,
-        height: area.shape.height,
-      }}
-    >
-      <h2 className="mb-2 font-display text-sm">{area.name}</h2>
-      <ul className="flex flex-col gap-1.5">
-        {area.pins.map((pin) => (
-          <PinDot key={pin.frameId} pin={pin} options={options} />
-        ))}
-      </ul>
-      <ResolvedList pins={area.resolved} />
-      {area.children.length > 0 && (
-        <div className="relative mt-2" style={{ height: subAreaHeight(area) }}>
-          {area.children.map((child) => (
-            <AreaRegion key={child.areaId} area={child} options={options} />
-          ))}
-        </div>
-      )}
-    </section>
-  )
+function flattenAreas(
+  areas: RenderedArea[],
+  depth = 0
+): { area: RenderedArea; depth: number }[] {
+  return areas.flatMap((area) => [
+    { area, depth },
+    ...flattenAreas(area.children, depth + 1),
+  ])
 }
 
 /**
@@ -305,10 +305,6 @@ function ResolvedList({ pins }: { pins: RenderedPin[] }) {
       </ul>
     </details>
   )
-}
-
-function subAreaHeight(area: RenderedArea): number {
-  return Math.max(0, ...area.children.map((c) => c.shape.y + c.shape.height))
 }
 
 function UnmappedGroup({

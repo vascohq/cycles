@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amends [ADR 0002](0002-one-liveblocks-room-per-cycle.md) in part.
+Accepted. Amends [ADR 0002](0002-one-liveblocks-room-per-cycle.md) in part. [ADR 0027](0027-an-agent-draws-the-land.md) amends this one in part: an agent draws the coastline of an area, so the app no longer generates every shape.
 
 ## Context
 

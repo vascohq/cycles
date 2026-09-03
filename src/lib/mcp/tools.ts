@@ -639,7 +639,15 @@ export async function handleListAreas(orgId: string): Promise<ToolResult> {
 
 export async function handleUpsertArea(
   orgId: string,
-  params: { id?: string; name?: string; parent_area_id?: string; x?: number; y?: number; owner?: string }
+  params: {
+    id?: string
+    name?: string
+    parent_area_id?: string
+    x?: number
+    y?: number
+    outline?: [number, number][]
+    owner?: string
+  }
 ): Promise<ToolResult> {
   if (!params.id && !params.name?.trim()) {
     return errorResult('A new area needs a "name", for example "Integrations" or "Billing".')
@@ -651,6 +659,7 @@ export async function handleUpsertArea(
       parentAreaId: params.parent_area_id,
       x: params.x,
       y: params.y,
+      outline: params.outline,
       owner: params.owner,
     })
     return jsonResult(result)
@@ -1779,7 +1788,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_upsert_area',
-    'Create a named area on the Product Map, or update one by id. A new area needs only a "name" — omit the position and it lands on the next free grid slot, because the app draws the shape. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. To file a frame into an area, pass the area id to map_upsert_frame.',
+    'Create a named area on the Product Map, or update one by id. A new area needs only a "name" — omit the position and it lands on the next free grid slot, and omit the outline and the app generates a shape. Pass an "outline" to draw the region\'s coastline yourself, which is how the map comes to look like the team\'s own product. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. To file a frame into an area, pass the area id to map_upsert_frame.',
     {
       ...orgArg,
       // All optional with NO .default() — omitting a field must leave it
@@ -1807,6 +1816,12 @@ export function registerCyclesTools(server: any): void {
         .min(0)
         .optional()
         .describe('Grid row, 0 or more. Omit on create for the next free slot.'),
+      outline: z
+        .array(z.tuple([z.number(), z.number()]))
+        .optional()
+        .describe(
+          'The area\'s coastline: a closed ring of [x, y] points in the map\'s world space, 0-1000 on both axes. Draw it from how the team describes the region — about 8 to 14 points reads as land, and the ring closes itself, so do not repeat the first point. Only leaf areas take an outline: an island and an archipelago are drawn as the merged silhouette of the areas inside them. Pass [] to clear it and go back to a generated shape.'
+        ),
       owner: z
         .string()
         .optional()
@@ -1832,6 +1847,7 @@ export function registerCyclesTools(server: any): void {
         parent_area_id?: string
         x?: number
         y?: number
+        outline?: [number, number][]
         owner?: string
       },
       extra: ToolExtra
