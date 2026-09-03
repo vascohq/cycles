@@ -37,10 +37,15 @@ export function MapCanvas({
   const [box, setBox] = useState({ width: 960, height: 560 })
   const [view, setView] = useState<View | null>(null)
 
-  const world = useMemo(
-    () => unionBounds(areas.map((a) => a.bounds)) ?? { x: 0, y: 0, width: 400, height: 300 },
-    [areas]
-  )
+  const world = useMemo(() => {
+    const box = unionBounds(areas.map((a) => a.bounds))
+    if (!box) return { x: 0, y: 0, width: 400, height: 300 }
+    // An island and an archipelago name themselves ABOVE their coastline, and
+    // that label is not part of any area's box. Without headroom the fitted
+    // view clips the top-level names clean off.
+    const headroom = Math.max(40, box.height * 0.15)
+    return { x: box.x, y: box.y - headroom, width: box.width, height: box.height + headroom }
+  }, [areas])
 
   useEffect(() => {
     const host = hostRef.current
@@ -220,9 +225,16 @@ export function MapCanvas({
       ref={hostRef}
       className="relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20"
     >
+      {/*
+        Absolutely positioned, so the SVG is OUT OF FLOW. An SVG carries an
+        intrinsic size from its viewBox, and inside a shrink-to-fit parent that
+        closes a loop: host width -> viewBox -> SVG intrinsic width -> host
+        width. It never settles — the canvas shrinks about a pixel per frame,
+        forever, and nothing on the page ever stops moving.
+      */}
       <svg
         viewBox={`${current.x} ${current.y} ${current.w} ${current.h}`}
-        className="h-full w-full cursor-grab active:cursor-grabbing"
+        className="absolute inset-0 h-full w-full cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -236,8 +248,15 @@ export function MapCanvas({
             leaves the coastline as a ring rather than a fill — areas are never
             colored by their frames.
           */}
-          <Coast id="coast-island" blur={13} erode={2.2} k={k} />
-          <Coast id="coast-archipelago" blur={30} erode={1.6} k={k} />
+          <Coast id="coast-island" blur={13} threshold={0.3} close={9} erode={2.2} k={k} />
+          <Coast
+            id="coast-archipelago"
+            blur={30}
+            threshold={0.16}
+            close={16}
+            erode={1.6}
+            k={k}
+          />
           {/* Hand-drawn character, on the drawn coastlines only. */}
           <filter id="pm-wobble" x="-12%" y="-12%" width="124%" height="124%">
             <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="7" result="n" />
@@ -290,39 +309,55 @@ export function MapCanvas({
 /**
  * The filter chain that turns a scatter of children into one coastline ring.
  *
- * `blur` stays in WORLD units, so the silhouette's shape does not shift as the
- * map is zoomed: it is the fusion distance, not a line weight.
+ * `blur` is the fusion distance and stays in WORLD units, so an island's shape
+ * does not shift as the map is zoomed.
  *
- * The alpha matrix has to be steep. A gentle one leaves the blur's gradient
- * behind as a soft grey shoulder outside the line, which reads as a second,
- * fatter outline round every island.
+ * `threshold` is where the blurred haze becomes land, as an alpha value. It sets
+ * how far apart two children still join up: a high threshold leaves a crisp edge
+ * but refuses to bridge, which detaches the outlying areas of an island and
+ * stops an archipelago wrapping its islands at all. The SLOPE gives the crisp
+ * edge; the threshold decides what counts as land, and the two are independent.
+ *
+ * `close` is a dilate followed by an erode of the same radius. It fills the
+ * pockets between three or more children, which would otherwise threshold into
+ * holes and draw their own little rings floating inside the island.
  *
  * `erode` is the line weight, so it scales with `k` (1 / zoom) to hold a
- * constant thickness on screen. In world units it would grow with the zoom
- * until the coastline was a 40-pixel smear.
+ * constant thickness on screen.
  */
+const EDGE_SLOPE = 160
+
 function Coast({
   id,
   blur,
+  threshold,
+  close,
   erode,
   k,
 }: {
   id: string
   blur: number
+  threshold: number
+  close: number
   erode: number
   k: number
 }) {
+  // out = SLOPE * alpha + offset, crossing 0.5 exactly at `threshold`.
+  const offset = 0.5 - EDGE_SLOPE * threshold
   // feMorphology with a radius at or near zero produces no ring at all.
   const weight = Math.max(0.15, erode * k)
+
   return (
-    <filter id={id} x="-25%" y="-25%" width="150%" height="150%">
+    <filter id={id} x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur in="SourceGraphic" stdDeviation={blur} result="haze" />
       <feColorMatrix
         in="haze"
         type="matrix"
-        values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 160 -72"
-        result="goo"
+        values={`0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 ${EDGE_SLOPE} ${offset}`}
+        result="hard"
       />
+      <feMorphology in="hard" operator="dilate" radius={close} result="fat" />
+      <feMorphology in="fat" operator="erode" radius={close} result="goo" />
       <feMorphology in="goo" operator="erode" radius={weight} result="inner" />
       <feComposite in="goo" in2="inner" operator="out" />
     </filter>
@@ -485,6 +520,8 @@ function Pin({
       tabIndex={0}
       aria-label={pin.problem}
     >
+      {/* The browser's own tooltip. Costs a line and no JavaScript. */}
+      <title>{`${pin.problem}${pin.reportCount > 0 ? ` — ${pin.reportCount} report${pin.reportCount === 1 ? '' : 's'}` : ''}`}</title>
       <circle cx={x} cy={y} r={halo} fill={pin.color} opacity={0.18} />
       {pin.outline !== 'none' && (
         <circle
@@ -532,6 +569,7 @@ function Bubble({
       tabIndex={0}
       aria-label={`${node.name}, ${node.count} frames. Zoom in.`}
     >
+      <title>{`${node.name} — ${node.count} frame${node.count === 1 ? '' : 's'}. Click to zoom in.`}</title>
       <circle cx={x} cy={y} r={r * 1.45} fill={node.color} opacity={0.16} />
       <circle cx={x} cy={y} r={r} fill={node.color} />
       {node.outline !== 'none' && (

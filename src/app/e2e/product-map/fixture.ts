@@ -19,32 +19,41 @@ function ring(id: string, cx: number, cy: number, r: number): [number, number][]
 type Leaf = { id: string; name: string; parent: string; cx: number; cy: number; r: number }
 
 const LEAVES: Leaf[] = [
-  // Front office → External to Vasco
-  { id: 'slack', name: 'Slack / Teams', parent: 'external', cx: 130, cy: 120, r: 42 },
-  { id: 'email', name: 'Email', parent: 'external', cx: 205, cy: 130, r: 34 },
-  { id: 'crm-write', name: 'CRM write-back', parent: 'external', cx: 150, cy: 205, r: 40 },
-  // Front office → Owned by Vasco
-  { id: 'artifacts', name: 'Shared artifacts', parent: 'owned', cx: 285, cy: 125, r: 40 },
-  { id: 'dashboards', name: 'Dashboards', parent: 'owned', cx: 355, cy: 165, r: 36 },
-  { id: 'fo-agents', name: 'Front office agents', parent: 'owned', cx: 290, cy: 215, r: 42 },
+  // LEFT: the ten connector categories, two staggered columns.
+  { id: 'c-crm', name: 'CRM', parent: 'connectors', cx: 175, cy: 110, r: 34 },
+  { id: 'c-billing', name: 'Billing & finance', parent: 'connectors', cx: 255, cy: 125, r: 34 },
+  { id: 'c-warehouse', name: 'Data warehouse', parent: 'connectors', cx: 175, cy: 175, r: 34 },
+  { id: 'c-calls', name: 'Conversations', parent: 'connectors', cx: 255, cy: 190, r: 34 },
+  { id: 'c-product', name: 'Product analytics', parent: 'connectors', cx: 175, cy: 240, r: 34 },
+  { id: 'c-marketing', name: 'Marketing analytics', parent: 'connectors', cx: 255, cy: 255, r: 34 },
+  { id: 'c-support', name: 'Sales & support', parent: 'connectors', cx: 175, cy: 305, r: 34 },
+  { id: 'c-contracts', name: 'Contracts', parent: 'connectors', cx: 255, cy: 320, r: 34 },
+  { id: 'c-projects', name: 'Project management', parent: 'connectors', cx: 175, cy: 370, r: 34 },
+  { id: 'c-hr', name: 'HR', parent: 'connectors', cx: 255, cy: 385, r: 34 },
 
-  // Back office
-  { id: 'mcp', name: 'MCP', parent: 'back-office', cx: 545, cy: 385, r: 38 },
-  { id: 'marketplace', name: 'Marketplace', parent: 'back-office', cx: 625, cy: 395, r: 36 },
-  { id: 'onboarding', name: 'Onboarding', parent: 'back-office', cx: 600, cy: 465, r: 36 },
-  { id: 'agent-engine', name: 'Agent engine', parent: 'back-office', cx: 520, cy: 455, r: 38 },
-  { id: 'plan-engine', name: 'Plan engine', parent: 'back-office', cx: 675, cy: 460, r: 34 },
-  { id: 'metric-engine', name: 'Metric engine', parent: 'back-office', cx: 610, cy: 535, r: 38 },
-  { id: 'context', name: 'Context', parent: 'back-office', cx: 530, cy: 525, r: 34 },
-  { id: 'foundation', name: 'Definitions', parent: 'back-office', cx: 680, cy: 530, r: 34 },
+  // CENTRE: the biggest mass on the map, and the largest areas on it. Every
+  // sibling gap is under 15 units, so the island coastline closes round all of
+  // them rather than leaving the bottom row adrift.
+  { id: 'mcp', name: 'MCP', parent: 'back-office', cx: 470, cy: 230, r: 48 },
+  { id: 'marketplace', name: 'Marketplace', parent: 'back-office', cx: 565, cy: 215, r: 48 },
+  { id: 'onboarding', name: 'Onboarding', parent: 'back-office', cx: 655, cy: 240, r: 48 },
+  { id: 'agent-engine', name: 'Agent engine', parent: 'back-office', cx: 450, cy: 330, r: 48 },
+  { id: 'plan-engine', name: 'Plan engine', parent: 'back-office', cx: 555, cy: 320, r: 48 },
+  { id: 'metric-engine', name: 'Metric engine', parent: 'back-office', cx: 655, cy: 340, r: 48 },
+  { id: 'context', name: 'Context', parent: 'back-office', cx: 505, cy: 410, r: 48 },
+  { id: 'foundation', name: 'Definitions', parent: 'back-office', cx: 600, cy: 405, r: 48 },
 
-  // Connectors
-  { id: 'c-crm', name: 'CRM', parent: 'connectors', cx: 870, cy: 145, r: 34 },
-  { id: 'c-billing', name: 'Billing & finance', parent: 'connectors', cx: 930, cy: 195, r: 34 },
-  { id: 'c-warehouse', name: 'Data warehouse', parent: 'connectors', cx: 865, cy: 215, r: 32 },
-  { id: 'c-calls', name: 'Conversations', parent: 'connectors', cx: 925, cy: 265, r: 32 },
-  { id: 'c-product', name: 'Product analytics', parent: 'connectors', cx: 860, cy: 290, r: 34 },
-  { id: 'c-contracts', name: 'Contracts', parent: 'connectors', cx: 920, cy: 340, r: 30 },
+  // RIGHT, TOP.
+  { id: 'slack', name: 'Slack / Teams', parent: 'external', cx: 855, cy: 130, r: 40 },
+  { id: 'email', name: 'Email', parent: 'external', cx: 935, cy: 145, r: 40 },
+  { id: 'crm-write', name: 'CRM write-back', parent: 'external', cx: 880, cy: 210, r: 40 },
+
+  // RIGHT, BELOW. A 30-unit gap to External: close enough that Front office
+  // draws ONE archipelago ring round both, far enough that each island keeps a
+  // coastline of its own.
+  { id: 'artifacts', name: 'Shared artifacts', parent: 'owned', cx: 855, cy: 320, r: 40 },
+  { id: 'dashboards', name: 'Dashboards', parent: 'owned', cx: 935, cy: 335, r: 40 },
+  { id: 'fo-agents', name: 'Front office agents', parent: 'owned', cx: 880, cy: 400, r: 40 },
 ]
 
 export const AREAS: Area[] = [

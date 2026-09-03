@@ -16,37 +16,70 @@ test.describe('Product Map canvas', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('opens fitted to the whole map, with one bubble per top-level region', async ({ page }) => {
-    await expect(marks(page)).toHaveCount(3)
-    await expect(marks(page).nth(0)).toHaveAttribute('aria-label', /^Front office, 6 frames/)
-    await expect(marks(page).nth(1)).toHaveAttribute('aria-label', /^Back office, 8 frames/)
-    await expect(marks(page).nth(2)).toHaveAttribute('aria-label', /^Connectors, 5 frames/)
+/**
+ * Shrink the window, so the whole map has to render small and its regions
+ * collapse into bubbles.
+ *
+ * Zooming out cannot do this: the world is bounded, so "the whole map fits" is
+ * already fully zoomed out. What makes a region collapse is its size ON SCREEN,
+ * and that is what a small viewport changes.
+ */
+  async function shrink(page: import('@playwright/test').Page) {
+    await page.setViewportSize({ width: 460, height: 420 })
+    await expect.poll(async () => await bubbles(page).count()).toBeGreaterThan(0)
+  }
+
+  function bubbles(page: import('@playwright/test').Page) {
+    return page.locator('svg [role="button"][aria-label*="frames."]')
+  }
+
+  test('names every top-level region', async ({ page }) => {
+    await expect(page.getByText('Front office')).toBeVisible()
+    await expect(page.getByText('Back office')).toBeVisible()
+    await expect(page.getByText('Connectors')).toBeVisible()
+  })
+
+  test('collapses regions into numbered bubbles as the map shrinks', async ({ page }) => {
+    const opened = await marks(page).count()
+    expect(opened).toBeGreaterThan(3)
+
+    await shrink(page)
+
+    expect(await marks(page).count()).toBeLessThan(opened)
   })
 
   test('a bubble numbers frames, not reports', async ({ page }) => {
-    // Front office holds 6 frames carrying far more than 6 reports between them.
-    await expect(marks(page).nth(0)).toHaveAttribute('aria-label', /6 frames/)
+    await shrink(page)
+
+    // Back office holds 8 frames, carrying more than 8 reports between them.
+    const backOffice = page.locator('svg [role="button"][aria-label^="Back office,"]')
+    await expect(backOffice).toHaveAttribute('aria-label', /Back office, 8 frames/)
   })
 
   test('clicking a bubble zooms to that region and splits it into pins', async ({ page }) => {
+    await shrink(page)
+    const backOffice = page.locator('svg [role="button"][aria-label^="Back office,"]')
+    await expect(backOffice).toBeVisible()
     const before = await viewBox(page)
-    await marks(page).nth(0).click()
 
-    await expect
-      .poll(async () => (await viewBox(page))[2])
-      .toBeLessThan(before[2])
-    // Front office's own 6 pins, each a mark of its own.
-    await expect(marks(page).filter({ hasText: '' })).not.toHaveCount(3)
+    await backOffice.click()
+
+    await expect.poll(async () => (await viewBox(page))[2]).toBeLessThan(before[2])
     await expect(
-      page.locator('svg [role="button"][aria-label="Capture from Slack loses the thread link"]')
+      page.locator('svg [role="button"][aria-label="Batch writes drop the assignee"]')
     ).toBeVisible()
   })
 
   test('clicking a pin opens its frame', async ({ page }) => {
-    await marks(page).nth(0).click()
-    await page
-      .locator('svg [role="button"][aria-label="Capture from Slack loses the thread link"]')
-      .click()
+    // A big window renders the map large, so every region is past the collapse
+    // size and its pins are drawn individually.
+    await page.setViewportSize({ width: 1600, height: 1000 })
+    const pin = page.locator(
+      'svg [role="button"][aria-label="Capture from Slack loses the thread link"]'
+    )
+    await expect(pin).toBeVisible()
+
+    await pin.click()
 
     await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f1')
   })
@@ -81,12 +114,6 @@ test.describe('Product Map canvas', () => {
     const customer = await page.getByTestId('counts').textContent()
 
     expect(internal).not.toEqual(customer)
-  })
-
-  test('names every region it draws', async ({ page }) => {
-    await expect(page.getByText('Front office')).toBeVisible()
-    await expect(page.getByText('Back office')).toBeVisible()
-    await expect(page.getByText('Connectors')).toBeVisible()
   })
 
   test('every mark is reachable by keyboard', async ({ page }) => {
