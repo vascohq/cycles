@@ -5,6 +5,7 @@ import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
   listCycleRooms: vi.fn(),
+  readCycleWindows: vi.fn(async () => []),
   getCycleStorage: vi.fn(),
   getProductMapStorage: vi.fn(),
   resolvePitch: vi.fn(),
@@ -52,7 +53,13 @@ vi.mock('@/lib/users', async (importOriginal) => ({
   getOrganizationUsers: vi.fn(),
 }))
 
-import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
+import {
+  listCycleRooms,
+  readCycleWindows,
+  getCycleStorage,
+  resolvePitch,
+  getProductMapStorage,
+} from './liveblocks-reader'
 import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame, resolveFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
@@ -60,6 +67,7 @@ import { getOrganizationUsers } from '@/lib/users'
 const mockGetOrgUsers = vi.mocked(getOrganizationUsers)
 
 const mockListRooms = vi.mocked(listCycleRooms)
+const mockCycleWindows = vi.mocked(readCycleWindows)
 const mockGetStorage = vi.mocked(getCycleStorage)
 const mockResolvePitch = vi.mocked(resolvePitch)
 const mockDeleteUpdate = vi.mocked(deleteUpdate)
@@ -1337,7 +1345,7 @@ describe('map_upsert_frame schema', () => {
 
   // The `map_` prefix is the only thing separating org-scoped map tools from
   // cycle-scoped tools in the list, so it never comes off (ADR 0021).
-  it('takes no cycle slug, because the map names no cycle', () => {
+  it('takes no cycle slug, because the Product Map names no cycle', () => {
     expect(schemaFor('map_upsert_frame')).not.toHaveProperty('cycle_slug')
     expect(schemaFor('map_list_frames')).not.toHaveProperty('cycle_slug')
     expect(schemaFor('map_attach_report')).not.toHaveProperty('cycle_slug')
@@ -1569,22 +1577,20 @@ describe('map_list_frames filters', () => {
   })
 
   it('returns dormant frames once the caller names a filter', async () => {
-    mockListRooms.mockResolvedValue([
+    mockCycleWindows.mockResolvedValue([
       {
         slug: 'c1',
-        name: 'One',
+        title: 'One',
         type: 'build',
         start_date: '2026-01-05',
         end_date: '2026-02-13',
-        archived: false,
       },
       {
         slug: 'c2',
-        name: 'Two',
+        title: 'Two',
         type: 'build',
         start_date: '2026-02-16',
         end_date: '2026-03-27',
-        archived: false,
       },
     ])
     mockGetMap.mockResolvedValue({
@@ -1611,8 +1617,10 @@ describe('map_list_frames filters', () => {
     vi.useRealTimers()
   })
 
-  it('ages nothing when the cycle rooms cannot be read', async () => {
-    mockListRooms.mockRejectedValue(new Error('liveblocks is down'))
+  // The reader fails soft, so a Product Map with no readable cycles ages
+  // nothing rather than refusing the listing (liveblocks-reader.test.ts).
+  it('ages nothing when there are no cycle boundaries to read', async () => {
+    mockCycleWindows.mockResolvedValue([])
     mockGetMap.mockResolvedValue({
       areas: [],
       frames: [frame({ id: 'f1', last_woken: '2019-01-01' })],
@@ -1719,7 +1727,7 @@ describe('handleResolveFrame', () => {
     expect(mockResolveFrame).not.toHaveBeenCalled()
   })
 
-  it('passes false through, so a frame can come back onto the map', async () => {
+  it('passes false through, so a frame can come back onto the Product Map', async () => {
     mockResolveFrame.mockResolvedValue({ frameId: 'f1', resolved: false })
 
     await handleResolveFrame(ORG_ID, { frame_id: 'f1', resolved: false })

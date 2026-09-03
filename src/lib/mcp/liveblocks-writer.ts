@@ -241,7 +241,7 @@ export async function upsertPitch(
     // The Frame on the Product Map this shape attacks (ADR 0022). '' clears it.
     // Writing it never touches the frame: the shape points at the frame, not
     // the reverse.
-    frameId?: string
+    frame_id?: string
   },
   injectedRoot?: any
 ): Promise<UpsertResult> {
@@ -283,7 +283,7 @@ export async function upsertPitch(
         notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
         ...(params.view ? { view: params.view } : {}),
-        ...(params.frameId ? { frameId: params.frameId } : {}),
+        ...(params.frame_id ? { frame_id: params.frame_id } : {}),
       }
       resultStart = pitch.timebox_start
       resultEnd = pitch.timebox_end
@@ -306,7 +306,7 @@ export async function upsertPitch(
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       if (params.view !== undefined) existing.set('view', params.view)
-      setOrClear(existing, 'frameId', params.frameId)
+      setOrClear(existing, 'frame_id', params.frame_id)
       resultStart = getField(existing, 'timebox_start') ?? ''
       resultEnd = getField(existing, 'timebox_end') ?? ''
       // squadId: null = clear (remove key), string = assign, undefined = leave.
@@ -1196,6 +1196,11 @@ export async function upsertFrame(
     const frames = root.get('frames')
 
     if (created) {
+      // Every frame wants an owner: somebody has to care that it gets
+      // addressed. The area owner is the default the app suggests, and nothing
+      // more — the capturer can change it. The in-app capture form does the
+      // same, so an agent capture is not left ownerless (#221).
+      const owner = params.owner || areaOwner(root, params.areaId)
       const frame: Frame = {
         id,
         kind: params.kind ?? DEFAULT_KIND,
@@ -1204,7 +1209,7 @@ export async function upsertFrame(
         appetite: params.appetite ?? '',
         business_case: params.business_case ?? '',
         ...(params.areaId ? { areaId: params.areaId } : {}),
-        ...(params.owner ? { owner: params.owner } : {}),
+        ...(owner ? { owner } : {}),
         ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
         reports: [],
         pointers: [],
@@ -1270,9 +1275,12 @@ export async function attachReport(
 
   let notFound = false
   let reportCount = 0
-  // The report's own date, so a support person can record a call from last week
-  // without back-dating the wake. Both default to the team's today.
-  const date = params.date?.trim() || getTeamToday(new Date())
+  // Two different dates. The report carries the day the problem happened, so a
+  // support person can record last week's call. The wake carries the day
+  // somebody reported it, which is now — reporting an old incident is a fresh
+  // mention, and must never age the frame towards Dormant (ADR 0024).
+  const today = getTeamToday(new Date())
+  const reportedOn = params.date?.trim() || today
 
   await withRoot(roomId, undefined, (root: any) => {
     const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
@@ -1288,11 +1296,11 @@ export async function attachReport(
       ...(params.customer?.trim() ? { customer: params.customer.trim() } : {}),
       ...(params.link?.trim() ? { link: params.link.trim() } : {}),
       text: params.text.trim(),
-      date,
+      date: reportedOn,
     }
     const reports = (getField(existing, 'reports') ?? []) as FrameReport[]
     existing.set('reports', [...reports, report])
-    existing.set('last_woken', date)
+    existing.set('last_woken', today)
     reportCount = reports.length + 1
   })
 
@@ -1302,7 +1310,7 @@ export async function attachReport(
 
 /**
  * Attach a pointer to a frame. A frame packages pointers; the artifact stays
- * where it lives, so the map never becomes a second copy that drifts.
+ * where it lives, so the Product Map never becomes a second copy that drifts.
  *
  * This writes ONE field: the pointer list. It does not wake the frame, because
  * only three things do and filing a link is not one of them (ADR 0024).
@@ -1357,8 +1365,9 @@ export async function wakeFrame(
   roomId: string,
   params: { frameId: string; date?: string }
 ): Promise<{ frameId: string; wokenOn: string }> {
-  const wokenOn = params.date?.trim() || getTeamToday(new Date())
+  const mentionedOn = params.date?.trim() || getTeamToday(new Date())
   let notFound = false
+  let wokenOn = mentionedOn
 
   await withRoot(roomId, undefined, (root: any) => {
     const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
@@ -1366,7 +1375,16 @@ export async function wakeFrame(
       notFound = true
       return
     }
-    existing.set('last_woken', wokenOn)
+    // The clock only ever moves forward. An agent replaying older table notes
+    // must never age a frame that something more recent already woke, so a
+    // back-dated mention is recorded as a no-op rather than a regression.
+    // ISO dates compare lexically, the same trick the cycle list engine uses.
+    const current = String(getField(existing, 'last_woken') ?? '')
+    if (current && current >= mentionedOn) {
+      wokenOn = current
+      return
+    }
+    existing.set('last_woken', mentionedOn)
   })
 
   if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
@@ -1378,7 +1396,7 @@ export async function wakeFrame(
  * does this. Nothing resolves on a timer, and shipping something never silently
  * claims the pain is over (ADR 0025).
  *
- * This writes ONE field. A resolved frame is not deleted: it leaves the map and
+ * This writes ONE field. A resolved frame is not deleted: it leaves the Product Map and
  * stays on its area, with the shapes that resolved it. Pass `resolved: false`
  * to put it back.
  */
@@ -1400,6 +1418,15 @@ export async function resolveFrame(
 
   if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
   return { frameId: params.frameId, resolved }
+}
+
+/** The owner of the area a frame is filed in, or '' when there is none to suggest. */
+function areaOwner(root: any, areaId: string | undefined): string {
+  if (!areaId) return ''
+  const areas = root.get('areas')
+  if (!areas) return ''
+  const area = areas.find((a: any) => getField(a, 'id') === areaId)
+  return area ? String(getField(area, 'owner') ?? '') : ''
 }
 
 function setOrClear(item: any, key: string, value: string | undefined): void {

@@ -54,7 +54,7 @@ export type CyclePitch = {
    * shape created with no frame, and on every shape written before the Product
    * Map existed. Editing this shape never writes back to the map.
    */
-  frameId?: string
+  frame_id?: string
   timebox_start: string
   timebox_end: string
   /** Identity emoji (single grapheme), or '' when unset. */

@@ -166,7 +166,7 @@ function ProductMapView({
   })
   const options = areaOptions(model.areas)
   // Opening a frame reads it and nothing more. It never wakes it (ADR 0024).
-  // Searched across every rendered frame, not only the ones on the map: an
+  // Searched across every rendered frame, not only the ones on the Product Map: an
   // origin link can point at a frame that is asleep or already resolved.
   const open =
     [...model.pins, ...model.dormantReview, ...model.resolved].find(
@@ -192,7 +192,11 @@ function ProductMapView({
             </div>
           )}
           {model.areas.length > 0 && <AreaField areas={model.areas} options={options} />}
-          <UnmappedGroup pins={model.unmapped} options={options} />
+          <UnmappedGroup
+            pins={model.unmapped}
+            resolved={model.unmappedResolved}
+            options={options}
+          />
           <DormantReview pins={model.dormantReview} options={options} />
           <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} />
         </Shell>
@@ -277,7 +281,7 @@ function AreaRegion({ area, options }: { area: RenderedArea; options: AreaOption
 
 /**
  * The frames this area's team resolved, with the shapes that resolved them. Off
- * the map and still on record: the map must never lie about what we know.
+ * the Product Map and still on record: the Product Map must never lie about what we know.
  */
 function ResolvedList({ pins }: { pins: RenderedPin[] }) {
   if (pins.length === 0) return null
@@ -307,8 +311,16 @@ function subAreaHeight(area: RenderedArea): number {
   return Math.max(0, ...area.children.map((c) => c.shape.y + c.shape.height))
 }
 
-function UnmappedGroup({ pins, options }: { pins: RenderedPin[]; options: AreaOption[] }) {
-  if (pins.length === 0) return null
+function UnmappedGroup({
+  pins,
+  resolved,
+  options,
+}: {
+  pins: RenderedPin[]
+  resolved: RenderedPin[]
+  options: AreaOption[]
+}) {
+  if (pins.length === 0 && resolved.length === 0) return null
   return (
     <section aria-label="Unmapped" className="mt-6">
       <h2 className="mb-2 font-display text-sm">
@@ -322,6 +334,7 @@ function UnmappedGroup({ pins, options }: { pins: RenderedPin[]; options: AreaOp
           <PinDot key={pin.frameId} pin={pin} options={options} />
         ))}
       </ul>
+      <ResolvedList pins={resolved} />
     </section>
   )
 }
@@ -343,7 +356,7 @@ function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOp
         Went to sleep <span className="text-muted-foreground">({pins.length})</span>
       </h2>
       <p className="mb-3 text-sm text-muted-foreground">
-        Nobody has mentioned these for two cycles, so they have left the map. They
+        Nobody has mentioned these for two cycles, so they have left the Product Map. They
         keep every field and every report. Say it still hurts to bring one back.
       </p>
       <ul className="flex flex-col gap-1.5">
@@ -375,7 +388,7 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
   return (
     <li
       // Opacity is the third pin channel: a pin fades as its clock runs, so a
-      // stale map looks stale. Reading it changes nothing — browsing the map
+      // stale map looks stale. Reading it changes nothing — browsing the Product Map
       // wakes nothing, or the decay would die (ADR 0024).
       style={{ opacity: pin.opacity }}
       className="flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-sm"
@@ -514,7 +527,7 @@ function LensToggle({
 /**
  * The frame detail. This is where a shaper writes the problem, the appetite and
  * the business case, so the betting table can judge the frame. It holds NO
- * outcome: the map stays about problems, and shaping stays about solutions.
+ * outcome: the Product Map stays about problems, and shaping stays about solutions.
  *
  * Every field writes straight to storage. There is no save button, because a
  * half-typed frame is a normal state here — a frame sits rough until somebody
@@ -989,12 +1002,14 @@ function Reports({ pin }: { pin: RenderedPin }) {
   const [customer, setCustomer] = useState('')
 
   const addReport = useProductMapMutation(
-    ({ storage }, frameId: string, report: FrameReport) => {
+    ({ storage }, frameId: string, report: FrameReport, wokenOn: string) => {
       const frame = storage.get('frames').find((f) => f.get('id') === frameId)
       if (!frame) return
       const reports = (frame.get('reports') ?? []) as FrameReport[]
       frame.set('reports', [...reports, report])
-      frame.set('last_woken', report.date)
+      // The wake is the act of reporting, which happens now — the same rule the
+      // writer follows, so a report never ages the frame it woke.
+      frame.set('last_woken', wokenOn)
     },
     []
   )
@@ -1002,14 +1017,22 @@ function Reports({ pin }: { pin: RenderedPin }) {
   function onSubmit(event: React.FormEvent) {
     event.preventDefault()
     const line = text.trim()
-    if (!line) return
-    addReport(pin.frameId, {
-      capturer: userId ?? '',
-      source,
-      ...(source === 'customer' && customer.trim() ? { customer: customer.trim() } : {}),
-      text: line,
-      date: getTeamToday(new Date()),
-    })
+    // Nothing reaches a frame unmediated: a report with no capturer would be an
+    // anonymous claim, and the whole point is that a reader can judge who made
+    // it. The submit button is disabled for the same reason.
+    if (!line || !userId) return
+    const today = getTeamToday(new Date())
+    addReport(
+      pin.frameId,
+      {
+        capturer: userId,
+        source,
+        ...(source === 'customer' && customer.trim() ? { customer: customer.trim() } : {}),
+        text: line,
+        date: today,
+      },
+      today
+    )
     setText('')
     setCustomer('')
   }
@@ -1072,7 +1095,7 @@ function Reports({ pin }: { pin: RenderedPin }) {
               onChange={(e) => setCustomer(e.target.value)}
             />
           )}
-          <Button type="submit" variant="outline" disabled={!text.trim()}>
+          <Button type="submit" variant="outline" disabled={!text.trim() || !userId}>
             Add report
           </Button>
         </div>

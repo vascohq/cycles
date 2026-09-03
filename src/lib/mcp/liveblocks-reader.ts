@@ -1,6 +1,7 @@
 import { liveblocks } from '@/lib/liveblocks'
 import { slugify } from '@/lib/slugify'
 import { readStage } from '@/lib/stage-engine'
+import type { CycleWindow } from '@/lib/product-map-engine'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
 import type { Area, Frame } from '@/product-map-liveblocks.config'
 import type {
@@ -66,6 +67,26 @@ export function resolvePitch(
   // Rooms written before ADR 0023 still hold a `framing` stage. Normalize on the
   // way out, so no read surface ever hands a caller a stage that no longer exists.
   return pitch && { ...pitch, stage: readStage(pitch.stage) }
+}
+
+/**
+ * The org's cycle windows, in the shape the Product Map engine counts freshness
+ * with. Fail-soft: a Product Map that cannot read the cycles still opens, with
+ * nothing aging. Losing the freshness channel beats losing the whole surface.
+ */
+export async function readCycleWindows(orgPrefix: string): Promise<CycleWindow[]> {
+  try {
+    const rooms = (await listCycleRooms(orgPrefix)) ?? []
+    return rooms.map((room) => ({
+      slug: room.slug,
+      title: room.name,
+      type: room.type === 'cooldown' ? ('cooldown' as const) : ('build' as const),
+      start_date: room.start_date,
+      end_date: room.end_date,
+    }))
+  } catch {
+    return []
+  }
 }
 
 export type ProductMapJson = {

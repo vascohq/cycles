@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { listCycleRooms, getCycleStorage, resolvePitch } from './liveblocks-reader'
+import {
+  listCycleRooms,
+  getCycleStorage,
+  readCycleWindows,
+  resolvePitch,
+} from './liveblocks-reader'
 
 vi.mock('@/lib/liveblocks', () => ({
   liveblocks: {
@@ -130,5 +135,62 @@ describe('resolvePitch', () => {
     expect(
       resolvePitch(storageWithSpecialChars, 'agentic-capabilities-skills-tools')
     ).toEqual(storageWithSpecialChars.pitches[2])
+  })
+})
+
+describe('readCycleWindows', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('names each cycle and keeps its dates, so freshness can count boundaries', async () => {
+    mockGetRooms.mockResolvedValue({
+      data: [
+        {
+          id: 'org_123:cycle:2026-q2',
+          metadata: {
+            title: 'Q2 Build',
+            type: 'build',
+            start_date: '2026-04-06',
+            end_date: '2026-05-15',
+          },
+        },
+        {
+          id: 'org_123:cycle:cool-1',
+          metadata: {
+            title: 'Cooldown 1',
+            type: 'cooldown',
+            start_date: '2026-05-18',
+            end_date: '2026-05-22',
+          },
+        },
+      ] as any,
+      nextCursor: null,
+      nextPage: null,
+    } as never)
+
+    const windows = await readCycleWindows('org_123')
+
+    expect(windows).toEqual([
+      {
+        slug: '2026-q2',
+        title: 'Q2 Build',
+        type: 'build',
+        start_date: '2026-04-06',
+        end_date: '2026-05-15',
+      },
+      {
+        slug: 'cool-1',
+        title: 'Cooldown 1',
+        type: 'cooldown',
+        start_date: '2026-05-18',
+        end_date: '2026-05-22',
+      },
+    ])
+  })
+
+  // Losing the freshness channel beats losing the whole surface: the Product
+  // Map still opens for a team whose cycle rooms cannot be read.
+  it('returns nothing rather than throwing when the rooms cannot be read', async () => {
+    mockGetRooms.mockRejectedValue(new Error('liveblocks is down'))
+    await expect(readCycleWindows('org_123')).resolves.toEqual([])
   })
 })

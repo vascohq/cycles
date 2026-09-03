@@ -14,8 +14,8 @@ import { isSharp } from '@/lib/product-map-engine'
  * bets on half a frame.
  *
  * The shape's problem is a COPY taken now: the **Frame as bet**. The frame on
- * the map keeps changing and this copy never does, so a past cycle always shows
- * what the team committed to (ADR 0022). Nothing here writes back to the map.
+ * the Product Map keeps changing and this copy never does, so a past cycle always shows
+ * what the team committed to (ADR 0022). Nothing here writes back to the Product Map.
  */
 export async function betOnFrame(input: {
   frameId: string
@@ -36,13 +36,13 @@ export async function betOnFrame(input: {
     )
   }
 
-  // A new shape starts at `shaping`: framing already happened, on the map
+  // A new shape starts at `shaping`: framing already happened, on the Product Map
   // (ADR 0023).
   const result = await upsertPitch(`${orgPrefix}:cycle:${input.cycleSlug}`, {
     title: input.title.trim() || frame.problem,
     stage: 'shaping',
     frame_problem: frame.problem,
-    frameId: frame.id,
+    frame_id: frame.id,
   })
 
   revalidatePath(`/${orgSlug ?? 'me'}/product-map`)

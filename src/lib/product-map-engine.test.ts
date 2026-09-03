@@ -168,8 +168,8 @@ describe('renderProductMap', () => {
     expect(model.pins[0].areaId).toBe('')
   })
 
-  // Resolve is the only way off the map, and only a person does it (ADR 0025).
-  it('drops a resolved frame from the map', () => {
+  // Resolve is the only way off the Product Map, and only a person does it (ADR 0025).
+  it('drops a resolved frame from the Product Map', () => {
     const model = renderProductMap({
       frames: [makeFrame({ id: 'open' }), makeFrame({ id: 'gone', resolved: true })],
       today: '2026-09-02',
@@ -341,7 +341,7 @@ describe('sub-areas', () => {
     expect(model.areas.map((a) => a.name)).toEqual(['HubSpot'])
   })
 
-  // Storage can hold anything, including a parent loop. The map still draws.
+  // Storage can hold anything, including a parent loop. The Product Map still draws.
   it('draws every area even when the parent chain loops', () => {
     const model = renderProductMap({
       areas: [
@@ -682,6 +682,13 @@ describe('counting cycles since the last wake', () => {
     ]
     expect(cyclesSinceWoken('2026-01-20', undated, '2026-09-02')).toBe(0)
   })
+
+  // A cooldown is its own room here, so counting it would put a frame to sleep
+  // after one build cycle instead of two — half the window ADR 0024 asks for.
+  it('does not age a frame for a cooldown, only for a build cycle', () => {
+    // Woken in cycle two; today is after the cooldown that followed it.
+    expect(cyclesSinceWoken('2026-03-01', CYCLES, '2026-04-10')).toBe(1)
+  })
 })
 
 describe('pin opacity', () => {
@@ -717,14 +724,14 @@ describe('the dormant boundary', () => {
     })
   }
 
-  it('keeps a frame on the map after one cycle with no wake', () => {
+  it('keeps a frame on the Product Map after one cycle with no wake', () => {
     const model = render('2026-01-20', '2026-03-01')
     expect(model.pins).toHaveLength(1)
     expect(model.pins[0].dim).toBe(true)
     expect(model.pins[0].dormant).toBe(false)
   })
 
-  it('takes a frame off the map after two cycles with no wake', () => {
+  it('takes a frame off the Product Map after two cycles with no wake', () => {
     const model = render('2026-01-20', '2026-03-30')
     expect(model.pins).toHaveLength(0)
     expect(model.unmapped).toHaveLength(0)
@@ -748,12 +755,12 @@ describe('the dormant boundary', () => {
     expect(worked.pins).toHaveLength(0)
   })
 
-  it('brings a frame back onto the map when somebody wakes it', () => {
+  it('brings a frame back onto the Product Map when somebody wakes it', () => {
     const model = render('2026-03-29', '2026-03-30')
     expect(model.pins).toHaveLength(1)
   })
 
-  it('ages nothing for a team with no cycle, so the map works before the first one', () => {
+  it('ages nothing for a team with no cycle, so the Product Map works before the first one', () => {
     const model = renderProductMap({
       frames: [makeFrame({ last_woken: '2019-01-01' })],
       cycles: [],
@@ -838,8 +845,12 @@ describe('the engagement ring', () => {
     expect(pinOutline([makeShape({ stage: 'building', currentCycle: true })])).toBe('solid')
   })
 
-  it('draws nothing once every linked shape is done', () => {
-    expect(pinOutline([makeShape({ stage: 'done', currentCycle: true })])).toBe('none')
+  it('keeps the ring solid for a shape that shipped in the cycle happening now', () => {
+    expect(pinOutline([makeShape({ stage: 'done', currentCycle: true })])).toBe('solid')
+  })
+
+  it('draws nothing once the work is done and its cycle is behind us', () => {
+    expect(pinOutline([makeShape({ stage: 'done', currentCycle: false })])).toBe('none')
   })
 
   it('prefers the current cycle when a frame carries an old shape too', () => {
@@ -860,7 +871,7 @@ describe('reading the shapes out of the cycle rooms', () => {
         {
           cycle,
           shapes: [
-            { id: 's1', title: 'Fix imports', stage: 'building', frameId: 'f1' },
+            { id: 's1', title: 'Fix imports', stage: 'building', frame_id: 'f1' },
             { id: 's2', title: 'Something else', stage: 'building' },
           ],
         },
@@ -873,7 +884,7 @@ describe('reading the shapes out of the cycle rooms', () => {
 
   it('names the cycle, so the frame detail reads a title and not a slug', () => {
     const [shape] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', frameId: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', frame_id: 'f1' }] }],
       '2026-03-01'
     )
     expect(shape.cycleTitle).toBe('Two')
@@ -881,11 +892,11 @@ describe('reading the shapes out of the cycle rooms', () => {
 
   it('marks a shape in the cycle running today as current', () => {
     const [inside] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frameId: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frame_id: 'f1' }] }],
       '2026-03-01'
     )
     const [outside] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frameId: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frame_id: 'f1' }] }],
       '2026-09-02'
     )
     expect(inside.currentCycle).toBe(true)
@@ -896,7 +907,7 @@ describe('reading the shapes out of the cycle rooms', () => {
   // still holds `framing`, and losing the shape over it would be worse.
   it('reads a stored framing stage as shaping', () => {
     const [shape] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', frameId: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', frame_id: 'f1' }] }],
       '2026-03-01'
     )
     expect(shape.stage).toBe('shaping')
@@ -953,7 +964,7 @@ describe('monitoring', () => {
     expect(frameState(frame, [released])).toBe('resolved')
   })
 
-  // A quiet release leaves the map quietly (ADR 0024).
+  // A quiet release leaves the Product Map quietly (ADR 0024).
   it('keeps the dormancy clock running, so a quiet release goes to sleep', () => {
     const model = renderProductMap({
       frames: [makeFrame({ id: 'f1', appetite: '6 weeks', last_woken: '2026-01-20' })],
@@ -997,7 +1008,7 @@ describe('the origin chain', () => {
     expect(originChain(orphan, [orphan])).toEqual([])
   })
 
-  it('stops on a chain that loops, so bad data cannot hang the map', () => {
+  it('stops on a chain that loops, so bad data cannot hang the Product Map', () => {
     const a = makeFrame({ id: 'a', originFrameId: 'b' })
     const b = makeFrame({ id: 'b', originFrameId: 'a' })
     expect(originChain(a, [a, b]).map((l) => l.frameId)).toEqual(['b'])
@@ -1019,7 +1030,7 @@ describe('the origin chain', () => {
 describe('a resolved frame', () => {
   const area = makeArea({ id: 'a1' })
 
-  it('leaves the map view', () => {
+  it('leaves the Product Map view', () => {
     const model = renderProductMap({
       areas: [area],
       frames: [makeFrame({ id: 'f1', areaId: 'a1', resolved: true })],
@@ -1049,6 +1060,8 @@ describe('a resolved frame', () => {
     })
     expect(model.resolved).toHaveLength(1)
     expect(model.unmapped).toEqual([])
+    // Unmapped is a home like any other, so the record stays reachable there.
+    expect(model.unmappedResolved).toHaveLength(1)
   })
 
   it('never lands in the dormant review, because it is not asleep', () => {

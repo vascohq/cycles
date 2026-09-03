@@ -13,11 +13,11 @@ import type {
   PointerKind,
 } from '@/product-map-liveblocks.config'
 
-// Kind is how much a problem hurts. It is the only axis with a color on the map.
+// Kind is how much a problem hurts. It is the only axis with a color on the Product Map.
 export const FRAME_KINDS = ['brand_burn', 'pain_point', 'unlock_win'] as const
 
 // Type is where a problem came from and how it gets worked. Type selects the
-// playbook (ADR 0025), and it gets NO visual channel on the map.
+// playbook (ADR 0025), and it gets NO visual channel on the Product Map.
 export const FRAME_TYPES = ['bug', 'idea', 'request', 'security', 'irritant'] as const
 
 // A pin's color is its Kind, and nothing else. Hues are taken from the scope
@@ -90,7 +90,7 @@ export function originChain(frame: Frame, frames: Frame[]): OriginLink[] {
   const byId = new Map(frames.map((f) => [f.id, f]))
   const chain: OriginLink[] = []
   // A chain that loops back on itself would spin forever, and bad data is not a
-  // reason to hang the map.
+  // reason to hang the Product Map.
   const seen = new Set<string>([frame.id])
   let current = frame.originFrameId
   while (current && !seen.has(current)) {
@@ -113,8 +113,10 @@ export function originChain(frame: Frame, frames: Frame[]): OriginLink[] {
 export type PinOutline = 'none' | 'dashed' | 'solid'
 
 export function pinOutline(shapes: LinkedShape[]): PinOutline {
-  // A shape in the current cycle is the loudest signal, so it wins.
-  if (shapes.some((s) => s.currentCycle && s.stage !== 'done')) return 'solid'
+  // A shape in the cycle happening now is the loudest signal, so it wins —
+  // including one that already shipped. The frame reads `released` at that
+  // point, and a release this cycle is current investment, not "no work".
+  if (shapes.some((s) => s.currentCycle)) return 'solid'
   if (shapes.some((s) => s.stage === 'shaping')) return 'dashed'
   return 'none'
 }
@@ -122,12 +124,12 @@ export function pinOutline(shapes: LinkedShape[]): PinOutline {
 /**
  * The shapes that attacked a frame, read from the cycle rooms. A frame never
  * stores its shape list: a shape points at its frame, not the reverse (ADR
- * 0022). Shapes with no frame are dropped — they attack nothing on the map.
+ * 0022). Shapes with no frame are dropped — they attack nothing on the Product Map.
  */
 export function linkedShapesFrom(
   rooms: {
     cycle: CycleWindow
-    shapes: { id: string; title: string; stage: string; frameId?: string }[]
+    shapes: { id: string; title: string; stage: string; frame_id?: string }[]
   }[],
   today: string
 ): LinkedShape[] {
@@ -138,9 +140,9 @@ export function linkedShapesFrom(
       today >= cycle.start_date &&
       today <= cycle.end_date
     return shapes
-      .filter((shape) => !!shape.frameId)
+      .filter((shape) => !!shape.frame_id)
       .map((shape) => ({
-        frameId: shape.frameId as string,
+        frameId: shape.frame_id as string,
         shapeId: shape.id,
         title: shape.title,
         // A room written before ADR 0023 can still hold a `framing` stage, and
@@ -167,7 +169,7 @@ export function isSharp(frame: Pick<Frame, 'problem' | 'appetite'>): boolean {
 }
 
 /**
- * The sentence the map shows under a sharp frame. The app builds it from the
+ * The sentence the Product Map shows under a sharp frame. The app builds it from the
  * problem and the appetite, so nobody types it. null for a rough frame: there
  * is no commitment to state until an appetite exists.
  */
@@ -206,8 +208,8 @@ function text(value: string | undefined): string {
 }
 
 /**
- * A cycle's time boundary, as the map needs it. Freshness is counted in CYCLES
- * and not in weeks, so the map only changes state at a moment when somebody is
+ * A cycle's time boundary, as the Product Map needs it. Freshness is counted in CYCLES
+ * and not in weeks, so the Product Map only changes state at a moment when somebody is
  * looking (ADR 0024).
  */
 export type CycleWindow = {
@@ -256,8 +258,33 @@ export function cyclesSinceWoken(
   if (!lastWoken) return 0
   // ISO calendar dates compare lexically, the same trick the cycle list engine
   // uses. An undated cycle has no boundary, so it cannot age anything.
-  return cycles.filter((c) => c.end_date && c.end_date >= lastWoken && c.end_date < today)
-    .length
+  return buildCycles(cycles).filter(
+    (c) => c.end_date && c.end_date >= lastWoken && c.end_date < today
+  ).length
+}
+
+/**
+ * Only build cycles age a frame. A cooldown is its own room in this app, so
+ * counting both would make "no wake for two cycles" fire after one build cycle
+ * and its cooldown — half the window ADR 0024 asks for. The same reason keeps
+ * cooldowns out of the average cycle length that drives dimming.
+ */
+function buildCycles(cycles: CycleWindow[]): CycleWindow[] {
+  return cycles.filter((c) => c.type !== 'cooldown')
+}
+
+/**
+ * True when the sweep would put this frame to sleep. One rule, shared by the
+ * rendered map and by `map_list_frames`, so the two can never disagree about
+ * which frames are asleep.
+ */
+export function isDormant(
+  lastWoken: string,
+  cycles: CycleWindow[],
+  today: string,
+  config: FreshnessConfig = DEFAULT_FRESHNESS
+): boolean {
+  return cyclesSinceWoken(lastWoken, cycles, today) >= config.dormantAfterCycles
 }
 
 /**
@@ -280,7 +307,7 @@ export function pinOpacity(
 
 /** The team's own cycle length, or the Shape Up default when they have none. */
 function averageCycleDays(cycles: CycleWindow[]): number {
-  const spans = cycles
+  const spans = buildCycles(cycles)
     .map((c) => daysBetween(c.start_date, c.end_date))
     .filter((d): d is number => d !== null && d > 0)
   if (spans.length === 0) return FALLBACK_CYCLE_DAYS
@@ -302,7 +329,7 @@ export function inCooldown(cycles: CycleWindow[], today: string): boolean {
 /**
  * The kinds of artifact a frame can point at. A frame holds ONLY pointers — the
  * artifacts live in GitHub, in Notion or in a wayfinder map and stay there, so
- * the map never becomes a second copy that drifts.
+ * the Product Map never becomes a second copy that drifts.
  *
  * There is deliberately no kind for a Shape. A shape points at its frame, not
  * the reverse, so a frame's shape list is read from the cycle rooms (ADR 0022).
@@ -371,7 +398,7 @@ export function gapList(frame: Pick<Frame, 'type' | 'pointers'>): PointerKind[] 
 /**
  * Which reports count towards a pin's size. A frame has ONE freshness clock;
  * the lens only filters what feeds the size. A frame hot with customers and
- * cold internally is the most useful thing the map can show.
+ * cold internally is the most useful thing the Product Map can show.
  */
 export const HEAT_LENSES = ['all', 'internal', 'customer'] as const
 export type HeatLens = (typeof HEAT_LENSES)[number]
@@ -403,7 +430,7 @@ export function pinSize(count: number): number {
 }
 
 /**
- * Everything the map and the frame detail draw for one frame. The **Pin** proper
+ * Everything the Product Map and the frame detail draw for one frame. The **Pin** proper
  * is only the marker; the rest of these fields are the frame's own text, carried
  * here so the view derives nothing for itself.
  */
@@ -437,7 +464,7 @@ export type RenderedPin = {
   /** Every shape that attacked this frame, with its cycle. Never stored. */
   shapes: LinkedShape[]
   /**
-   * Somebody has bet on this before. The map shows a MARK and no number: past
+   * Somebody has bet on this before. The Product Map shows a MARK and no number: past
    * investment must never read as priority (ADR 0024).
    */
   worked: boolean
@@ -454,10 +481,10 @@ export type RenderedPin = {
   cyclesSinceWoken: number
   /** Freshness, the third pin channel. 1 is wide awake. */
   opacity: number
-  /** Fading, but still on the map. */
+  /** Fading, but still on the Product Map. */
   dim: boolean
   /**
-   * Nobody has woken it for the sleep threshold. A dormant frame leaves the map
+   * Nobody has woken it for the sleep threshold. A dormant frame leaves the Product Map
    * view and keeps every field and every report (ADR 0024).
    */
   dormant: boolean
@@ -483,7 +510,7 @@ export type RenderedArea = {
   owner: string | null
   pins: RenderedPin[]
   /**
-   * The frames this area's team resolved. They are off the map and still on
+   * The frames this area's team resolved. They are off the Product Map and still on
    * record here, with the shapes that resolved them (ADR 0025).
    */
   resolved: RenderedPin[]
@@ -491,14 +518,16 @@ export type RenderedArea = {
 }
 
 export type ProductMapModel = {
-  /** Awake pins only. A dormant frame is not on the map (ADR 0024). */
+  /** Awake pins only. A dormant frame is not on the Product Map (ADR 0024). */
   pins: RenderedPin[]
   areas: RenderedArea[]
   /** Frames that belong to no area. Unmapped is always a valid result. */
   unmapped: RenderedPin[]
+  /** Resolved frames that belonged to no area, kept on record under Unmapped. */
+  unmappedResolved: RenderedPin[]
   /**
-   * Frames a person resolved. Off the map, never deleted, and still readable so
-   * the map does not lie about what the team knows.
+   * Frames a person resolved. Off the Product Map, never deleted, and still readable so
+   * the Product Map does not lie about what the team knows.
    */
   resolved: RenderedPin[]
   /**
@@ -541,7 +570,7 @@ export function renderProductMap(input: {
     )
   )
 
-  // A resolved frame leaves the map, because a person decided the problem is
+  // A resolved frame leaves the Product Map, because a person decided the problem is
   // gone. It is never deleted: it stays on its area, with the shapes that
   // resolved it.
   const resolved = rendered.filter((p) => p.state === 'resolved')
@@ -552,7 +581,7 @@ export function renderProductMap(input: {
   const pins = live.filter((p) => !p.dormant)
   const asleep = live.filter((p) => p.dormant)
   // The sweep runs at the end of a cycle, in cooldown, where housekeeping
-  // already belongs — so the map changes when somebody is looking.
+  // already belongs — so the Product Map changes when somebody is looking.
   const dormantReview = inCooldown(cycles, input.today)
     ? asleep.slice(0, config.reviewQueueCap)
     : []
@@ -568,6 +597,10 @@ export function renderProductMap(input: {
     pins,
     areas: buildAreaTree(areas, pinsByArea, resolvedByArea),
     unmapped: pinsByArea.get('') ?? [],
+    // Unmapped is a home like any other, so a frame resolved there stays on
+    // record there. Otherwise resolving an Unmapped frame would erase it from
+    // the view, which is the one thing Resolve must never do.
+    unmappedResolved: resolvedByArea.get('') ?? [],
     resolved,
     dormantReview,
   }

@@ -22,14 +22,14 @@ vi.mock('@/lib/users', () => ({
 // and each cycle room, because a frame's shape list is never stored on the
 // frame. Stubbed so this file needs no Liveblocks credentials.
 vi.mock('@/lib/mcp/liveblocks-reader', () => ({
-  listCycleRooms: vi.fn(async () => []),
+  readCycleWindows: vi.fn(async () => []),
   getCycleStorage: vi.fn(async () => ({ pitches: [] })),
 }))
 
 import ProductMapPage from './page'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import { listCycleRooms, getCycleStorage } from '@/lib/mcp/liveblocks-reader'
+import { readCycleWindows, getCycleStorage } from '@/lib/mcp/liveblocks-reader'
 
 const mockAuth = vi.mocked(auth)
 const mockRedirect = vi.mocked(redirect)
@@ -66,7 +66,7 @@ describe('ProductMapPage', () => {
     expect(element.props.organizationUsers).toEqual([])
   })
 
-  // Freshness counts cycles, so the map reads their boundaries — while still
+  // Freshness counts cycles, so the Product Map reads their boundaries — while still
   // opening for an organization that has never created one (ADR 0021).
   it('hands over the cycle windows without requiring a cycle', async () => {
     const element: any = await ProductMapPage(params('my-org'))
@@ -76,19 +76,18 @@ describe('ProductMapPage', () => {
   // A frame never stores its shape list, so the page reads the cycle rooms
   // (ADR 0022).
   it('hands over the shapes that point at a frame', async () => {
-    vi.mocked(listCycleRooms).mockResolvedValueOnce([
+    vi.mocked(readCycleWindows).mockResolvedValueOnce([
       {
         slug: '2026-q3',
-        name: 'Q3',
+        title: 'Q3',
         type: 'build',
         start_date: '2026-08-01',
         end_date: '2026-09-11',
-        archived: false,
       },
     ])
     vi.mocked(getCycleStorage).mockResolvedValueOnce({
       pitches: [
-        { id: 'p1', title: 'Fix imports', stage: 'building', frameId: 'f1' },
+        { id: 'p1', title: 'Fix imports', stage: 'building', frame_id: 'f1' },
         { id: 'p2', title: 'No frame here', stage: 'building' },
       ],
     } as never)
@@ -99,9 +98,9 @@ describe('ProductMapPage', () => {
     expect(element.props.shapes[0].frameId).toBe('f1')
   })
 
-  it('still opens when the cycle rooms cannot be read, with nothing aged', async () => {
-    vi.mocked(listCycleRooms).mockRejectedValueOnce(new Error('liveblocks is down'))
-
+  // The reader is what fails soft (see liveblocks-reader.test.ts); the page's
+  // job is only to hand on whatever it gets, including nothing.
+  it('still opens when there are no cycles to read, with nothing aged', async () => {
     const element: any = await ProductMapPage(params('my-org'))
 
     expect(element.props.cycles).toEqual([])

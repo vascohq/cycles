@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
 import { getOrganizationUsers } from '@/lib/users'
-import { listCycleRooms, getCycleStorage } from '@/lib/mcp/liveblocks-reader'
+import { getCycleStorage, readCycleWindows } from '@/lib/mcp/liveblocks-reader'
 import { linkedShapesFrom, type CycleWindow, type LinkedShape } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { ProductMap } from './product-map'
@@ -33,7 +33,7 @@ export default async function ProductMapPage({
   // cycle BOUNDARIES, because freshness is counted in cycles: no cycles means
   // nothing ages, which is the right answer for a team that has never run one.
   const orgPrefix = orgId ?? userId
-  const cycles = await mapCycleWindows(orgPrefix)
+  const cycles = await readCycleWindows(orgPrefix)
   const shapes = await linkedShapes(orgPrefix, cycles)
 
   return (
@@ -71,19 +71,4 @@ async function linkedShapes(
   return linkedShapesFrom(rooms, getTeamToday(new Date()))
 }
 
-async function mapCycleWindows(orgPrefix: string): Promise<CycleWindow[]> {
-  try {
-    const rooms = await listCycleRooms(orgPrefix)
-    return rooms.map((room) => ({
-      slug: room.slug,
-      title: room.name,
-      type: room.type === 'cooldown' ? 'cooldown' : 'build',
-      start_date: room.start_date,
-      end_date: room.end_date,
-    }))
-  } catch {
-    // Fail soft: a map that cannot read the cycles still opens, with nothing
-    // aging. Losing the freshness channel beats losing the whole surface.
-    return []
-  }
-}
+

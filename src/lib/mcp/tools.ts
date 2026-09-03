@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
+import {
+  listCycleRooms,
+  getCycleStorage,
+  readCycleWindows,
+  resolvePitch,
+  getProductMapStorage,
+} from './liveblocks-reader'
 import { STAGES, readStage } from '@/lib/stage-engine'
 import { parseSlugPath, isValidSlugSegment } from './slug-path'
 import { resolveOrg, type OrgMembership } from './auth'
@@ -18,12 +24,10 @@ import { resolveOrigin } from './origin'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
 import { getTeamToday } from '@/lib/team-time'
 import {
-  DEFAULT_FRESHNESS,
   FRAME_KINDS,
   FRAME_TYPES,
   POINTER_KINDS,
-  cyclesSinceWoken,
-  type CycleWindow,
+  isDormant,
 } from '@/lib/product-map-engine'
 import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
 import {
@@ -502,11 +506,6 @@ function preparePitchParams(params: WriteParams): WriteParams {
     const notion = validateNotionUrl(params.notion_url)
     prepared.notion_url = notion.isValidUrl ? notion.value : ''
   }
-  // The tool speaks snake_case; the writer holds the stored field name.
-  if (params.frame_id !== undefined) {
-    prepared.frameId = params.frame_id
-    delete prepared.frame_id
-  }
   return prepared
 }
 
@@ -659,7 +658,7 @@ export async function handleUpsertArea(
 }
 
 /**
- * List the frames on the map. Awake frames only, unless the caller asks for
+ * List the frames on the Product Map. Awake frames only, unless the caller asks for
  * dormant ones AND names an area or a Type. There is deliberately no unfiltered
  * dormant listing: an unfiltered list somebody grooms is a backlog (ADR 0024).
  */
@@ -676,8 +675,8 @@ export async function handleListFrames(
 
   const { frames } = await getProductMapStorage(orgId)
   // Dormancy is derived from the cycle boundaries, so the cycle rooms have to
-  // be read even though the map itself names no cycle.
-  const cycles = await mapCycleWindows(orgId)
+  // be read even though the Product Map itself names no cycle.
+  const cycles = await readCycleWindows(orgId)
   const today = getTeamToday(new Date())
 
   const answered = frames
@@ -685,32 +684,11 @@ export async function handleListFrames(
     .filter((f) => !params.type || f.type === params.type)
     .map((f) => ({
       ...f,
-      dormant:
-        cyclesSinceWoken(f.last_woken, cycles, today) >= DEFAULT_FRESHNESS.dormantAfterCycles,
+      dormant: isDormant(f.last_woken, cycles, today),
     }))
     .filter((f) => (params.include_dormant ? true : !f.dormant))
 
   return jsonResult({ frames: answered })
-}
-
-/**
- * The org's cycle windows, in the shape the map engine counts freshness with.
- * Fail-soft: a map that cannot read the cycles still answers, with nothing
- * aged. Losing the freshness channel beats refusing the listing.
- */
-async function mapCycleWindows(orgId: string): Promise<CycleWindow[]> {
-  try {
-    const rooms = (await listCycleRooms(orgId)) ?? []
-    return rooms.map((room) => ({
-      slug: room.slug,
-      title: room.name,
-      type: room.type === 'cooldown' ? ('cooldown' as const) : ('build' as const),
-      start_date: room.start_date,
-      end_date: room.end_date,
-    }))
-  } catch {
-    return []
-  }
 }
 
 export async function handleWakeFrame(
@@ -1211,14 +1189,14 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe(
-          'The Frame as bet: a copy of the frame\'s problem text taken when the bet was made. The frame on the map keeps changing; this copy never does, so a past cycle always shows what was committed to.'
+          'The Frame as bet: a copy of the frame\'s problem text taken when the bet was made. The frame on the Product Map keeps changing; this copy never does, so a past cycle always shows what was committed to.'
         ),
       frame_outcome: z.string().optional(),
       frame_id: z
         .string()
         .optional()
         .describe(
-          'The Frame on the Product Map this shape attacks (map_list_frames names them). Only a SHARP frame — one with both a problem and an appetite — should be bet on. Editing this shape never writes back to the map. Pass "" to clear.'
+          'The Frame on the Product Map this shape attacks (map_list_frames names them). Only a SHARP frame — one with both a problem and an appetite — should be bet on. Editing this shape never writes back to the Product Map. Pass "" to clear.'
         ),
       timebox_start: z.string().optional(),
       timebox_end: z.string().optional(),
@@ -1836,7 +1814,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_list_frames',
-    "List the frames on the organization's Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the map holds problems, a cycle holds the bets. Awake frames only by default. To reach dormant frames — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter. There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
+    "List the frames on the organization's Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the Product Map holds problems, a cycle holds the bets. Awake frames only by default. To reach dormant frames — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter. There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
     {
       ...orgArg,
       area_id: z.string().optional().describe('Only frames filed in this area.'),
@@ -1887,7 +1865,7 @@ export function registerCyclesTools(server: any): void {
         .enum(FRAME_KINDS)
         .optional()
         .describe(
-          'How much it hurts, and the pin color on the map. Defaults to "pain_point" on capture.'
+          'How much it hurts, and the pin color on the Product Map. Defaults to "pain_point" on capture.'
         ),
       appetite: z
         .string()
@@ -1942,7 +1920,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_attach_report',
-    'Record one report of a problem happening on an existing frame. Use this instead of capturing a duplicate frame — the report count is what makes widespread pain look bigger on the map. A report from a customer takes "source": "customer" and can name the customer. Attaching a report WAKES the frame and touches nothing else on it.',
+    'Record one report of a problem happening on an existing frame. Use this instead of capturing a duplicate frame — the report count is what makes widespread pain look bigger on the Product Map. A report from a customer takes "source": "customer" and can name the customer. Attaching a report WAKES the frame and touches nothing else on it.',
     {
       ...orgArg,
       frame_id: z.string().describe('The frame this report belongs to.'),
@@ -2051,7 +2029,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_wake_frame',
-    'Reset a frame\'s freshness clock, because somebody talked about the problem. Call this after a betting table or a call when a frame came up in the notes — it is how the map follows the conversation without anybody grooming a list. A frame nobody wakes for two cycles goes dormant and leaves the map view, keeping every field. This writes ONE field and can never erase a frame. If you have evidence of the problem happening, use map_attach_report instead: that records the evidence AND wakes the frame.',
+    'Reset a frame\'s freshness clock, because somebody talked about the problem. Call this after a betting table or a call when a frame came up in the notes — it is how the Product Map follows the conversation without anybody grooming a list. A frame nobody wakes for two cycles goes dormant and leaves the Product Map view, keeping every field. This writes ONE field and can never erase a frame. If you have evidence of the problem happening, use map_attach_report instead: that records the evidence AND wakes the frame.',
     {
       ...orgArg,
       frame_id: z.string().describe('The frame that came up.'),
@@ -2081,19 +2059,19 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_resolve_frame',
-    'Resolve a frame, because the problem is gone. Do this ONLY when a person has decided it — shipping a shape never resolves a frame on its own, and nothing resolves on a timer. A released frame stays in monitoring until somebody resolves it. This writes one field and changes nothing else: the frame leaves the map view, keeps everything, and stays on record with the shapes that resolved it. If monitoring turned up a quality or an adoption problem, do NOT reopen this frame — capture a NEW one with map_upsert_frame and pass "origin_frame_id", so each problem gets its own appetite.',
+    'Resolve a frame, because the problem is gone. Do this ONLY when a person has decided it — shipping a shape never resolves a frame on its own, and nothing resolves on a timer. A released frame stays in monitoring until somebody resolves it. This writes one field and changes nothing else: the frame leaves the Product Map view, keeps everything, and stays on record with the shapes that resolved it. If monitoring turned up a quality or an adoption problem, do NOT reopen this frame — capture a NEW one with map_upsert_frame and pass "origin_frame_id", so each problem gets its own appetite.',
     {
       ...orgArg,
       frame_id: z.string().describe('The frame whose problem is gone.'),
       resolved: z
         .boolean()
         .optional()
-        .describe('Defaults to true. Pass false to put a frame back on the map.'),
+        .describe('Defaults to true. Pass false to put a frame back on the Product Map.'),
     },
     {
       title: 'Resolve a frame',
       readOnlyHint: false,
-      // It takes a frame off the map view. Nothing is deleted, and it reverses.
+      // It takes a frame off the Product Map view. Nothing is deleted, and it reverses.
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,

@@ -1658,6 +1658,41 @@ describe('upsertFrame', () => {
     expect(frame.get('resolved')).toBe(false)
   })
 
+  // Every frame wants an owner, and the area owner is the default the app
+  // suggests — nothing more. The agent capture path gets the same deal the
+  // in-app form gets (#221).
+  it('fills the frame owner from the area owner on capture', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
+
+    expect(storage.frames.find(() => true)!.get('owner')).toBe('user_9')
+  })
+
+  it('lets the capturer name an owner instead of the area owner', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, {
+      type: 'bug',
+      problem: 'Slow',
+      areaId: 'a1',
+      owner: 'user_3',
+    })
+
+    expect(storage.frames.find(() => true)!.get('owner')).toBe('user_3')
+  })
+
+  it('leaves an Unmapped capture unowned rather than guessing', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+
+    expect(storage.frames.find(() => true)!.get('owner')).toBeUndefined()
+  })
+
   it('defaults the Kind to pain_point, so capture never has to pick a severity', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
@@ -1859,14 +1894,10 @@ describe('attachReport', () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
 
-    await attachReport(MAP_ROOM, {
-      frameId: 'f1',
-      capturer: 'user_2',
-      text: 'again',
-      date: '2026-09-02',
-    })
+    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
 
-    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+    const woken = storage.frames.find(() => true)!.get('last_woken') as string
+    expect(woken > '2026-01-01').toBe(true)
   })
 
   // Internal is the quieter claim, so a report only counts under the customer
@@ -1928,6 +1959,28 @@ describe('attachReport', () => {
     await expect(
       attachReport(MAP_ROOM, { frameId: 'nope', capturer: 'user_2', text: 'again' })
     ).rejects.toThrow('Frame not found: "nope"')
+  })
+
+  // The report's date is history; the wake is the act of reporting. A support
+  // person filing last quarter's call must not push a live frame to sleep.
+  it('keeps the report date but wakes the frame today', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      frames: [makeFrameItem({ reports: [], last_woken: '2026-01-01' })],
+    })
+
+    await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      text: 'a call from last quarter',
+      date: '2026-01-05',
+    })
+
+    const frame = storage.frames.find(() => true)!
+    const reports = frame.get('reports') as any[]
+    expect(reports[0].date).toBe('2026-01-05')
+    expect(frame.get('last_woken')).not.toBe('2026-01-05')
+    expect(frame.get('last_woken')! > '2026-01-05').toBe(true)
   })
 })
 
@@ -2060,6 +2113,18 @@ describe('wakeFrame', () => {
       'Frame not found: "nope"'
     )
   })
+
+  // An agent replaying older table notes must never age a frame that something
+  // more recent already woke. The clock only ever moves forward.
+  it('refuses to move the clock backwards, and reports the date that stands', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-09-02' })] })
+
+    const result = await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-06-01' })
+
+    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+    expect(result.wokenOn).toBe('2026-09-02')
+  })
 })
 
 describe('upsertPitch frame pointer', () => {
@@ -2074,12 +2139,12 @@ describe('upsertPitch frame pointer', () => {
       title: 'Fix silent imports',
       stage: 'shaping',
       frame_problem: 'Imports fail silently',
-      frameId: 'f1',
+      frame_id: 'f1',
     })
 
     const pitch = storage.pitches.find(() => true)!
-    expect(pitch.get('frameId')).toBe('f1')
-    // The Frame as bet: a copy taken now, which the map can never rewrite.
+    expect(pitch.get('frame_id')).toBe('f1')
+    // The Frame as bet: a copy taken now, which the Product Map can never rewrite.
     expect(pitch.get('frame_problem')).toBe('Imports fail silently')
   })
 
@@ -2088,27 +2153,27 @@ describe('upsertPitch frame pointer', () => {
 
     await upsertPitch(ROOM, { title: 'Cooldown chores', stage: 'building' })
 
-    expect(storage.pitches.find(() => true)!.get('frameId')).toBeUndefined()
+    expect(storage.pitches.find(() => true)!.get('frame_id')).toBeUndefined()
   })
 
   it('leaves the frame pointer alone when the caller omits it (ADR 0011)', async () => {
     const storage = setupStorage({
-      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frameId: 'f1' })],
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frame_id: 'f1' })],
     })
 
     await upsertPitch(ROOM, { id: 'p1', title: 'Renamed', stage: 'building' })
 
-    expect(storage.pitches.find(() => true)!.get('frameId')).toBe('f1')
+    expect(storage.pitches.find(() => true)!.get('frame_id')).toBe('f1')
   })
 
   it('clears the frame pointer on an empty string', async () => {
     const storage = setupStorage({
-      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frameId: 'f1' })],
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frame_id: 'f1' })],
     })
 
-    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', frameId: '' })
+    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', frame_id: '' })
 
-    expect(storage.pitches.find(() => true)!.get('frameId')).toBeUndefined()
+    expect(storage.pitches.find(() => true)!.get('frame_id')).toBeUndefined()
   })
 })
 
@@ -2141,7 +2206,7 @@ describe('resolveFrame', () => {
     expect(frame.get('last_woken')).toBe('2026-08-01')
   })
 
-  it('puts a frame back on the map when the caller passes false', async () => {
+  it('puts a frame back on the Product Map when the caller passes false', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({ frames: [makeFrameItem({ resolved: true })] })
 
