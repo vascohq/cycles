@@ -30,6 +30,7 @@ import {
   POINTER_KINDS,
   POINTER_KIND_LABELS,
   renderProductMap,
+  type CycleWindow,
   type FrameState,
   type HeatLens,
   type RenderedArea,
@@ -111,9 +112,11 @@ const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
 export function ProductMap({
   roomId,
   organizationUsers,
+  cycles,
 }: {
   roomId: string
   organizationUsers: OrganizationUser[]
+  cycles: CycleWindow[]
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -123,14 +126,14 @@ export function ProductMap({
         initialStorage={productMapInitialStorage()}
       >
         <ClientSideSuspense fallback={<ProductMapSkeleton />}>
-          {() => <ProductMapView />}
+          {() => <ProductMapView cycles={cycles} />}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
   )
 }
 
-function ProductMapView() {
+function ProductMapView({ cycles }: { cycles: CycleWindow[] }) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
@@ -140,7 +143,13 @@ function ProductMapView() {
 
   // Today is a parameter of the engine, never a clock inside it. Resolved here
   // in the team timezone, the same as every other date-derived surface.
-  const model = renderProductMap({ areas, frames, lens, today: getTeamToday(new Date()) })
+  const model = renderProductMap({
+    areas,
+    frames,
+    lens,
+    cycles,
+    today: getTeamToday(new Date()),
+  })
   const options = areaOptions(model.areas)
   // Opening a frame reads it and nothing more. It never wakes it (ADR 0024).
   const open = model.pins.find((pin) => pin.frameId === openFrameId) ?? null
@@ -164,6 +173,7 @@ function ProductMapView() {
         )}
         {model.areas.length > 0 && <AreaField areas={model.areas} options={options} />}
         <UnmappedGroup pins={model.unmapped} options={options} />
+        <DormantReview pins={model.dormantReview} options={options} />
         <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} />
       </Shell>
     </OpenFrameContext.Provider>
@@ -266,8 +276,38 @@ function UnmappedGroup({ pins, options }: { pins: RenderedPin[]; options: AreaOp
   )
 }
 
+/**
+ * The sweep's review queue, shown only in cooldown and capped. It exists for the
+ * one case dormancy cannot cover on its own: a frame that came up at the betting
+ * table and that nobody's transcript turned into a wake.
+ *
+ * This is NOT a browsable list of dormant frames. Anything past the cap is
+ * reached with a filtered `map_list_frames` query, and that friction is the
+ * feature (ADR 0024).
+ */
+function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOption[] }) {
+  if (pins.length === 0) return null
+  return (
+    <section aria-label="Went to sleep" className="mt-6">
+      <h2 className="mb-2 font-display text-sm">
+        Went to sleep <span className="text-muted-foreground">({pins.length})</span>
+      </h2>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Nobody has mentioned these for two cycles, so they have left the map. They
+        keep every field and every report. Say it still hurts to bring one back.
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {pins.map((pin) => (
+          <PinDot key={pin.frameId} pin={pin} options={options} />
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
   const openFrame = useContext(OpenFrameContext)
+  const wake = useWakeFrame()
   // Filing a frame is the one edit a pin carries. Moving it out is the same
   // write with the area cleared, so nothing needs a second control.
   const fileFrame = useProductMapMutation(
@@ -283,7 +323,13 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
   )
 
   return (
-    <li className="flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-sm">
+    <li
+      // Opacity is the third pin channel: a pin fades as its clock runs, so a
+      // stale map looks stale. Reading it changes nothing — browsing the map
+      // wakes nothing, or the decay would die (ADR 0024).
+      style={{ opacity: pin.opacity }}
+      className="flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-sm"
+    >
       {/* A rough pin is drawn hollow, so a raw capture never reads as agreed
           work. This modulates the color channel (Kind) rather than adding a
           fifth channel, which is the map's legibility ceiling (ADR 0025). */}
@@ -308,6 +354,7 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
         {KIND_LABELS[pin.kind]} · {TYPE_LABELS[pin.type]} · {STATE_LABELS[pin.state]}
         {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
       </span>
+      <StillHurtsButton onWake={() => wake(pin.frameId)} />
       {options.length > 0 && (
         <Select
           value={pin.areaId || UNMAPPED}
@@ -327,6 +374,33 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
         </Select>
       )}
     </li>
+  )
+}
+
+/**
+ * "Still hurts" — the third and simplest of the three things that wake a frame.
+ * It writes the freshness clock and nothing else, so somebody keeps a frame
+ * alive without having to write a new report.
+ */
+function useWakeFrame() {
+  return useProductMapMutation(({ storage }, frameId: string) => {
+    const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+    if (!frame) return
+    frame.set('last_woken', getTeamToday(new Date()))
+  }, [])
+}
+
+function StillHurtsButton({ onWake }: { onWake: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className="h-7 shrink-0 px-2 text-xs"
+      onClick={onWake}
+      title="Reset this frame's freshness clock"
+    >
+      Still hurts
+    </Button>
   )
 }
 
@@ -481,6 +555,7 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
           </Select>
         </Field>
 
+        <StillHurts pin={pin} />
         <Pointers pin={pin} />
         <Reports pin={pin} />
       </SheetContent>
@@ -489,6 +564,26 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
 }
 
 type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+
+/**
+ * Opening a frame does NOT wake it. This button is how a reader who still feels
+ * the problem says so on purpose (ADR 0024).
+ */
+function StillHurts({ pin }: { pin: RenderedPin }) {
+  const wake = useWakeFrame()
+  return (
+    <div className="flex items-center justify-between gap-2 border-t pt-4">
+      <p className="text-xs text-muted-foreground">
+        {pin.dormant
+          ? 'Asleep — nobody has mentioned this for two cycles.'
+          : pin.daysSinceWoken === null
+            ? 'No freshness clock on this frame.'
+            : `Last mentioned ${pin.daysSinceWoken} days ago.`}
+      </p>
+      <StillHurtsButton onWake={() => wake(pin.frameId)} />
+    </div>
+  )
+}
 
 /**
  * The dossier. A frame packages links and never copies the artifact, so the

@@ -18,9 +18,16 @@ vi.mock('@/lib/users', () => ({
   getOrganizationUsers: vi.fn(async () => []),
 }))
 
+// The page reads the cycle BOUNDARIES, because freshness is counted in cycles.
+// Stubbed so this file needs no Liveblocks credentials.
+vi.mock('@/lib/mcp/liveblocks-reader', () => ({
+  listCycleRooms: vi.fn(async () => []),
+}))
+
 import ProductMapPage from './page'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { listCycleRooms } from '@/lib/mcp/liveblocks-reader'
 
 const mockAuth = vi.mocked(auth)
 const mockRedirect = vi.mocked(redirect)
@@ -55,6 +62,21 @@ describe('ProductMapPage', () => {
   it('hands the frame detail the org members, so an owner reads as a name', async () => {
     const element: any = await ProductMapPage(params('my-org'))
     expect(element.props.organizationUsers).toEqual([])
+  })
+
+  // Freshness counts cycles, so the map reads their boundaries — while still
+  // opening for an organization that has never created one (ADR 0021).
+  it('hands over the cycle windows without requiring a cycle', async () => {
+    const element: any = await ProductMapPage(params('my-org'))
+    expect(element.props.cycles).toEqual([])
+  })
+
+  it('still opens when the cycle rooms cannot be read, with nothing aged', async () => {
+    vi.mocked(listCycleRooms).mockRejectedValueOnce(new Error('liveblocks is down'))
+
+    const element: any = await ProductMapPage(params('my-org'))
+
+    expect(element.props.cycles).toEqual([])
   })
 
   it('falls back to the user id in a personal workspace', async () => {

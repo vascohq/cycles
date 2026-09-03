@@ -124,6 +124,98 @@ function text(value: string | undefined): string {
 }
 
 /**
+ * A cycle's time boundary, as the map needs it. Freshness is counted in CYCLES
+ * and not in weeks, so the map only changes state at a moment when somebody is
+ * looking (ADR 0024).
+ */
+export type CycleWindow = {
+  slug: string
+  type: 'build' | 'cooldown'
+  /** ISO dates (YYYY-MM-DD), or '' when the cycle is undated. */
+  start_date: string
+  end_date: string
+}
+
+/**
+ * Both freshness thresholds are configuration and not constants, so the team
+ * can tune them after two cycles of real use (ADR 0024).
+ */
+export type FreshnessConfig = {
+  /** Cycles without a wake before a pin starts to fade. */
+  dimAfterCycles: number
+  /** Cycles without a wake before the sweep puts the frame to sleep. */
+  dormantAfterCycles: number
+  /** Most dormant candidates the end-of-cycle review will show. */
+  reviewQueueCap: number
+}
+
+export const DEFAULT_FRESHNESS: FreshnessConfig = {
+  dimAfterCycles: 1,
+  dormantAfterCycles: 2,
+  reviewQueueCap: 10,
+}
+
+/** Six weeks — the Shape Up default, used when no cycle exists to measure. */
+export const FALLBACK_CYCLE_DAYS = 42
+/** A faded pin must still be findable, so opacity stops here. */
+export const MIN_OPACITY = 0.35
+
+/**
+ * Completed cycles since the frame was last woken. A cycle counts once it has
+ * ended, which is why a frame's dormancy can only change at a cycle boundary.
+ */
+export function cyclesSinceWoken(
+  lastWoken: string,
+  cycles: CycleWindow[],
+  today: string
+): number {
+  if (!lastWoken) return 0
+  // ISO calendar dates compare lexically, the same trick the cycle list engine
+  // uses. An undated cycle has no boundary, so it cannot age anything.
+  return cycles.filter((c) => c.end_date && c.end_date >= lastWoken && c.end_date < today)
+    .length
+}
+
+/**
+ * How solid a pin draws. Freshness is the third pin channel: a pin fades as its
+ * clock runs, so a stale map looks stale. Dimming is measured in DAYS, because
+ * a pin fades through a cycle rather than jumping at its end — only dormancy
+ * waits for the boundary.
+ */
+export function pinOpacity(
+  daysSinceWoken: number | null,
+  cycles: CycleWindow[],
+  config: FreshnessConfig
+): number {
+  if (daysSinceWoken === null || daysSinceWoken <= 0) return 1
+  const span = config.dormantAfterCycles * averageCycleDays(cycles)
+  if (span <= 0) return 1
+  const fresh = 1 - daysSinceWoken / span
+  return Math.max(MIN_OPACITY, Math.min(1, Number(fresh.toFixed(3))))
+}
+
+/** The team's own cycle length, or the Shape Up default when they have none. */
+function averageCycleDays(cycles: CycleWindow[]): number {
+  const spans = cycles
+    .map((c) => daysBetween(c.start_date, c.end_date))
+    .filter((d): d is number => d !== null && d > 0)
+  if (spans.length === 0) return FALLBACK_CYCLE_DAYS
+  return spans.reduce((sum, d) => sum + d, 0) / spans.length
+}
+
+/** True when today falls inside a cooldown cycle, where the sweep belongs. */
+export function inCooldown(cycles: CycleWindow[], today: string): boolean {
+  return cycles.some(
+    (c) =>
+      c.type === 'cooldown' &&
+      c.start_date &&
+      c.end_date &&
+      today >= c.start_date &&
+      today <= c.end_date
+  )
+}
+
+/**
  * The kinds of artifact a frame can point at. A frame holds ONLY pointers — the
  * artifacts live in GitHub, in Notion or in a wayfinder map and stay there, so
  * the map never becomes a second copy that drifts.
@@ -260,9 +352,20 @@ export type RenderedPin = {
   candidateStatement: string | null
   /**
    * Whole days between the frame's last wake and today. null when the frame has
-   * never been woken or carries an unreadable date. Freshness reads this (#224).
+   * never been woken or carries an unreadable date.
    */
   daysSinceWoken: number | null
+  /** Completed cycles since the last wake. Dormancy counts these, not days. */
+  cyclesSinceWoken: number
+  /** Freshness, the third pin channel. 1 is wide awake. */
+  opacity: number
+  /** Fading, but still on the map. */
+  dim: boolean
+  /**
+   * Nobody has woken it for the sleep threshold. A dormant frame leaves the map
+   * view and keeps every field and every report (ADR 0024).
+   */
+  dormant: boolean
 }
 
 // An area's shape is GENERATED from its grid position, because an agent must be
@@ -288,10 +391,18 @@ export type RenderedArea = {
 }
 
 export type ProductMapModel = {
+  /** Awake pins only. A dormant frame is not on the map (ADR 0024). */
   pins: RenderedPin[]
   areas: RenderedArea[]
   /** Frames that belong to no area. Unmapped is always a valid result. */
   unmapped: RenderedPin[]
+  /**
+   * The sweep's review queue: frames that just went to sleep, capped, and shown
+   * only during cooldown. It exists so a wake the transcript missed is
+   * recoverable. There is deliberately NO browsable list of dormant frames —
+   * reaching one takes a filtered query, and that friction is the feature.
+   */
+  dormantReview: RenderedPin[]
 }
 
 export function renderProductMap(input: {
@@ -303,15 +414,33 @@ export function renderProductMap(input: {
   shapes?: LinkedShape[]
   /** Which reports count towards pin size. Defaults to all of them. */
   lens?: HeatLens
+  /** Cycle boundaries. Freshness counts cycles, so with none nothing ages. */
+  cycles?: CycleWindow[]
+  /** Overrides for the two freshness thresholds and the review cap. */
+  freshness?: Partial<FreshnessConfig>
 }): ProductMapModel {
   const areas = input.areas ?? []
   const lens = input.lens ?? DEFAULT_LENS
+  const cycles = input.cycles ?? []
+  const config = { ...DEFAULT_FRESHNESS, ...input.freshness }
   const shapesByFrame = groupShapesByFrame(input.shapes ?? [])
   // A resolved frame leaves the map: a person decided the problem is gone.
   // It is never deleted, so it stays readable through a filtered query.
-  const pins = input.frames
+  const live = input.frames
     .filter((f) => !f.resolved)
-    .map((f) => renderPin(f, input.today, shapesByFrame.get(f.id) ?? [], lens))
+    .map((f) =>
+      renderPin(f, input.today, shapesByFrame.get(f.id) ?? [], lens, cycles, config)
+    )
+
+  // A dormant frame leaves the view. Past investment gets no say in this: sunk
+  // cost must never set priority (ADR 0024).
+  const pins = live.filter((p) => !p.dormant)
+  const asleep = live.filter((p) => p.dormant)
+  // The sweep runs at the end of a cycle, in cooldown, where housekeeping
+  // already belongs — so the map changes when somebody is looking.
+  const dormantReview = inCooldown(cycles, input.today)
+    ? asleep.slice(0, config.reviewQueueCap)
+    : []
 
   const known = new Set(areas.map((a) => a.id))
   const pinsByArea = new Map<string, RenderedPin[]>()
@@ -328,7 +457,7 @@ export function renderProductMap(input: {
     else pinsByArea.set(pin.areaId, [pin])
   }
 
-  return { pins, areas: buildAreaTree(areas, pinsByArea), unmapped }
+  return { pins, areas: buildAreaTree(areas, pinsByArea), unmapped, dormantReview }
 }
 
 function buildAreaTree(
@@ -385,10 +514,14 @@ function renderPin(
   frame: Frame,
   today: string,
   shapes: LinkedShape[],
-  lens: HeatLens
+  lens: HeatLens,
+  cycles: CycleWindow[],
+  config: FreshnessConfig
 ): RenderedPin {
   const kind = isFrameKind(frame.kind) ? frame.kind : DEFAULT_KIND
   const count = reportCount(frame, lens)
+  const days = daysBetween(frame.last_woken, today)
+  const elapsed = cyclesSinceWoken(frame.last_woken, cycles, today)
   return {
     frameId: frame.id,
     areaId: frame.areaId ?? '',
@@ -407,7 +540,11 @@ function renderPin(
     sharp: isSharp(frame),
     state: frameState(frame, shapes),
     candidateStatement: candidateStatement(frame),
-    daysSinceWoken: daysBetween(frame.last_woken, today),
+    daysSinceWoken: days,
+    cyclesSinceWoken: elapsed,
+    opacity: pinOpacity(days, cycles, config),
+    dim: elapsed >= config.dimAfterCycles && elapsed < config.dormantAfterCycles,
+    dormant: elapsed >= config.dormantAfterCycles,
   }
 }
 

@@ -4,21 +4,28 @@ import {
   FRAME_KINDS,
   FRAME_TYPES,
   KIND_COLORS,
+  DEFAULT_FRESHNESS,
+  FALLBACK_CYCLE_DAYS,
   HEAT_LENSES,
+  MIN_OPACITY,
   PLAYBOOKS,
   POINTER_KINDS,
   PIN_MAX_SIZE,
   PIN_MIN_SIZE,
   candidateStatement,
   frameState,
+  cyclesSinceWoken,
   gapList,
+  inCooldown,
   isPointerKind,
+  pinOpacity,
   pinSize,
   reportCount,
   isFrameKind,
   isFrameType,
   isSharp,
   renderProductMap,
+  type CycleWindow,
   type LinkedShape,
 } from './product-map-engine'
 import type {
@@ -53,6 +60,13 @@ function makeReport(overrides: Partial<FrameReport> = {}): FrameReport {
     ...overrides,
   }
 }
+
+/** Two six-week build cycles, back to back, then a cooldown. */
+const CYCLES: CycleWindow[] = [
+  { slug: 'c1', type: 'build', start_date: '2026-01-05', end_date: '2026-02-13' },
+  { slug: 'c2', type: 'build', start_date: '2026-02-16', end_date: '2026-03-27' },
+  { slug: 'cool', type: 'cooldown', start_date: '2026-03-30', end_date: '2026-04-03' },
+]
 
 function makeShape(overrides: Partial<LinkedShape> = {}): LinkedShape {
   return {
@@ -637,5 +651,173 @@ describe('playbooks and the gap list', () => {
     })
     expect(model.pins[0].pointers).toHaveLength(1)
     expect(model.pins[0].gaps).toEqual(['pull_request'])
+  })
+})
+
+describe('counting cycles since the last wake', () => {
+  it('counts nothing while the frame\'s own cycle is still running', () => {
+    expect(cyclesSinceWoken('2026-01-20', CYCLES, '2026-02-01')).toBe(0)
+  })
+
+  it('counts one once that cycle has ended', () => {
+    expect(cyclesSinceWoken('2026-01-20', CYCLES, '2026-03-01')).toBe(1)
+  })
+
+  it('counts two once a second cycle has ended', () => {
+    expect(cyclesSinceWoken('2026-01-20', CYCLES, '2026-03-30')).toBe(2)
+  })
+
+  // Counting cycles rather than weeks is the whole point: state changes at a
+  // moment when somebody is looking (ADR 0024).
+  it('counts nothing for a team with no cycle, so nothing ages', () => {
+    expect(cyclesSinceWoken('2020-01-01', [], '2026-09-02')).toBe(0)
+  })
+
+  it('ignores an undated cycle, because it has no boundary to cross', () => {
+    const undated: CycleWindow[] = [
+      { slug: 'x', type: 'build', start_date: '', end_date: '' },
+    ]
+    expect(cyclesSinceWoken('2026-01-20', undated, '2026-09-02')).toBe(0)
+  })
+})
+
+describe('pin opacity', () => {
+  it('draws a frame woken today at full strength', () => {
+    expect(pinOpacity(0, CYCLES, DEFAULT_FRESHNESS)).toBe(1)
+  })
+
+  it('fades as the clock runs, so a stale map looks stale', () => {
+    const fresh = pinOpacity(7, CYCLES, DEFAULT_FRESHNESS)
+    const stale = pinOpacity(60, CYCLES, DEFAULT_FRESHNESS)
+    expect(stale).toBeLessThan(fresh)
+    expect(fresh).toBeLessThan(1)
+  })
+
+  it('stops fading at a floor, so a faded pin is still findable', () => {
+    expect(pinOpacity(5000, CYCLES, DEFAULT_FRESHNESS)).toBe(MIN_OPACITY)
+  })
+
+  it('falls back to a six-week cycle when the team has none', () => {
+    const withCycles = pinOpacity(FALLBACK_CYCLE_DAYS, [], DEFAULT_FRESHNESS)
+    expect(withCycles).toBeLessThan(1)
+    expect(withCycles).toBeGreaterThan(MIN_OPACITY)
+  })
+})
+
+describe('the dormant boundary', () => {
+  function render(lastWoken: string, today: string, overrides = {}) {
+    return renderProductMap({
+      frames: [makeFrame({ last_woken: lastWoken })],
+      cycles: CYCLES,
+      today,
+      ...overrides,
+    })
+  }
+
+  it('keeps a frame on the map after one cycle with no wake', () => {
+    const model = render('2026-01-20', '2026-03-01')
+    expect(model.pins).toHaveLength(1)
+    expect(model.pins[0].dim).toBe(true)
+    expect(model.pins[0].dormant).toBe(false)
+  })
+
+  it('takes a frame off the map after two cycles with no wake', () => {
+    const model = render('2026-01-20', '2026-03-30')
+    expect(model.pins).toHaveLength(0)
+    expect(model.unmapped).toHaveLength(0)
+  })
+
+  it('reads both thresholds from configuration, not from constants', () => {
+    const model = render('2026-01-20', '2026-03-01', {
+      freshness: { dimAfterCycles: 1, dormantAfterCycles: 1 },
+    })
+    expect(model.pins).toHaveLength(0)
+  })
+
+  // Sunk cost must never set priority (ADR 0024).
+  it('lets past investment make no difference to the boundary', () => {
+    const worked = renderProductMap({
+      frames: [makeFrame({ last_woken: '2026-01-20', appetite: '2 weeks' })],
+      shapes: [makeShape({ stage: 'done', currentCycle: false })],
+      cycles: CYCLES,
+      today: '2026-03-30',
+    })
+    expect(worked.pins).toHaveLength(0)
+  })
+
+  it('brings a frame back onto the map when somebody wakes it', () => {
+    const model = render('2026-03-29', '2026-03-30')
+    expect(model.pins).toHaveLength(1)
+  })
+
+  it('ages nothing for a team with no cycle, so the map works before the first one', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ last_woken: '2019-01-01' })],
+      cycles: [],
+      today: '2026-09-02',
+    })
+    expect(model.pins).toHaveLength(1)
+    expect(model.pins[0].dormant).toBe(false)
+  })
+})
+
+describe('the sweep', () => {
+  const asleep = Array.from({ length: 15 }, (_, i) =>
+    makeFrame({ id: `f${i}`, last_woken: '2026-01-20' })
+  )
+
+  it('runs at the end of a cycle, in cooldown, where somebody is looking', () => {
+    const model = renderProductMap({
+      frames: asleep,
+      cycles: CYCLES,
+      today: '2026-03-31',
+    })
+    expect(model.dormantReview.length).toBeGreaterThan(0)
+  })
+
+  it('caps the review queue', () => {
+    const model = renderProductMap({
+      frames: asleep,
+      cycles: CYCLES,
+      today: '2026-03-31',
+    })
+    expect(model.dormantReview).toHaveLength(DEFAULT_FRESHNESS.reviewQueueCap)
+  })
+
+  it('shows no queue mid-cycle, because the sweep is a cycle-end ritual', () => {
+    const model = renderProductMap({
+      frames: asleep,
+      cycles: CYCLES,
+      today: '2026-03-01',
+    })
+    expect(model.dormantReview).toEqual([])
+  })
+
+  it('knows when today sits in cooldown', () => {
+    expect(inCooldown(CYCLES, '2026-03-31')).toBe(true)
+    expect(inCooldown(CYCLES, '2026-03-01')).toBe(false)
+    expect(inCooldown([], '2026-03-31')).toBe(false)
+  })
+
+  // Nothing is ever deleted on a timer: a dormant frame keeps everything.
+  it('keeps every field and every report on a sleeping frame', () => {
+    const model = renderProductMap({
+      frames: [
+        makeFrame({
+          last_woken: '2026-01-20',
+          appetite: '6 weeks',
+          business_case: 'Two customers churned',
+          reports: [makeReport()],
+          pointers: [{ url: 'https://x.test', label: 'Issue', kind: 'issue' }],
+        }),
+      ],
+      cycles: CYCLES,
+      today: '2026-03-31',
+    })
+    const [sleeper] = model.dormantReview
+    expect(sleeper.appetite).toBe('6 weeks')
+    expect(sleeper.businessCase).toBe('Two customers churned')
+    expect(sleeper.reports).toHaveLength(1)
+    expect(sleeper.pointers).toHaveLength(1)
   })
 })

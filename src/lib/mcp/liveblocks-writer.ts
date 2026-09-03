@@ -1339,6 +1339,34 @@ export async function linkPointer(
   return { frameId: params.frameId, pointerCount }
 }
 
+/**
+ * Wake a frame. This writes ONE field, the freshness clock, and it must never
+ * erase a frame: the problem, the appetite, the reports, the pointers and the
+ * owner all stay exactly as they were.
+ *
+ * A wake is a mention. It carries no note, because a wake with evidence behind
+ * it is a Report — use attachReport for that (ADR 0024).
+ */
+export async function wakeFrame(
+  roomId: string,
+  params: { frameId: string; date?: string }
+): Promise<{ frameId: string; wokenOn: string }> {
+  const wokenOn = params.date?.trim() || getTeamToday(new Date())
+  let notFound = false
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    existing.set('last_woken', wokenOn)
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, wokenOn }
+}
+
 function setOrClear(item: any, key: string, value: string | undefined): void {
   if (value === undefined) return
   if (value === '') item.delete(key)

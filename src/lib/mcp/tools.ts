@@ -16,7 +16,15 @@ import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
-import { FRAME_KINDS, FRAME_TYPES, POINTER_KINDS } from '@/lib/product-map-engine'
+import { getTeamToday } from '@/lib/team-time'
+import {
+  DEFAULT_FRESHNESS,
+  FRAME_KINDS,
+  FRAME_TYPES,
+  POINTER_KINDS,
+  cyclesSinceWoken,
+  type CycleWindow,
+} from '@/lib/product-map-engine'
 import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
 import {
   createCycle,
@@ -40,6 +48,7 @@ import {
   upsertFrame,
   attachReport,
   linkPointer,
+  wakeFrame,
 } from './liveblocks-writer'
 import {
   getOrganizationUsers,
@@ -643,9 +652,76 @@ export async function handleUpsertArea(
   }
 }
 
-export async function handleListFrames(orgId: string): Promise<ToolResult> {
+/**
+ * List the frames on the map. Awake frames only, unless the caller asks for
+ * dormant ones AND names an area or a Type. There is deliberately no unfiltered
+ * dormant listing: an unfiltered list somebody grooms is a backlog (ADR 0024).
+ */
+export async function handleListFrames(
+  orgId: string,
+  params: { area_id?: string; type?: string; include_dormant?: boolean } = {}
+): Promise<ToolResult> {
+  const filtered = !!params.area_id || !!params.type
+  if (params.include_dormant && !filtered) {
+    return errorResult(
+      'A dormant listing needs a filter. Pass "area_id" or "type" — there is no browsable list of dormant frames, by design.'
+    )
+  }
+
   const { frames } = await getProductMapStorage(orgId)
-  return jsonResult({ frames })
+  // Dormancy is derived from the cycle boundaries, so the cycle rooms have to
+  // be read even though the map itself names no cycle.
+  const cycles = await mapCycleWindows(orgId)
+  const today = getTeamToday(new Date())
+
+  const answered = frames
+    .filter((f) => !params.area_id || f.areaId === params.area_id)
+    .filter((f) => !params.type || f.type === params.type)
+    .map((f) => ({
+      ...f,
+      dormant:
+        cyclesSinceWoken(f.last_woken, cycles, today) >= DEFAULT_FRESHNESS.dormantAfterCycles,
+    }))
+    .filter((f) => (params.include_dormant ? true : !f.dormant))
+
+  return jsonResult({ frames: answered })
+}
+
+/**
+ * The org's cycle windows, in the shape the map engine counts freshness with.
+ * Fail-soft: a map that cannot read the cycles still answers, with nothing
+ * aged. Losing the freshness channel beats refusing the listing.
+ */
+async function mapCycleWindows(orgId: string): Promise<CycleWindow[]> {
+  try {
+    const rooms = (await listCycleRooms(orgId)) ?? []
+    return rooms.map((room) => ({
+      slug: room.slug,
+      type: room.type === 'cooldown' ? ('cooldown' as const) : ('build' as const),
+      start_date: room.start_date,
+      end_date: room.end_date,
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function handleWakeFrame(
+  orgId: string,
+  params: { frame_id?: string; date?: string }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  try {
+    const result = await wakeFrame(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      date: params.date,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
 }
 
 export async function handleUpsertFrame(
@@ -1724,14 +1800,31 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_list_frames',
-    'List the frames on the organization\'s Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the map holds problems, a cycle holds the bets.',
-    orgArg,
+    "List the frames on the organization's Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the map holds problems, a cycle holds the bets. Awake frames only by default. To reach dormant frames — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter. There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
+    {
+      ...orgArg,
+      area_id: z.string().optional().describe('Only frames filed in this area.'),
+      type: z
+        .enum(FRAME_TYPES)
+        .optional()
+        .describe('Only frames of this Type, e.g. "bug" for "what bugs could I take".'),
+      include_dormant: z
+        .boolean()
+        .optional()
+        .describe('Include sleeping frames. Needs "area_id" or "type" alongside it.'),
+    },
     { title: 'List frames', readOnlyHint: true, openWorldHint: false },
-    async ({ org }: { org?: string }, extra: ToolExtra) => {
+    async (
+      {
+        org,
+        ...params
+      }: { org?: string; area_id?: string; type?: string; include_dormant?: boolean },
+      extra: ToolExtra
+    ) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
-      return handleListFrames(resolved.org.id)
+      return handleListFrames(resolved.org.id, params)
     }
   )
 
@@ -1916,6 +2009,36 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleLinkPointer(resolved.org.id, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_wake_frame',
+    'Reset a frame\'s freshness clock, because somebody talked about the problem. Call this after a betting table or a call when a frame came up in the notes — it is how the map follows the conversation without anybody grooming a list. A frame nobody wakes for two cycles goes dormant and leaves the map view, keeping every field. This writes ONE field and can never erase a frame. If you have evidence of the problem happening, use map_attach_report instead: that records the evidence AND wakes the frame.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame that came up.'),
+      date: z
+        .string()
+        .optional()
+        .describe('ISO date (YYYY-MM-DD) of the mention. Defaults to today.'),
+    },
+    {
+      title: 'Wake a frame',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, ...params }: { org?: string; frame_id?: string; date?: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleWakeFrame(resolved.org.id, params)
     }
   )
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleWakeFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -32,6 +32,7 @@ vi.mock('./liveblocks-writer', () => ({
   upsertFrame: vi.fn(),
   attachReport: vi.fn(),
   linkPointer: vi.fn(),
+  wakeFrame: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
   openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
@@ -51,7 +52,7 @@ vi.mock('@/lib/users', async (importOriginal) => ({
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -1360,6 +1361,20 @@ describe('map_upsert_frame schema', () => {
       'customer'
     )
   })
+
+  it('lets map_list_frames filter by area and by Type', () => {
+    const schema = z.object(schemaFor('map_list_frames'))
+
+    expect(schema.parse({ area_id: 'a1', type: 'bug' }).type).toBe('bug')
+    expect(() => schema.parse({ type: 'feature' })).toThrow()
+    expect(schema.parse({}).include_dormant).toBeUndefined()
+  })
+
+  it('lets map_wake_frame omit the date, so the writer picks today', () => {
+    const schema = z.object(schemaFor('map_wake_frame'))
+
+    expect(schema.parse({ frame_id: 'f1' }).date).toBeUndefined()
+  })
 })
 
 describe('handleAttachReport', () => {
@@ -1489,6 +1504,165 @@ describe('handleLinkPointer', () => {
       url: 'https://x.test',
       kind: 'issue',
     })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Frame not found: "nope"')
+  })
+})
+
+describe('map_list_frames filters', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockGetMap = vi.mocked(getProductMapStorage)
+
+  function frame(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'f1',
+      kind: 'pain_point',
+      type: 'bug',
+      problem: 'Imports fail silently',
+      appetite: '',
+      business_case: '',
+      reports: [],
+      pointers: [],
+      last_woken: '2026-09-01',
+      resolved: false,
+      ...overrides,
+    } as never
+  }
+
+  it('filters by area', async () => {
+    mockListRooms.mockResolvedValue([])
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [frame({ id: 'f1', areaId: 'a1' }), frame({ id: 'f2', areaId: 'a2' })],
+    })
+
+    const result = await handleListFrames(ORG_ID, { area_id: 'a1' })
+
+    const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
+    expect(parsed.frames.map((f) => f.id)).toEqual(['f1'])
+  })
+
+  it('filters by Type, which is what answers "what bugs could I take"', async () => {
+    mockListRooms.mockResolvedValue([])
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [frame({ id: 'f1', type: 'bug' }), frame({ id: 'f2', type: 'idea' })],
+    })
+
+    const result = await handleListFrames(ORG_ID, { type: 'bug' })
+
+    const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
+    expect(parsed.frames.map((f) => f.id)).toEqual(['f1'])
+  })
+
+  // An unfiltered list somebody grooms is a backlog. The friction is the
+  // feature (ADR 0024).
+  it('refuses an unfiltered dormant listing', async () => {
+    const result = await handleListFrames(ORG_ID, { include_dormant: true })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('filter')
+    expect(mockGetMap).not.toHaveBeenCalled()
+  })
+
+  it('returns dormant frames once the caller names a filter', async () => {
+    mockListRooms.mockResolvedValue([
+      {
+        slug: 'c1',
+        name: 'One',
+        type: 'build',
+        start_date: '2026-01-05',
+        end_date: '2026-02-13',
+        archived: false,
+      },
+      {
+        slug: 'c2',
+        name: 'Two',
+        type: 'build',
+        start_date: '2026-02-16',
+        end_date: '2026-03-27',
+        archived: false,
+      },
+    ])
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [frame({ id: 'f1', type: 'bug', last_woken: '2026-01-20' })],
+    })
+    // Pin the clock: dormancy is derived against "today", so a wall-clock test
+    // would start passing or failing on its own as the calendar moves.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-01T12:00:00Z'))
+
+    const awake = await handleListFrames(ORG_ID, { type: 'bug' })
+    expect((JSON.parse(awake.content[0].text) as { frames: unknown[] }).frames).toEqual([])
+
+    const withDormant = await handleListFrames(ORG_ID, {
+      type: 'bug',
+      include_dormant: true,
+    })
+    const parsed = JSON.parse(withDormant.content[0].text) as {
+      frames: { id: string; dormant: boolean }[]
+    }
+    expect(parsed.frames).toHaveLength(1)
+    expect(parsed.frames[0].dormant).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('ages nothing when the cycle rooms cannot be read', async () => {
+    mockListRooms.mockRejectedValue(new Error('liveblocks is down'))
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [frame({ id: 'f1', last_woken: '2019-01-01' })],
+    })
+
+    const result = await handleListFrames(ORG_ID)
+
+    const parsed = JSON.parse(result.content[0].text) as { frames: unknown[] }
+    expect(parsed.frames).toHaveLength(1)
+  })
+})
+
+describe('handleWakeFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockWakeFrame = vi.mocked(wakeFrame)
+
+  it('wakes a frame by id', async () => {
+    mockWakeFrame.mockResolvedValue({ frameId: 'f1', wokenOn: '2026-09-02' })
+
+    const result = await handleWakeFrame(ORG_ID, { frame_id: 'f1', date: '2026-09-02' })
+
+    expect(mockWakeFrame).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      frameId: 'f1',
+      date: '2026-09-02',
+    })
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      frameId: 'f1',
+      wokenOn: '2026-09-02',
+    })
+  })
+
+  it('rejects a wake with no frame, and writes nothing', async () => {
+    const result = await handleWakeFrame(ORG_ID, {})
+
+    expect(result.isError).toBe(true)
+    expect(mockWakeFrame).not.toHaveBeenCalled()
+  })
+
+  it('lets the date be omitted, so the writer picks today (ADR 0011)', async () => {
+    mockWakeFrame.mockResolvedValue({ frameId: 'f1', wokenOn: '2026-09-02' })
+
+    await handleWakeFrame(ORG_ID, { frame_id: 'f1' })
+
+    expect(mockWakeFrame.mock.calls[0][1].date).toBeUndefined()
+  })
+
+  it('reports a writer failure as an error, not a success', async () => {
+    mockWakeFrame.mockRejectedValue(new Error('Frame not found: "nope"'))
+
+    const result = await handleWakeFrame(ORG_ID, { frame_id: 'nope' })
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toBe('Frame not found: "nope"')

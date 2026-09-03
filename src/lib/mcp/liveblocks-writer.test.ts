@@ -34,6 +34,7 @@ import {
   upsertFrame,
   attachReport,
   linkPointer,
+  wakeFrame,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -2014,5 +2015,48 @@ describe('linkPointer', () => {
     await expect(
       linkPointer(MAP_ROOM, { frameId: 'nope', url: 'https://x.test', kind: 'issue' })
     ).rejects.toThrow('Frame not found: "nope"')
+  })
+})
+
+describe('wakeFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('resets the freshness clock and reports the date', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
+
+    const result = await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-09-02' })
+
+    expect(result).toEqual({ frameId: 'f1', wokenOn: '2026-09-02' })
+    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+  })
+
+  // The guarantee that matters most for this tool: a wake must NEVER erase a
+  // frame (ADR 0011, ADR 0024).
+  it('leaves the problem, the appetite, the reports, the pointers and the owner alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-09-02' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('kind')).toBe('pain_point')
+    expect(frame.get('type')).toBe('bug')
+    expect(frame.get('reports')).toHaveLength(1)
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('resolved')).toBe(false)
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(wakeFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
+      'Frame not found: "nope"'
+    )
   })
 })
