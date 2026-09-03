@@ -235,15 +235,15 @@ function ProductMapView({
         <Shell>
           <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
           <div className="mb-6 flex flex-wrap items-center gap-2">
-            <AreaForm areaCount={areas.length} />
             <LensToggle lens={lens} onChange={setLens} />
           </div>
           {model.pins.length === 0 && model.areas.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
               <p className="font-display text-lg">Nothing on the Product Map yet</p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                An area is a region of your product. A frame records one problem
-                in it. The first of either appears here.
+                Describe your product to Claude and it will draw the land: the
+                areas, the islands they sit in, and the coastline round them.
+                Then capture a frame for each problem you find.
               </p>
             </div>
           )}
@@ -1503,43 +1503,6 @@ function CaptureForm({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/**
- * An area needs a name and nothing else. Its position is the next free grid
- * slot, and the engine turns that into the shape — the same deal an agent gets
- * through `map_upsert_area`.
- */
-function AreaForm({ areaCount }: { areaCount: number }) {
-  const [name, setName] = useState('')
-
-  const addArea = useProductMapMutation(({ storage }, area: Area) => {
-    storage.get('areas').push(new LiveObject(area))
-  }, [])
-
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    const text = name.trim()
-    if (!text) return
-    // Three across, then wrap. Mirrors the writer's slot rule.
-    addArea({ id: nanoid(), name: text, x: areaCount % 3, y: Math.floor(areaCount / 3) })
-    setName('')
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
-      <Input
-        className="min-w-48 max-w-64"
-        placeholder="Add an area, e.g. Integrations"
-        aria-label="Area name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <Button type="submit" variant="outline" disabled={!name.trim()}>
-        Add area
-      </Button>
-    </form>
   )
 }
 
