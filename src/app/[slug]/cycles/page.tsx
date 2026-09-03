@@ -134,30 +134,28 @@ export default async function CyclesPage({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
-      <section className="mb-8 flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          {/* Plain text, not a SectionLabel: this sits ABOVE the page's h1, and
-              an h2 before an h1 puts the heading order out of sequence. */}
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Product Map
-          </p>
-          <Link
-            href={`/${urlSlug}/product-map`}
-            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Open the Product Map
-          </Link>
-        </div>
+      {/* A big gap under the map, a small one above CURRENT: the Cycles heading
+          and its button belong to the list below them, not to the map above. */}
+      <section className="mb-12 flex flex-col gap-3">
         <ProductMap
           variant="canvas"
           roomId={productMapRoomId(roomPrefix)}
           organizationUsers={organizationUsers}
           cycles={mapCycles}
           shapes={shapes}
+          heading={<p className="font-display text-2xl">Product Map</p>}
+          action={
+            <Link
+              href={`/${urlSlug}/product-map`}
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Open the Product Map
+            </Link>
+          }
         />
       </section>
 
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-3 flex justify-between items-center">
         <h1 className="text-2xl font-display">Cycles</h1>
         <CreateCycleDialog>
           <CreateCycleForm />

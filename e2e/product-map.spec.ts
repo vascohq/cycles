@@ -33,10 +33,22 @@ test.describe('Product Map canvas', () => {
     return page.locator('svg [role="button"][aria-label*="frames."]')
   }
 
+  /**
+   * The <text> element, not a <tspan> inside it. A long name wraps into tspans,
+   * so "Front office agents" contains a tspan reading exactly "Front office" —
+   * the same words as the archipelago's own label. Matching the whole <text>
+   * element's content tells the two apart.
+   */
+  function areaLabel(page: import('@playwright/test').Page, name: string) {
+    return page
+      .locator('svg[aria-label="Product Map"] text')
+      .filter({ hasText: new RegExp(`^${name}$`) })
+  }
+
   test('names every top-level region', async ({ page }) => {
-    await expect(page.getByText('Front office')).toBeVisible()
-    await expect(page.getByText('Back office')).toBeVisible()
-    await expect(page.getByText('Connectors')).toBeVisible()
+    await expect(areaLabel(page, 'Front office')).toBeVisible()
+    await expect(areaLabel(page, 'Back office')).toBeVisible()
+    await expect(areaLabel(page, 'Connectors')).toBeVisible()
   })
 
   test('collapses regions into numbered bubbles as the map shrinks', async ({ page }) => {

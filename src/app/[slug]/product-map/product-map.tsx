@@ -184,12 +184,18 @@ export function ProductMap({
   cycles,
   shapes,
   variant = 'full',
+  heading,
+  action,
 }: {
   roomId: string
   organizationUsers: OrganizationUser[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
   variant?: ProductMapVariant
+  /** Left of the canvas's heading row. Only read by the `canvas` variant. */
+  heading?: React.ReactNode
+  /** Right of it, before Capture. Only read by the `canvas` variant. */
+  action?: React.ReactNode
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -199,7 +205,15 @@ export function ProductMap({
         initialStorage={productMapInitialStorage()}
       >
         <ClientSideSuspense fallback={<ProductMapSkeleton />}>
-          {() => <ProductMapView cycles={cycles} shapes={shapes} variant={variant} />}
+          {() => (
+            <ProductMapView
+              cycles={cycles}
+              shapes={shapes}
+              variant={variant}
+              heading={heading}
+              action={action}
+            />
+          )}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
@@ -210,10 +224,14 @@ function ProductMapView({
   cycles,
   shapes,
   variant,
+  heading,
+  action,
 }: {
   cycles: CycleWindow[]
   shapes: LinkedShape[]
   variant: ProductMapVariant
+  heading?: React.ReactNode
+  action?: React.ReactNode
 }) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
@@ -251,6 +269,15 @@ function ProductMapView({
     return (
       <OpenFrameContext.Provider value={setOpenFrameId}>
         <CyclesContext.Provider value={cycles}>
+          {/* The heading row lives in here, not on the host page: Capture needs
+              the room, and the room provider stops at this component. */}
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            {heading}
+            <div className="flex items-center gap-3">
+              {action}
+              <CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />
+            </div>
+          </div>
           {model.areas.length > 0 ? (
             <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
           ) : (

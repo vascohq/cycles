@@ -10,7 +10,7 @@ import {
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
-import { unionBounds, type Bounds } from '@/lib/product-map-geometry'
+import { unionBounds, type Bounds, type Point } from '@/lib/product-map-geometry'
 import {
   Tooltip,
   TooltipContent,
@@ -50,8 +50,11 @@ const WORST_WORDS: Record<string, string> = {
   [KIND_COLORS.unlock_win]: 'a win to unlock',
 }
 
-/** Breathing room round the fitted map, as a fraction of its size. */
-const FIT_PAD = 0.12
+/**
+ * Breathing room round the fitted map, as a fraction of its size. Kept small:
+ * every percent here shrinks the land, and the land is the whole point.
+ */
+const FIT_PAD = 0.04
 const MIN_SPAN = 40
 
 type View = { x: number; y: number; w: number; h: number }
@@ -68,13 +71,19 @@ export function MapCanvas({
   const [view, setView] = useState<View | null>(null)
 
   const world = useMemo(() => {
-    const box = unionBounds(areas.map((a) => a.bounds))
+    // Every coastline AND every label point. An island and an archipelago name
+    // themselves ABOVE their coastline, so their labels sit outside every
+    // area's box — fit to the boxes alone and the top-level names are clipped
+    // clean off. Guessing a headroom instead either clips them or wastes space,
+    // and wasted space here shrinks the whole map.
+    const box = unionBounds([
+      ...areas.map((a) => a.bounds),
+      ...labelPoints(areas).map(([x, y]) => ({ x, y, width: 0, height: 0 })),
+    ])
     if (!box) return { x: 0, y: 0, width: 400, height: 300 }
-    // An island and an archipelago name themselves ABOVE their coastline, and
-    // that label is not part of any area's box. Without headroom the fitted
-    // view clips the top-level names clean off.
-    const headroom = Math.max(40, box.height * 0.15)
-    return { x: box.x, y: box.y - headroom, width: box.width, height: box.height + headroom }
+    // The label's own line height, which a point does not carry.
+    const line = 14
+    return { x: box.x, y: box.y - line, width: box.width, height: box.height + line }
   }, [areas])
 
   useEffect(() => {
@@ -99,8 +108,8 @@ export function MapCanvas({
 
   const fit = useCallback(
     (target: Bounds): View => {
-      const padX = target.width * FIT_PAD + 20
-      const padY = target.height * FIT_PAD + 20
+      const padX = target.width * FIT_PAD + 8
+      const padY = target.height * FIT_PAD + 8
       const w = Math.max(target.width + padX * 2, MIN_SPAN)
       const h = Math.max(target.height + padY * 2, MIN_SPAN)
       // Match the container's aspect, so fitting never squashes the coastline.
@@ -669,6 +678,11 @@ function Bubble({
       </TooltipPortal>
     </Tooltip>
   )
+}
+
+/** Where every area in the tree writes its name. */
+function labelPoints(areas: RenderedArea[]): Point[] {
+  return areas.flatMap((area) => [area.labelAt, ...labelPoints(area.children)])
 }
 
 /** Every drawn coastline beneath an area. Only leaves have one. */
