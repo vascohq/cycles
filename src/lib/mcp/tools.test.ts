@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -30,6 +30,7 @@ vi.mock('./liveblocks-writer', () => ({
   deleteSquad: vi.fn(),
   upsertArea: vi.fn(),
   upsertFrame: vi.fn(),
+  attachReport: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
   openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
@@ -49,7 +50,7 @@ vi.mock('@/lib/users', async (importOriginal) => ({
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -1336,5 +1337,100 @@ describe('map_upsert_frame schema', () => {
   it('takes no cycle slug, because the map names no cycle', () => {
     expect(schemaFor('map_upsert_frame')).not.toHaveProperty('cycle_slug')
     expect(schemaFor('map_list_frames')).not.toHaveProperty('cycle_slug')
+    expect(schemaFor('map_attach_report')).not.toHaveProperty('cycle_slug')
+  })
+
+  it('lets map_attach_report omit everything but the frame and the text', () => {
+    const schema = z.object(schemaFor('map_attach_report'))
+    const parsed = schema.parse({ frame_id: 'f1', text: 'again' })
+
+    expect(parsed.source).toBeUndefined()
+    expect(parsed.capturer).toBeUndefined()
+    expect(parsed.customer).toBeUndefined()
+    expect(parsed.link).toBeUndefined()
+    expect(parsed.date).toBeUndefined()
+  })
+
+  it('refuses a report source outside the vocabulary', () => {
+    const schema = z.object(schemaFor('map_attach_report'))
+
+    expect(() => schema.parse({ frame_id: 'f1', text: 'x', source: 'slack' })).toThrow()
+    expect(schema.parse({ frame_id: 'f1', text: 'x', source: 'customer' }).source).toBe(
+      'customer'
+    )
+  })
+})
+
+describe('handleAttachReport', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockAttachReport = vi.mocked(attachReport)
+
+  it('records a customer report on an existing frame', async () => {
+    mockAttachReport.mockResolvedValue({ frameId: 'f1', reportCount: 3 })
+
+    const result = await handleAttachReport(ORG_ID, {
+      frame_id: 'f1',
+      capturer: 'user_2',
+      text: 'Their import dropped 400 rows',
+      source: 'customer',
+      customer: 'Acme',
+      link: 'https://example.test/call',
+      date: '2026-09-02',
+    })
+
+    expect(mockAttachReport).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      text: 'Their import dropped 400 rows',
+      source: 'customer',
+      customer: 'Acme',
+      link: 'https://example.test/call',
+      date: '2026-09-02',
+    })
+    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', reportCount: 3 })
+  })
+
+  it('rejects a report with no frame, and writes nothing', async () => {
+    const result = await handleAttachReport(ORG_ID, { text: 'again', capturer: 'user_2' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('frame_id')
+    expect(mockAttachReport).not.toHaveBeenCalled()
+  })
+
+  it('rejects a report with no text, and writes nothing', async () => {
+    const result = await handleAttachReport(ORG_ID, { frame_id: 'f1', capturer: 'user_2' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('text')
+    expect(mockAttachReport).not.toHaveBeenCalled()
+  })
+
+  // ADR 0011: an omitted field reaches the writer as undefined, so the writer
+  // fills its own default rather than the tool coercing one in.
+  it('passes an omitted field through as undefined', async () => {
+    mockAttachReport.mockResolvedValue({ frameId: 'f1', reportCount: 1 })
+
+    await handleAttachReport(ORG_ID, { frame_id: 'f1', capturer: 'user_2', text: 'again' })
+
+    const [, params] = mockAttachReport.mock.calls[0]
+    expect(params.source).toBeUndefined()
+    expect(params.customer).toBeUndefined()
+    expect(params.link).toBeUndefined()
+    expect(params.date).toBeUndefined()
+  })
+
+  it('reports a writer failure as an error, not a success', async () => {
+    mockAttachReport.mockRejectedValue(new Error('Frame not found: "nope"'))
+
+    const result = await handleAttachReport(ORG_ID, {
+      frame_id: 'nope',
+      capturer: 'user_2',
+      text: 'again',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Frame not found: "nope"')
   })
 })

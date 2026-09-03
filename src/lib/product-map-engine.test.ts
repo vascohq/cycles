@@ -4,15 +4,20 @@ import {
   FRAME_KINDS,
   FRAME_TYPES,
   KIND_COLORS,
+  HEAT_LENSES,
+  PIN_MAX_SIZE,
+  PIN_MIN_SIZE,
   candidateStatement,
   frameState,
+  pinSize,
+  reportCount,
   isFrameKind,
   isFrameType,
   isSharp,
   renderProductMap,
   type LinkedShape,
 } from './product-map-engine'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, Frame, FrameReport } from '@/product-map-liveblocks.config'
 
 function makeFrame(overrides: Partial<Frame> = {}): Frame {
   return {
@@ -26,6 +31,16 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
     pointers: [],
     last_woken: '2026-09-01',
     resolved: false,
+    ...overrides,
+  }
+}
+
+function makeReport(overrides: Partial<FrameReport> = {}): FrameReport {
+  return {
+    capturer: 'user_1',
+    source: 'internal',
+    text: 'It happened again',
+    date: '2026-09-01',
     ...overrides,
   }
 }
@@ -464,5 +479,92 @@ describe('the rendered pin carries the derived frame fields', () => {
   it('reports no owner as null rather than an empty string', () => {
     const model = renderProductMap({ frames: [makeFrame()], today: '2026-09-02' })
     expect(model.pins[0].owner).toBeNull()
+  })
+})
+
+describe('the heat lens', () => {
+  it('names the three lenses', () => {
+    expect([...HEAT_LENSES]).toEqual(['all', 'internal', 'customer'])
+  })
+
+  const frame = makeFrame({
+    reports: [
+      makeReport({ source: 'customer' }),
+      makeReport({ source: 'customer' }),
+      makeReport({ source: 'customer' }),
+      makeReport({ source: 'internal' }),
+    ],
+  })
+
+  it('counts every report under the all lens', () => {
+    expect(reportCount(frame, 'all')).toBe(4)
+  })
+
+  it('counts only what customers raised under the customer lens', () => {
+    expect(reportCount(frame, 'customer')).toBe(3)
+  })
+
+  it('counts only what the team raised under the internal lens', () => {
+    expect(reportCount(frame, 'internal')).toBe(1)
+  })
+
+  it('counts nothing on a frame nobody has reported', () => {
+    expect(reportCount(makeFrame(), 'all')).toBe(0)
+  })
+})
+
+describe('pin size', () => {
+  it('draws the smallest pin for a frame with no reports', () => {
+    expect(pinSize(0)).toBe(PIN_MIN_SIZE)
+  })
+
+  it('grows with the report count, so widespread pain looks bigger', () => {
+    expect(pinSize(5)).toBeGreaterThan(pinSize(1))
+    expect(pinSize(1)).toBeGreaterThan(pinSize(0))
+  })
+
+  it('caps, so one shouty frame never swallows its area', () => {
+    expect(pinSize(500)).toBe(PIN_MAX_SIZE)
+  })
+})
+
+describe('the rendered pin under each lens', () => {
+  const hotWithCustomers = makeFrame({
+    reports: [
+      makeReport({ source: 'customer' }),
+      makeReport({ source: 'customer' }),
+      makeReport({ source: 'customer' }),
+      makeReport({ source: 'customer' }),
+    ],
+  })
+
+  it('draws a frame hot with customers and cold internally at two sizes', () => {
+    const customerLens = renderProductMap({
+      frames: [hotWithCustomers],
+      lens: 'customer',
+      today: '2026-09-02',
+    })
+    const internalLens = renderProductMap({
+      frames: [hotWithCustomers],
+      lens: 'internal',
+      today: '2026-09-02',
+    })
+    expect(customerLens.pins[0].reportCount).toBe(4)
+    expect(internalLens.pins[0].reportCount).toBe(0)
+    expect(customerLens.pins[0].size).toBeGreaterThan(internalLens.pins[0].size)
+  })
+
+  it('counts every report when no lens is named', () => {
+    const model = renderProductMap({ frames: [hotWithCustomers], today: '2026-09-02' })
+    expect(model.pins[0].reportCount).toBe(4)
+  })
+
+  it('hands the detail every report, whatever the lens filters out', () => {
+    const model = renderProductMap({
+      frames: [hotWithCustomers],
+      lens: 'internal',
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].reports).toHaveLength(4)
   })
 })

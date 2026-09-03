@@ -11,14 +11,23 @@ import {
   useProductMapMutation,
   productMapInitialStorage,
 } from '@/product-map-room-context'
-import type { Area, Frame, FrameKind, FrameType } from '@/product-map-liveblocks.config'
+import type {
+  Area,
+  Frame,
+  FrameKind,
+  FrameReport,
+  FrameType,
+} from '@/product-map-liveblocks.config'
 import {
   AREA_GAP,
   DEFAULT_KIND,
+  DEFAULT_LENS,
   FRAME_KINDS,
   FRAME_TYPES,
+  HEAT_LENSES,
   renderProductMap,
   type FrameState,
+  type HeatLens,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
@@ -61,6 +70,17 @@ const TYPE_LABELS: Record<FrameType, string> = {
   request: 'Request',
   security: 'Security',
   irritant: 'Irritant',
+}
+
+const LENS_LABELS: Record<HeatLens, string> = {
+  all: 'Everyone',
+  internal: 'Internal only',
+  customer: 'Customers only',
+}
+
+const SOURCE_LABELS: Record<FrameReport['source'], string> = {
+  internal: 'Internal',
+  customer: 'Customer',
 }
 
 const STATE_LABELS: Record<FrameState, string> = {
@@ -112,10 +132,11 @@ function ProductMapView() {
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
   const [openFrameId, setOpenFrameId] = useState<string | null>(null)
+  const [lens, setLens] = useState<HeatLens>(DEFAULT_LENS)
 
   // Today is a parameter of the engine, never a clock inside it. Resolved here
   // in the team timezone, the same as every other date-derived surface.
-  const model = renderProductMap({ areas, frames, today: getTeamToday(new Date()) })
+  const model = renderProductMap({ areas, frames, lens, today: getTeamToday(new Date()) })
   const options = areaOptions(model.areas)
   // Opening a frame reads it and nothing more. It never wakes it (ADR 0024).
   const open = model.pins.find((pin) => pin.frameId === openFrameId) ?? null
@@ -124,7 +145,10 @@ function ProductMapView() {
     <OpenFrameContext.Provider value={setOpenFrameId}>
       <Shell>
         <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
-        <AreaForm areaCount={areas.length} />
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <AreaForm areaCount={areas.length} />
+          <LensToggle lens={lens} onChange={setLens} />
+        </div>
         {model.pins.length === 0 && model.areas.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
             <p className="font-display text-lg">Nothing on the Product Map yet</p>
@@ -261,8 +285,10 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
           fifth channel, which is the map's legibility ceiling (ADR 0025). */}
       <span
         aria-hidden
-        className="size-2.5 shrink-0 rounded-full border-2"
+        className="shrink-0 rounded-full border-2"
         style={{
+          width: pin.size,
+          height: pin.size,
           borderColor: pin.color,
           backgroundColor: pin.sharp ? pin.color : 'transparent',
         }}
@@ -276,6 +302,7 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
       </button>
       <span className="shrink-0 text-xs text-muted-foreground">
         {KIND_LABELS[pin.kind]} · {TYPE_LABELS[pin.type]} · {STATE_LABELS[pin.state]}
+        {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
       </span>
       {options.length > 0 && (
         <Select
@@ -296,6 +323,38 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
         </Select>
       )}
     </li>
+  )
+}
+
+/**
+ * The heat lens. It changes which reports count towards pin size, and nothing
+ * else — a frame keeps one freshness clock whatever the lens says. Comparing
+ * the internal lens with the customer lens is how a team finds pain it is
+ * ignoring.
+ */
+function LensToggle({
+  lens,
+  onChange,
+}: {
+  lens: HeatLens
+  onChange: (lens: HeatLens) => void
+}) {
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">Heat from</span>
+      <Select value={lens} onValueChange={(v) => onChange(v as HeatLens)}>
+        <SelectTrigger className="w-40" aria-label="Heat lens">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {HEAT_LENSES.map((l) => (
+            <SelectItem key={l} value={l}>
+              {LENS_LABELS[l]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
@@ -417,12 +476,130 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
             </SelectContent>
           </Select>
         </Field>
+
+        <Reports pin={pin} />
       </SheetContent>
     </Sheet>
   )
 }
 
 type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+
+/**
+ * The evidence. A reader needs the reports and not only the count, so an agent's
+ * frame can be judged by the person reading it — every report names its capturer.
+ *
+ * Adding a report also wakes the frame, because a fresh report IS the
+ * conversation the freshness clock listens for (ADR 0024).
+ */
+function Reports({ pin }: { pin: RenderedPin }) {
+  const users = useOrganizationUsers()
+  const { userId } = useAuth()
+  const [text, setText] = useState('')
+  const [source, setSource] = useState<FrameReport['source']>('internal')
+  const [customer, setCustomer] = useState('')
+
+  const addReport = useProductMapMutation(
+    ({ storage }, frameId: string, report: FrameReport) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      const reports = (frame.get('reports') ?? []) as FrameReport[]
+      frame.set('reports', [...reports, report])
+      frame.set('last_woken', report.date)
+    },
+    []
+  )
+
+  function onSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    const line = text.trim()
+    if (!line) return
+    addReport(pin.frameId, {
+      capturer: userId ?? '',
+      source,
+      ...(source === 'customer' && customer.trim() ? { customer: customer.trim() } : {}),
+      text: line,
+      date: getTeamToday(new Date()),
+    })
+    setText('')
+    setCustomer('')
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-t pt-4">
+      <Label>Reports ({pin.reports.length})</Label>
+      {pin.reports.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Nobody has recorded this happening yet.
+        </p>
+      )}
+      <ul className="flex flex-col gap-2">
+        {pin.reports.map((report, i) => (
+          <li key={i} className="rounded-lg border p-2 text-sm">
+            <p>{report.text}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {SOURCE_LABELS[report.source]}
+              {report.customer && ` · ${report.customer}`} · {report.date} · recorded by{' '}
+              {capturerName(report.capturer, users)}
+              {report.link && (
+                <>
+                  {' · '}
+                  <a className="underline" href={report.link} target="_blank" rel="noreferrer">
+                    link
+                  </a>
+                </>
+              )}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={onSubmit} className="flex flex-col gap-2">
+        <Textarea
+          rows={2}
+          placeholder="What happened?"
+          aria-label="Report"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="flex items-center gap-2">
+          <Select
+            value={source}
+            onValueChange={(v) => setSource(v as FrameReport['source'])}
+          >
+            <SelectTrigger className="w-32" aria-label="Source">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="internal">{SOURCE_LABELS.internal}</SelectItem>
+              <SelectItem value="customer">{SOURCE_LABELS.customer}</SelectItem>
+            </SelectContent>
+          </Select>
+          {source === 'customer' && (
+            <Input
+              className="flex-1"
+              placeholder="Which customer?"
+              aria-label="Customer"
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+            />
+          )}
+          <Button type="submit" variant="outline" disabled={!text.trim()}>
+            Add report
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+/**
+ * A capturer is a Clerk user id OR an agent id, so a name lookup that misses is
+ * normal. Show the raw id then: the provenance of an agent's report matters more
+ * than a tidy label.
+ */
+function capturerName(capturer: string, users: OrganizationUser[]): string {
+  return users.find((u) => u.userId === capturer)?.name ?? (capturer || 'unknown')
+}
 
 function Field({
   label,
@@ -607,7 +784,7 @@ function AreaForm({ areaCount }: { areaCount: number }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mb-6 flex flex-wrap items-center gap-2">
+    <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
       <Input
         className="min-w-48 max-w-64"
         placeholder="Add an area, e.g. Integrations"

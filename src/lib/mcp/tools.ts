@@ -38,6 +38,7 @@ import {
   openBatch,
   upsertArea,
   upsertFrame,
+  attachReport,
 } from './liveblocks-writer'
 import {
   getOrganizationUsers,
@@ -685,6 +686,40 @@ export async function handleUpsertFrame(
       areaId: params.area_id,
       owner: params.owner,
       originFrameId: params.origin_frame_id,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleAttachReport(
+  orgId: string,
+  params: {
+    frame_id?: string
+    text?: string
+    source?: string
+    capturer?: string
+    customer?: string
+    link?: string
+    date?: string
+  }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  if (!params.text?.trim()) {
+    return errorResult('A report needs "text" — one line saying what happened.')
+  }
+  try {
+    const result = await attachReport(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      capturer: params.capturer!,
+      source: params.source as never,
+      customer: params.customer,
+      link: params.link,
+      text: params.text,
+      date: params.date,
     })
     return jsonResult(result)
   } catch (err) {
@@ -1743,6 +1778,75 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleUpsertFrame(resolved.org.id, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_attach_report',
+    'Record one report of a problem happening on an existing frame. Use this instead of capturing a duplicate frame — the report count is what makes widespread pain look bigger on the map. A report from a customer takes "source": "customer" and can name the customer. Attaching a report WAKES the frame and touches nothing else on it.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame this report belongs to.'),
+      text: z.string().describe('One line saying what happened.'),
+      source: z
+        .enum(['internal', 'customer'])
+        .optional()
+        .describe(
+          'Who raised it. Drives the heat lens. Defaults to "internal", the quieter claim.'
+        ),
+      capturer: z
+        .string()
+        .optional()
+        .describe(
+          'Who recorded it — a Clerk user id, or your own agent id when you captured it yourself. Defaults to the calling user.'
+        ),
+      customer: z
+        .string()
+        .optional()
+        .describe('Free-text customer label, e.g. "Acme". There is no customer record.'),
+      link: z.string().optional().describe('Link to the conversation, ticket or transcript.'),
+      date: z
+        .string()
+        .optional()
+        .describe(
+          'ISO date (YYYY-MM-DD) the problem happened. Defaults to today. This is also the wake date.'
+        ),
+    },
+    {
+      title: 'Attach a report to a frame',
+      readOnlyHint: false,
+      destructiveHint: false,
+      // NOT idempotent: two identical calls record two reports, because two
+      // people hitting the same problem is exactly the signal.
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        ...params
+      }: {
+        org?: string
+        frame_id?: string
+        text?: string
+        source?: string
+        capturer?: string
+        customer?: string
+        link?: string
+        date?: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      // Nothing reaches a frame unmediated: a report always names who recorded
+      // it. An agent may name itself; otherwise the calling user is on the hook.
+      return handleAttachReport(resolved.org.id, {
+        ...params,
+        capturer: params.capturer?.trim() || getUserId(extra),
+      })
     }
   )
 }

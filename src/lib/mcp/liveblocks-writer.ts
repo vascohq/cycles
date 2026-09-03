@@ -9,7 +9,7 @@ import type {
   PitchUpdate,
   Squad,
 } from '@/cycle-liveblocks.config'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, Frame, FrameReport } from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
   FRAME_KINDS,
@@ -1222,6 +1222,67 @@ export async function upsertFrame(
 
   if (notFound) throw new Error(`Frame not found: "${id}"`)
   return { created, id }
+}
+
+/**
+ * Attach a report to a frame. A report is one record of the problem happening,
+ * and it is the only thing that grows a pin.
+ *
+ * This writes exactly two fields: the report goes onto the list, and the wake
+ * clock resets. Nothing else on the frame is read or rewritten, so a report can
+ * never erase the problem, the appetite, the pointers or the owner.
+ *
+ * A new report is one of the three things that wake a frame (ADR 0024).
+ */
+export async function attachReport(
+  roomId: string,
+  params: {
+    frameId: string
+    capturer: string
+    source?: FrameReport['source']
+    customer?: string
+    link?: string
+    text: string
+    date?: string
+  }
+): Promise<{ frameId: string; reportCount: number }> {
+  if (!params.text.trim()) {
+    throw new Error('A report needs text — one line saying what happened.')
+  }
+  if (params.source !== undefined && params.source !== 'internal' && params.source !== 'customer') {
+    throw new Error(`Invalid source: "${params.source}". One of: internal, customer.`)
+  }
+
+  let notFound = false
+  let reportCount = 0
+  // The report's own date, so a support person can record a call from last week
+  // without back-dating the wake. Both default to the team's today.
+  const date = params.date?.trim() || getTeamToday(new Date())
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    const report: FrameReport = {
+      capturer: params.capturer,
+      // Internal is the quieter claim, so it is the safe default: a report only
+      // counts under the customer lens when somebody said it came from one.
+      source: params.source ?? 'internal',
+      ...(params.customer?.trim() ? { customer: params.customer.trim() } : {}),
+      ...(params.link?.trim() ? { link: params.link.trim() } : {}),
+      text: params.text.trim(),
+      date,
+    }
+    const reports = (getField(existing, 'reports') ?? []) as FrameReport[]
+    existing.set('reports', [...reports, report])
+    existing.set('last_woken', date)
+    reportCount = reports.length + 1
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, reportCount }
 }
 
 function setOrClear(item: any, key: string, value: string | undefined): void {

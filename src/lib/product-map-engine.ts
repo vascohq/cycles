@@ -3,7 +3,13 @@
 // returns the rendered map model. No React, no Liveblocks, no clock of its own,
 // the same shape as the cycle list engine.
 
-import type { Area, Frame, FrameKind, FrameType } from '@/product-map-liveblocks.config'
+import type {
+  Area,
+  Frame,
+  FrameKind,
+  FrameReport,
+  FrameType,
+} from '@/product-map-liveblocks.config'
 
 // Kind is how much a problem hurts. It is the only axis with a color on the map.
 export const FRAME_KINDS = ['brand_burn', 'pain_point', 'unlock_win'] as const
@@ -116,6 +122,40 @@ function text(value: string | undefined): string {
 }
 
 /**
+ * Which reports count towards a pin's size. A frame has ONE freshness clock;
+ * the lens only filters what feeds the size. A frame hot with customers and
+ * cold internally is the most useful thing the map can show.
+ */
+export const HEAT_LENSES = ['all', 'internal', 'customer'] as const
+export type HeatLens = (typeof HEAT_LENSES)[number]
+
+export const DEFAULT_LENS: HeatLens = 'all'
+
+export function isHeatLens(value: unknown): value is HeatLens {
+  return (HEAT_LENSES as readonly unknown[]).includes(value)
+}
+
+/** How many of a frame's reports the lens lets through. */
+export function reportCount(frame: Pick<Frame, 'reports'>, lens: HeatLens): number {
+  const reports = frame.reports ?? []
+  if (lens === 'all') return reports.length
+  return reports.filter((r) => r.source === lens).length
+}
+
+// Size is the report count, so widespread pain looks bigger. Growth is by
+// square root: ten reports must read as louder than one, not as ten dots wide,
+// and the cap stops one shouty frame swallowing its area.
+export const PIN_MIN_SIZE = 10
+export const PIN_MAX_SIZE = 28
+const PIN_SIZE_PER_ROOT = 6
+
+/** A pin's diameter in pixels, from the report count under the active lens. */
+export function pinSize(count: number): number {
+  if (count <= 0) return PIN_MIN_SIZE
+  return Math.min(PIN_MAX_SIZE, PIN_MIN_SIZE + Math.round(Math.sqrt(count) * PIN_SIZE_PER_ROOT))
+}
+
+/**
  * Everything the map and the frame detail draw for one frame. The **Pin** proper
  * is only the marker; the rest of these fields are the frame's own text, carried
  * here so the view derives nothing for itself.
@@ -132,6 +172,12 @@ export type RenderedPin = {
   owner: string | null
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
+  /** Every report on the frame, unfiltered — the detail shows the evidence. */
+  reports: FrameReport[]
+  /** Reports that pass the active heat lens. Size reads this, nothing else. */
+  reportCount: number
+  /** Diameter in pixels. Size is the second pin channel. */
+  size: number
   /** A problem AND an appetite. A rough pin must never look like agreed work. */
   sharp: boolean
   state: FrameState
@@ -180,14 +226,17 @@ export function renderProductMap(input: {
   today: string
   /** Shapes that point home to a frame, read from the cycle rooms (ADR 0022). */
   shapes?: LinkedShape[]
+  /** Which reports count towards pin size. Defaults to all of them. */
+  lens?: HeatLens
 }): ProductMapModel {
   const areas = input.areas ?? []
+  const lens = input.lens ?? DEFAULT_LENS
   const shapesByFrame = groupShapesByFrame(input.shapes ?? [])
   // A resolved frame leaves the map: a person decided the problem is gone.
   // It is never deleted, so it stays readable through a filtered query.
   const pins = input.frames
     .filter((f) => !f.resolved)
-    .map((f) => renderPin(f, input.today, shapesByFrame.get(f.id) ?? []))
+    .map((f) => renderPin(f, input.today, shapesByFrame.get(f.id) ?? [], lens))
 
   const known = new Set(areas.map((a) => a.id))
   const pinsByArea = new Map<string, RenderedPin[]>()
@@ -257,8 +306,14 @@ function areaShape(area: Area, depth: number): RenderedArea['shape'] {
   return { x: area.x * (width + AREA_GAP), y: area.y * (height + AREA_GAP), width, height }
 }
 
-function renderPin(frame: Frame, today: string, shapes: LinkedShape[]): RenderedPin {
+function renderPin(
+  frame: Frame,
+  today: string,
+  shapes: LinkedShape[],
+  lens: HeatLens
+): RenderedPin {
   const kind = isFrameKind(frame.kind) ? frame.kind : DEFAULT_KIND
+  const count = reportCount(frame, lens)
   return {
     frameId: frame.id,
     areaId: frame.areaId ?? '',
@@ -269,6 +324,9 @@ function renderPin(frame: Frame, today: string, shapes: LinkedShape[]): Rendered
     businessCase: frame.business_case ?? '',
     owner: frame.owner ?? null,
     color: KIND_COLORS[kind],
+    reports: frame.reports ?? [],
+    reportCount: count,
+    size: pinSize(count),
     sharp: isSharp(frame),
     state: frameState(frame, shapes),
     candidateStatement: candidateStatement(frame),

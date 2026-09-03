@@ -32,6 +32,7 @@ import {
   deleteSquad,
   upsertArea,
   upsertFrame,
+  attachReport,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -1798,5 +1799,131 @@ describe('upsertFrame validation', () => {
     await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
 
     expect(storage.frames.find(() => true)!.get('type')).toBe('bug')
+  })
+})
+
+describe('attachReport', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('adds the report and reports the new count', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      source: 'customer',
+      customer: 'Acme',
+      link: 'https://example.test/call',
+      text: 'Their nightly import dropped 400 rows',
+      date: '2026-09-02',
+    })
+
+    expect(result).toEqual({ frameId: 'f1', reportCount: 2 })
+    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(reports).toHaveLength(2)
+    expect(reports[1]).toEqual({
+      capturer: 'user_2',
+      source: 'customer',
+      customer: 'Acme',
+      link: 'https://example.test/call',
+      text: 'Their nightly import dropped 400 rows',
+      date: '2026-09-02',
+    })
+  })
+
+  // The core ADR 0011 guarantee for this tool: a report is additive and nothing
+  // else on the frame is rewritten.
+  it('leaves the problem, the appetite, the pointers and the owner untouched', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('pointers')).toHaveLength(1)
+    expect(frame.get('kind')).toBe('pain_point')
+    expect(frame.get('type')).toBe('bug')
+    expect(frame.get('resolved')).toBe(false)
+  })
+
+  // A new report is one of the three things that wake a frame (ADR 0024).
+  it('wakes the frame', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
+
+    await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      text: 'again',
+      date: '2026-09-02',
+    })
+
+    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+  })
+
+  // Internal is the quieter claim, so a report only counts under the customer
+  // lens when somebody said so.
+  it('defaults the source to internal', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [] })] })
+
+    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+
+    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(reports[0].source).toBe('internal')
+  })
+
+  it('omits the customer label and the link rather than storing blanks', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [] })] })
+
+    await attachReport(MAP_ROOM, {
+      frameId: 'f1',
+      capturer: 'user_2',
+      text: 'again',
+      customer: '   ',
+      link: '',
+    })
+
+    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(reports[0]).not.toHaveProperty('customer')
+    expect(reports[0]).not.toHaveProperty('link')
+  })
+
+  it('refuses a report with no text', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: '  ' })
+    ).rejects.toThrow('A report needs text')
+  })
+
+  it('refuses a source outside the vocabulary', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      attachReport(MAP_ROOM, {
+        frameId: 'f1',
+        capturer: 'user_2',
+        text: 'again',
+        source: 'slack' as never,
+      })
+    ).rejects.toThrow('Invalid source')
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      attachReport(MAP_ROOM, { frameId: 'nope', capturer: 'user_2', text: 'again' })
+    ).rejects.toThrow('Frame not found: "nope"')
   })
 })
