@@ -334,20 +334,65 @@ function Coast({
  * draws the merged silhouette of every leaf beneath it, so the outer shape always
  * wraps its children and there is no polygon union to compute.
  */
-/** Below this many pixels wide, an area's name is unreadable and only collides. */
-const LABEL_AT_PX = 110
+/**
+ * A region narrower than this on screen cannot hold even a short word, and at
+ * that size it is almost always standing in as a bubble anyway.
+ */
+const LABEL_AT_PX = 34
+const LABEL_MAX_PX = 15
+const LABEL_MIN_PX = 9
+/** Rough width of one character as a fraction of the font size, for this stack. */
+const CHAR_W = 0.55
+
+/**
+ * Fit a name into the width an area actually has. Small areas get smaller type,
+ * and a name that still does not fit breaks onto a second line. Hiding the
+ * label instead is worse: an unlabelled region tells the reader nothing.
+ */
+function fitLabel(name: string, availablePx: number): { lines: string[]; fontPx: number } {
+  const oneLine = Math.min(LABEL_MAX_PX, availablePx / Math.max(name.length * CHAR_W, 1))
+  if (oneLine >= LABEL_MIN_PX) {
+    return { lines: [name], fontPx: Math.max(LABEL_MIN_PX, oneLine) }
+  }
+
+  // Break at the space that leaves the two halves closest in length, so neither
+  // line sticks out further than it has to.
+  const words = name.split(' ')
+  if (words.length < 2) return { lines: [name], fontPx: LABEL_MIN_PX }
+
+  let best = { lines: [name], longest: name.length }
+  for (let i = 1; i < words.length; i++) {
+    const top = words.slice(0, i).join(' ')
+    const bottom = words.slice(i).join(' ')
+    const longest = Math.max(top.length, bottom.length)
+    if (longest < best.longest) best = { lines: [top, bottom], longest }
+  }
+  const twoLine = Math.min(LABEL_MAX_PX, availablePx / Math.max(best.longest * CHAR_W, 1))
+  return { lines: best.lines, fontPx: Math.max(LABEL_MIN_PX, twoLine) }
+}
 
 function AreaShape({ area, k, scale }: { area: RenderedArea; k: number; scale: number }) {
-  const onScreen = Math.max(area.bounds.width, area.bounds.height) * scale
-  const label = onScreen < LABEL_AT_PX ? null : (
+  // Width, not the longest side: a label runs horizontally, so height buys it
+  // nothing. A container is measured the same way, and its name sits above.
+  const widthPx = area.bounds.width * scale
+  const fitted = widthPx < LABEL_AT_PX ? null : fitLabel(area.name, widthPx * 1.1)
+  const label = !fitted ? null : (
     <text
       x={area.labelAt[0]}
       y={area.labelAt[1]}
       textAnchor="middle"
       className="pointer-events-none select-none fill-foreground font-display"
-      style={{ fontSize: 15 * k, opacity: area.level === 'area' ? 0.9 : 0.55 }}
+      style={{ fontSize: fitted.fontPx * k, opacity: area.level === 'area' ? 0.9 : 0.55 }}
     >
-      {area.name}
+      {fitted.lines.map((line, i) => (
+        <tspan
+          key={i}
+          x={area.labelAt[0]}
+          dy={i === 0 ? -((fitted.lines.length - 1) * fitted.fontPx * 0.55 * k) : fitted.fontPx * 1.1 * k}
+        >
+          {line}
+        </tspan>
+      ))}
     </text>
   )
 
