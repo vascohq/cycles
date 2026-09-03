@@ -22,6 +22,7 @@ import type {
 } from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
+  KIND_COLORS,
   DEFAULT_LENS,
   FRAME_KINDS,
   FRAME_TYPES,
@@ -55,6 +56,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -98,6 +106,18 @@ const STATE_LABELS: Record<FrameState, string> = {
   monitoring: 'Monitoring',
   resolved: 'Resolved',
 }
+
+/**
+ * A pill: a compact, rounded control that reads as a tag rather than a form
+ * field. Same as the new-card modal on the Scope Map, so the two surfaces feel
+ * like one app.
+ */
+const PILL =
+  'inline-flex h-auto w-auto items-center gap-1.5 rounded-full border border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-0 focus:ring-offset-0'
+
+/** A borderless title that reads as a heading, not an input. */
+const TITLE_INPUT =
+  'w-full resize-none bg-transparent text-lg font-medium leading-snug outline-none placeholder:text-muted-foreground/40 focus:outline-none'
 
 /** The Select value that stands for "no area". Empty string is not selectable. */
 const UNMAPPED = '__unmapped__'
@@ -553,21 +573,35 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
       {/* key: a fresh frame gets fresh local field state, so no draft leaks
           from the frame that was open before it. */}
       <SheetContent key={pin.frameId} className="overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="font-display text-lg">
-            {pin.sharp ? 'Sharp frame' : 'Rough frame'}
-          </SheetTitle>
+        {/*
+          The problem IS the title, in the same language as capture and as the
+          new-card modal: a big borderless line you type straight into, with the
+          frame's facts as pills under it. A separate "Problem" field below a
+          generic heading made the frame read like a form.
+        */}
+        <SheetHeader className="space-y-2">
+          <SheetTitle className="sr-only">{pin.problem || 'Frame'}</SheetTitle>
+          <DraftTitle value={pin.problem} onCommit={set('problem')} />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={PILL}>
+              <span
+                aria-hidden
+                className="size-2 rounded-full"
+                style={{ backgroundColor: pin.color }}
+              />
+              {KIND_LABELS[pin.kind]}
+            </span>
+            <span className={PILL}>{TYPE_LABELS[pin.type]}</span>
+            <span className={PILL}>{STATE_LABELS[pin.state]}</span>
+            {pin.worked && <span className={PILL}>Worked before</span>}
+            {pin.dim && <span className={PILL}>Fading</span>}
+          </div>
           <SheetDescription>
-            {STATE_LABELS[pin.state]}
             {pin.sharp
-              ? ''
-              : ' — a frame is sharp once it has both a problem and an appetite.'}
+              ? 'Sharp — it has both a problem and an appetite, so it can be bet on.'
+              : 'Rough — a frame is sharp once it has both a problem and an appetite.'}
           </SheetDescription>
         </SheetHeader>
-
-        <Field label="Problem" hint="One line saying what hurts.">
-          <DraftTextarea value={pin.problem} rows={2} onCommit={set('problem')} />
-        </Field>
 
         <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
           <DraftInput value={pin.appetite} onCommit={set('appetite')} />
@@ -1146,6 +1180,28 @@ function DraftInput({
   )
 }
 
+/** The frame's problem, styled as its heading rather than as a form field. */
+function DraftTitle({
+  value,
+  onCommit,
+}: {
+  value: string
+  onCommit: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  return (
+    <textarea
+      rows={2}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft !== value && onCommit(draft)}
+      placeholder="What hurts?…"
+      aria-label="Problem"
+      className={TITLE_INPUT}
+    />
+  )
+}
+
 function DraftTextarea({
   value,
   rows,
@@ -1167,10 +1223,21 @@ function DraftTextarea({
 }
 
 /**
- * Capture costs one line and a Type. Type is required because it selects the
- * playbook (ADR 0025); everything else can wait for somebody to sharpen the
- * frame. Kind starts at pain_point so nobody has to grade a severity at 4pm on
- * a Friday, and the area can stay Unmapped.
+ * Capture, in the same language as the new-card modal on the Scope Map: a big
+ * borderless title, a row of pills, a divider, one primary action.
+ *
+ * The order is the order somebody thinks in. The title says what hurts. The
+ * struggle says what the customer cannot do, and it becomes the frame's FIRST
+ * REPORT rather than more prose — capture should leave evidence, not an
+ * assertion. Then why it matters to Vasco, then the appetite.
+ *
+ * There is deliberately no outcome field. A frame holds the problem; an outcome
+ * belongs to the Shape that attacks it, so the map stays about problems and
+ * shaping stays about solutions.
+ *
+ * Only the title is required. Type selects the playbook (ADR 0025) and defaults
+ * to a bug; Kind starts at pain_point so nobody has to grade a severity at 4pm
+ * on a Friday; the area can stay Unmapped.
  */
 function CaptureForm({
   areas,
@@ -1179,7 +1246,12 @@ function CaptureForm({
   areas: AreaOption[]
   areaOwners: Record<string, string>
 }) {
+  const [open, setOpen] = useState(false)
   const [problem, setProblem] = useState('')
+  const [struggle, setStruggle] = useState('')
+  const [customer, setCustomer] = useState('')
+  const [why, setWhy] = useState('')
+  const [appetite, setAppetite] = useState('')
   const [type, setType] = useState<FrameType>('bug')
   const [kind, setKind] = useState<FrameKind>(DEFAULT_KIND)
   const [areaId, setAreaId] = useState(UNMAPPED)
@@ -1189,84 +1261,182 @@ function CaptureForm({
     storage.get('frames').push(new LiveObject(frame))
   }, [])
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  function reset() {
+    setProblem('')
+    setStruggle('')
+    setCustomer('')
+    setWhy('')
+    setAppetite('')
+    setAreaId(UNMAPPED)
+  }
+
+  function create() {
     const text = problem.trim()
     if (!text) return
+    const today = getTeamToday(new Date())
     // Every frame leaves capture owned. The area's owner is the suggestion, and
     // it is only a suggestion — the capturer changes it in the frame detail. An
     // Unmapped frame falls back to the capturer, because somebody must care.
     const owner = areaOwners[areaId] ?? userId ?? ''
+    const struggleText = struggle.trim()
+    const who = customer.trim()
+
     captureFrame({
       id: nanoid(),
       kind,
       type,
       problem: text,
-      appetite: '',
-      business_case: '',
+      appetite: appetite.trim(),
+      business_case: why.trim(),
       ...(areaId === UNMAPPED ? {} : { areaId }),
       ...(owner ? { owner } : {}),
-      reports: [],
+      // The struggle is the first report. Naming a customer makes it a customer
+      // report, which is what the customer Heat lens reads.
+      reports: struggleText
+        ? [
+            {
+              capturer: userId ?? 'unknown',
+              source: who ? ('customer' as const) : ('internal' as const),
+              ...(who ? { customer: who } : {}),
+              text: struggleText,
+              date: today,
+            },
+          ]
+        : [],
       pointers: [],
       // A frame is born awake. Its clock starts on the day it was captured.
-      last_woken: getTeamToday(new Date()),
+      last_woken: today,
       resolved: false,
     })
-    setProblem('')
+    reset()
+    setOpen(false)
   }
 
   return (
-    <form onSubmit={onSubmit} className="mb-3 flex flex-wrap items-center gap-2">
-      <Input
-        className="min-w-64 flex-1"
-        placeholder="What hurts?"
-        aria-label="Problem"
-        value={problem}
-        onChange={(e) => setProblem(e.target.value)}
-      />
-      <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
-        <SelectTrigger className="w-36" aria-label="Type">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {FRAME_TYPES.map((t) => (
-            <SelectItem key={t} value={t}>
-              {TYPE_LABELS[t]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={kind} onValueChange={(v) => setKind(v as FrameKind)}>
-        <SelectTrigger className="w-40" aria-label="Kind">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {FRAME_KINDS.map((k) => (
-            <SelectItem key={k} value={k}>
-              {KIND_LABELS[k]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {areas.length > 0 && (
-        <Select value={areaId} onValueChange={setAreaId}>
-          <SelectTrigger className="w-40" aria-label="Area">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
-            {areas.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <Button type="submit" disabled={!problem.trim()}>
-        Capture
-      </Button>
-    </form>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) reset()
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button className="mb-3">Capture a frame</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg gap-3 p-5">
+        <DialogTitle className="sr-only">Capture a frame</DialogTitle>
+        <textarea
+          autoFocus
+          rows={2}
+          value={problem}
+          onChange={(e) => setProblem(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter creates, so a frame noticed in passing costs one line and a
+            // keystroke. Shift+Enter still breaks the line.
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              create()
+            }
+          }}
+          placeholder="What hurts?…"
+          aria-label="Problem"
+          className={TITLE_INPUT}
+        />
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">
+            What is the customer struggling with?
+          </Label>
+          <Textarea
+            rows={2}
+            value={struggle}
+            onChange={(e) => setStruggle(e.target.value)}
+            placeholder="What they cannot do today, in their words."
+          />
+          <Input
+            className="h-8 text-sm"
+            value={customer}
+            onChange={(e) => setCustomer(e.target.value)}
+            placeholder="Which customer? Leave empty if this came from us."
+            aria-label="Customer"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Why does this matter to Vasco?</Label>
+          <Textarea
+            rows={2}
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            placeholder="The business case. Free text — nobody scores this."
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Appetite</Label>
+          <Input
+            className="h-8 text-sm"
+            value={appetite}
+            onChange={(e) => setAppetite(e.target.value)}
+            placeholder="Two weeks, six weeks… a frame is sharp once it has one."
+            aria-label="Appetite"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={kind} onValueChange={(v) => setKind(v as FrameKind)}>
+            <SelectTrigger className={PILL} aria-label="Kind">
+              <span
+                aria-hidden
+                className="size-2 rounded-full"
+                style={{ backgroundColor: KIND_COLORS[kind] }}
+              />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FRAME_KINDS.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {KIND_LABELS[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
+            <SelectTrigger className={PILL} aria-label="Type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FRAME_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {TYPE_LABELS[t]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {areas.length > 0 && (
+            <Select value={areaId} onValueChange={setAreaId}>
+              <SelectTrigger className={PILL} aria-label="Area">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
+                {areas.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <DialogFooter className="border-t border-border pt-3">
+          <Button onClick={create} disabled={!problem.trim()}>
+            Capture frame
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
