@@ -408,6 +408,13 @@ function Coast({
 const LABEL_AT_PX = 34
 const LABEL_MAX_PX = 15
 const LABEL_MIN_PX = 9
+/**
+ * Below this, a one-line label is not worth keeping on one line. Squeezing a
+ * long name to 9px makes it exactly as wide as its area, and a centred label
+ * that wide spills over both edges into whatever sits next door. Wrapping it
+ * costs a line and keeps it inside its own coastline.
+ */
+const LABEL_COMFORTABLE_PX = 12
 /** Rough width of one character as a fraction of the font size, for this stack. */
 const CHAR_W = 0.55
 
@@ -418,15 +425,14 @@ const CHAR_W = 0.55
  */
 function fitLabel(name: string, availablePx: number): { lines: string[]; fontPx: number } {
   const oneLine = Math.min(LABEL_MAX_PX, availablePx / Math.max(name.length * CHAR_W, 1))
-  if (oneLine >= LABEL_MIN_PX) {
+  const words = name.split(' ')
+  // One line only while it stays readable, or when there is nowhere to break.
+  if (oneLine >= LABEL_COMFORTABLE_PX || words.length < 2) {
     return { lines: [name], fontPx: Math.max(LABEL_MIN_PX, oneLine) }
   }
 
-  // Break at the space that leaves the two halves closest in length, so neither
-  // line sticks out further than it has to.
-  const words = name.split(' ')
-  if (words.length < 2) return { lines: [name], fontPx: LABEL_MIN_PX }
-
+  // Break at the space that leaves the halves closest in length, so no line
+  // sticks out further than it has to.
   let best = { lines: [name], longest: name.length }
   for (let i = 1; i < words.length; i++) {
     const top = words.slice(0, i).join(' ')
@@ -442,7 +448,9 @@ function AreaShape({ area, k, scale }: { area: RenderedArea; k: number; scale: n
   // Width, not the longest side: a label runs horizontally, so height buys it
   // nothing. A container is measured the same way, and its name sits above.
   const widthPx = area.bounds.width * scale
-  const fitted = widthPx < LABEL_AT_PX ? null : fitLabel(area.name, widthPx * 1.1)
+  // The width the area actually has, with no allowance. A label that overflows
+  // its own coastline lands on its neighbour's.
+  const fitted = widthPx < LABEL_AT_PX ? null : fitLabel(area.name, widthPx)
   const label = !fitted ? null : (
     <text
       x={area.labelAt[0]}

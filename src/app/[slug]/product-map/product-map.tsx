@@ -53,9 +53,14 @@ import {
   DialogContent,
   DialogFooter,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -249,9 +254,15 @@ function ProductMapView({
           {model.areas.length > 0 ? (
             <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
           ) : (
-            <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No Product Map yet. Describe your product to Claude and it will
-              draw the land.
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center">
+              <p className="text-sm font-medium">No land yet</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                The map is drawn by an agent. Describe your product to Claude
+                and it draws the land through the Cycles MCP server.
+              </p>
+              <div className="w-full max-w-lg text-left">
+                <AskClaude drawTheMap />
+              </div>
             </div>
           )}
           <FrameDetail
@@ -267,16 +278,18 @@ function ProductMapView({
   return (
     <OpenFrameContext.Provider value={setOpenFrameId}>
       <CyclesContext.Provider value={cycles}>
-        <Shell>
-          <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
+        <Shell action={<CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />}>
           {model.pins.length === 0 && model.areas.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
-              <p className="font-display text-lg">Nothing on the Product Map yet</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                Describe your product to Claude and it will draw the land: the
-                areas, the islands they sit in, and the coastline round them.
-                Then capture a frame for each problem you find.
+              <p className="font-display text-lg">No land yet</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                The map is drawn by an agent. Describe your product to Claude
+                and it draws the land through the Cycles MCP server: the areas,
+                the islands they sit in, and the coastline round them.
               </p>
+              <div className="mt-1 w-full max-w-lg text-left">
+                <AskClaude drawTheMap />
+              </div>
             </div>
           )}
           {model.areas.length > 0 && (
@@ -1299,11 +1312,14 @@ function DraftTextarea({
 function CaptureForm({
   areas,
   areaOwners,
+  open,
+  onOpenChange,
 }: {
   areas: AreaOption[]
   areaOwners: Record<string, string>
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
   const [problem, setProblem] = useState('')
   const [struggle, setStruggle] = useState('')
   const [customer, setCustomer] = useState('')
@@ -1366,20 +1382,17 @@ function CaptureForm({
       resolved: false,
     })
     reset()
-    setOpen(false)
+    onOpenChange(false)
   }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        setOpen(next)
+        onOpenChange(next)
         if (!next) reset()
       }}
     >
-      <DialogTrigger asChild>
-        <Button className="mb-3">Capture a frame</Button>
-      </DialogTrigger>
       <DialogContent className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5">
         <DialogTitle className="sr-only">Capture a frame</DialogTitle>
         <textarea
@@ -1511,10 +1524,117 @@ function ProductMapSkeleton() {
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+/**
+ * One CTA, two ways in. Capture with AI is the route that scales — an agent
+ * interviews you and fills the frame — and manual capture is the 4pm-on-a-Friday
+ * escape hatch, so noticing a problem never waits for an agent.
+ */
+function CaptureMenu({
+  areas,
+  areaOwners,
+}: {
+  areas: AreaOption[]
+  areaOwners: Record<string, string>
+}) {
+  const [manual, setManual] = useState(false)
+  const [withAi, setWithAi] = useState(false)
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button>Capture</Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setWithAi(true)}>
+            Capture with AI
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setManual(true)}>
+            Capture manually
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <CaptureForm areas={areas} areaOwners={areaOwners} open={manual} onOpenChange={setManual} />
+      <AiCaptureDialog open={withAi} onOpenChange={setWithAi} />
+    </>
+  )
+}
+
+/**
+ * There is nothing to fill in here. Capture through an agent happens in the
+ * conversation, so this says what to say and gets out of the way.
+ */
+function AiCaptureDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl gap-3 p-5">
+        <DialogTitle className="font-display text-lg">Capture with AI</DialogTitle>
+        <p className="text-sm text-muted-foreground">
+          Tell Claude what hurts and it fills the frame in: the problem, the
+          area it belongs to, the Kind, the Type, and the customers who raised
+          it. It writes to this map through the Cycles MCP server, so nothing
+          gets pasted anywhere.
+        </p>
+        <AskClaude />
+        <p className="text-xs text-muted-foreground">
+          Claude will ask about anything it needs. If you would rather not be
+          interviewed, capture manually instead.
+        </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Example prompts, shown wherever somebody needs an agent to do the work. */
+function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
+  const examples = drawTheMap
+    ? [
+        'Draw our product map. We have a front office (Slack, email, CRM write-back), a back office (MCP, onboarding, the agent and metric engines) and ten connector categories.',
+        'Read our integration requests in Notion and capture a frame for each one, in the right area.',
+      ]
+    : [
+        'Capture a frame: Stripe refunds are counted as revenue. Four customers have raised it.',
+        'Botpress is blocked because reconciliation only matches account-type fields. Capture that as a brand burn on Definitions.',
+        'Read yesterday\'s betting table notes and capture a frame for every product problem in them.',
+      ]
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs font-medium text-muted-foreground">Say something like</p>
+      <ul className="flex flex-col gap-1.5">
+        {examples.map((example) => (
+          <li
+            key={example}
+            className="rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs leading-relaxed"
+          >
+            {example}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Shell({
+  children,
+  action,
+}: {
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
   return (
     <main className="mx-auto w-full max-w-screen-xl px-6 py-8">
-      <h1 className="mb-6 font-display text-2xl">Product Map</h1>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="font-display text-2xl">Product Map</h1>
+        {action}
+      </div>
       {children}
     </main>
   )
