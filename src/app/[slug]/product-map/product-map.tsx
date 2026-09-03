@@ -21,12 +21,11 @@ import type {
   PointerKind,
 } from '@/product-map-liveblocks.config'
 import {
-  AREA_GAP,
   DEFAULT_KIND,
+  KIND_COLORS,
   DEFAULT_LENS,
   FRAME_KINDS,
   FRAME_TYPES,
-  HEAT_LENSES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
   renderProductMap,
@@ -37,6 +36,7 @@ import {
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
+import { MapCanvas } from '@/components/product-map/map-canvas'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
@@ -49,12 +49,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -79,12 +85,6 @@ const TYPE_LABELS: Record<FrameType, string> = {
   irritant: 'Irritant',
 }
 
-const LENS_LABELS: Record<HeatLens, string> = {
-  all: 'Everyone',
-  internal: 'Internal only',
-  customer: 'Customers only',
-}
-
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
   internal: 'Internal',
   customer: 'Customer',
@@ -98,6 +98,60 @@ const STATE_LABELS: Record<FrameState, string> = {
   monitoring: 'Monitoring',
   resolved: 'Resolved',
 }
+
+/**
+ * A pill: a compact, rounded control that reads as a tag rather than a form
+ * field. Same as the new-card modal on the Scope Map, so the two surfaces feel
+ * like one app.
+ */
+const PILL =
+  'inline-flex h-auto w-auto items-center gap-1.5 rounded-full border border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-0 focus:ring-offset-0'
+
+/**
+ * A pill that edits. Capture and the frame form use the same one, so a frame is
+ * read and written the same way and nothing has to be learned twice.
+ */
+function PillSelect({
+  value,
+  onChange,
+  label,
+  options,
+  dot,
+}: {
+  value: string
+  onChange: (value: string) => void
+  label: string
+  options: { value: string; label: string }[]
+  dot?: string
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={PILL} aria-label={label}>
+        {dot && (
+          <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: dot }} />
+        )}
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/** One wording, so the field reads the same whether a frame is being made or read. */
+const WHY_LABEL = 'Why does this matter to Vasco?'
+
+const KIND_OPTIONS = FRAME_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))
+const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))
+
+/** A borderless title that reads as a heading, not an input. */
+const TITLE_INPUT =
+  'w-full resize-none bg-transparent text-lg font-medium leading-snug outline-none placeholder:text-muted-foreground/40 focus:outline-none'
 
 /** The Select value that stands for "no area". Empty string is not selectable. */
 const UNMAPPED = '__unmapped__'
@@ -114,16 +168,34 @@ const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
 /** The cycles a frame can be bet into. Read once, at the page boundary. */
 const CyclesContext = createContext<CycleWindow[]>([])
 
+/**
+ * `full` is the Product Map's own page: the land, plus capture, plus every list
+ * that reaches a frame the land does not show.
+ *
+ * `canvas` is the land and nothing else, for embedding somewhere the map is not
+ * the subject — the cycles home page. Clicking a pin still opens its frame,
+ * because a map you cannot read from is decoration.
+ */
+export type ProductMapVariant = 'full' | 'canvas'
+
 export function ProductMap({
   roomId,
   organizationUsers,
   cycles,
   shapes,
+  variant = 'full',
+  heading,
+  action,
 }: {
   roomId: string
   organizationUsers: OrganizationUser[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
+  variant?: ProductMapVariant
+  /** Left of the canvas's heading row. Only read by the `canvas` variant. */
+  heading?: React.ReactNode
+  /** Right of it, before Capture. Only read by the `canvas` variant. */
+  action?: React.ReactNode
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -133,7 +205,15 @@ export function ProductMap({
         initialStorage={productMapInitialStorage()}
       >
         <ClientSideSuspense fallback={<ProductMapSkeleton />}>
-          {() => <ProductMapView cycles={cycles} shapes={shapes} />}
+          {() => (
+            <ProductMapView
+              cycles={cycles}
+              shapes={shapes}
+              variant={variant}
+              heading={heading}
+              action={action}
+            />
+          )}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
@@ -143,16 +223,25 @@ export function ProductMap({
 function ProductMapView({
   cycles,
   shapes,
+  variant,
+  heading,
+  action,
 }: {
   cycles: CycleWindow[]
   shapes: LinkedShape[]
+  variant: ProductMapVariant
+  heading?: React.ReactNode
+  action?: React.ReactNode
 }) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
   const [openFrameId, setOpenFrameId] = useState<string | null>(null)
-  const [lens, setLens] = useState<HeatLens>(DEFAULT_LENS)
+  // No control on the page for this. The engine still computes every lens, and
+  // MCP callers still filter by one, so the switch can come back without a
+  // change to the model.
+  const lens: HeatLens = DEFAULT_LENS
 
   // Today is a parameter of the engine, never a clock inside it. Resolved here
   // in the team timezone, the same as every other date-derived surface.
@@ -173,32 +262,76 @@ function ProductMapView({
       (pin) => pin.frameId === openFrameId
     ) ?? null
 
+  // The land only. No capture, and none of the lists that reach a frame the
+  // land does not show — those belong to the Product Map's own page, not to a
+  // page where the map is a view onto somewhere else.
+  if (variant === 'canvas') {
+    return (
+      <OpenFrameContext.Provider value={setOpenFrameId}>
+        <CyclesContext.Provider value={cycles}>
+          {/* The heading row lives in here, not on the host page: Capture needs
+              the room, and the room provider stops at this component. */}
+          <div className="flex items-baseline justify-between gap-3">
+            {heading}
+            <div className="flex items-center gap-3">
+              {action}
+              <CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />
+            </div>
+          </div>
+          {model.areas.length > 0 ? (
+            <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
+          ) : (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center">
+              <p className="text-sm font-medium">No land yet</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                The map is drawn by an agent. Describe your product to Claude
+                and it draws the land through the Cycles MCP server.
+              </p>
+              <div className="w-full max-w-lg text-left">
+                <AskClaude drawTheMap />
+              </div>
+            </div>
+          )}
+          <FrameDetail
+            pin={open}
+            onClose={() => setOpenFrameId(null)}
+            areas={options}
+          />
+        </CyclesContext.Provider>
+      </OpenFrameContext.Provider>
+    )
+  }
+
   return (
     <OpenFrameContext.Provider value={setOpenFrameId}>
       <CyclesContext.Provider value={cycles}>
-        <Shell>
-          <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <AreaForm areaCount={areas.length} />
-            <LensToggle lens={lens} onChange={setLens} />
-          </div>
+        <Shell action={<CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />}>
           {model.pins.length === 0 && model.areas.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
-              <p className="font-display text-lg">Nothing on the Product Map yet</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                An area is a region of your product. A frame records one problem
-                in it. The first of either appears here.
+              <p className="font-display text-lg">No land yet</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                The map is drawn by an agent. Describe your product to Claude
+                and it draws the land through the Cycles MCP server: the areas,
+                the islands they sit in, and the coastline round them.
               </p>
+              <div className="mt-1 w-full max-w-lg text-left">
+                <AskClaude drawTheMap />
+              </div>
             </div>
           )}
-          {model.areas.length > 0 && <AreaField areas={model.areas} options={options} />}
+          {model.areas.length > 0 && (
+            <>
+              <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
+              <AreaList areas={model.areas} options={options} />
+            </>
+          )}
           <UnmappedGroup
             pins={model.unmapped}
             resolved={model.unmappedResolved}
             options={options}
           />
           <DormantReview pins={model.dormantReview} options={options} />
-          <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} />
+          <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} areas={options} />
         </Shell>
       </CyclesContext.Provider>
     </OpenFrameContext.Provider>
@@ -226,57 +359,52 @@ function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
 }
 
 /**
- * The land. Every region is placed from the shape the engine generated, so no
- * geometry is stored and an agent that cannot draw still gets a drawn area.
+ * Every area as real DOM: its frames, and what its team resolved.
+ *
+ * This is the keyboard and screen-reader surface for the land. A pin on the
+ * canvas is focusable, but Chrome does not expose an SVG group to the
+ * accessibility tree at all, so the map alone would leave a mapped frame
+ * unreachable — and it is also where each area's resolved frames live, off the
+ * land, because a resolved pin would lie about where the product hurts.
  */
-function AreaField({ areas, options }: { areas: RenderedArea[]; options: AreaOption[] }) {
-  const height = Math.max(0, ...areas.map((a) => a.shape.y + a.shape.height))
-  const width = Math.max(0, ...areas.map((a) => a.shape.x + a.shape.width))
+function AreaList({ areas, options }: { areas: RenderedArea[]; options: AreaOption[] }) {
+  const flat = flattenAreas(areas).filter(
+    ({ area }) => area.pins.length > 0 || area.resolved.length > 0
+  )
+  if (flat.length === 0) return null
 
   return (
-    <div
-      className="relative overflow-x-auto rounded-xl border border-dashed p-4"
-      style={{ minHeight: height + AREA_GAP }}
-    >
-      <div className="relative" style={{ height, width }}>
-        {areas.map((area) => (
-          <AreaRegion key={area.areaId} area={area} options={options} />
+    <details className="mt-4">
+      <summary className="cursor-pointer text-sm text-muted-foreground">
+        All frames by area
+      </summary>
+      <div className="mt-3 flex flex-col gap-4">
+        {flat.map(({ area, depth }) => (
+          <section key={area.areaId} aria-label={area.name} style={{ marginLeft: depth * 16 }}>
+            <h2 className="mb-1.5 font-display text-sm">{area.name}</h2>
+            {area.pins.length > 0 && (
+              <ul className="flex flex-col gap-1.5">
+                {area.pins.map((pin) => (
+                  <PinDot key={pin.frameId} pin={pin} options={options} />
+                ))}
+              </ul>
+            )}
+            <ResolvedList pins={area.resolved} />
+          </section>
         ))}
       </div>
-    </div>
+    </details>
   )
 }
 
-// An area is never colored by the health of its frames — that would make the
-// individual pins unreadable. Every region gets the same neutral ground.
-function AreaRegion({ area, options }: { area: RenderedArea; options: AreaOption[] }) {
-  return (
-    <section
-      aria-label={area.name}
-      className="absolute overflow-auto rounded-xl border bg-muted/30 p-3"
-      style={{
-        left: area.shape.x,
-        top: area.shape.y,
-        width: area.shape.width,
-        height: area.shape.height,
-      }}
-    >
-      <h2 className="mb-2 font-display text-sm">{area.name}</h2>
-      <ul className="flex flex-col gap-1.5">
-        {area.pins.map((pin) => (
-          <PinDot key={pin.frameId} pin={pin} options={options} />
-        ))}
-      </ul>
-      <ResolvedList pins={area.resolved} />
-      {area.children.length > 0 && (
-        <div className="relative mt-2" style={{ height: subAreaHeight(area) }}>
-          {area.children.map((child) => (
-            <AreaRegion key={child.areaId} area={child} options={options} />
-          ))}
-        </div>
-      )}
-    </section>
-  )
+function flattenAreas(
+  areas: RenderedArea[],
+  depth = 0
+): { area: RenderedArea; depth: number }[] {
+  return areas.flatMap((area) => [
+    { area, depth },
+    ...flattenAreas(area.children, depth + 1),
+  ])
 }
 
 /**
@@ -305,10 +433,6 @@ function ResolvedList({ pins }: { pins: RenderedPin[] }) {
       </ul>
     </details>
   )
-}
-
-function subAreaHeight(area: RenderedArea): number {
-  return Math.max(0, ...area.children.map((c) => c.shape.y + c.shape.height))
 }
 
 function UnmappedGroup({
@@ -498,42 +622,15 @@ function StillHurtsButton({ onWake }: { onWake: () => void }) {
  * the internal lens with the customer lens is how a team finds pain it is
  * ignoring.
  */
-function LensToggle({
-  lens,
-  onChange,
+function FrameDetail({
+  pin,
+  onClose,
+  areas,
 }: {
-  lens: HeatLens
-  onChange: (lens: HeatLens) => void
+  pin: RenderedPin | null
+  onClose: () => void
+  areas: AreaOption[]
 }) {
-  return (
-    <div className="ml-auto flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Heat from</span>
-      <Select value={lens} onValueChange={(v) => onChange(v as HeatLens)}>
-        <SelectTrigger className="w-40" aria-label="Heat lens">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {HEAT_LENSES.map((l) => (
-            <SelectItem key={l} value={l}>
-              {LENS_LABELS[l]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
-
-/**
- * The frame detail. This is where a shaper writes the problem, the appetite and
- * the business case, so the betting table can judge the frame. It holds NO
- * outcome: the Product Map stays about problems, and shaping stays about solutions.
- *
- * Every field writes straight to storage. There is no save button, because a
- * half-typed frame is a normal state here — a frame sits rough until somebody
- * sharpens it.
- */
-function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () => void }) {
   const users = useOrganizationUsers()
 
   const editFrame = useProductMapMutation(
@@ -541,8 +638,9 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
       const frame = storage.get('frames').find((f) => f.get('id') === frameId)
       if (!frame) return
       // '' clears an optional field: the key goes away rather than sitting there
-      // as an empty string nobody can tell from "unset".
-      if (field === 'owner' && value === '') frame.delete('owner')
+      // as an empty string nobody can tell from "unset". A frame with no areaId
+      // is Unmapped, which is always a valid answer.
+      if ((field === 'owner' || field === 'areaId') && value === '') frame.delete(field)
       else frame.set(field, value as never)
     },
     []
@@ -553,108 +651,137 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
     editFrame(pin.frameId, field, value)
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
       {/* key: a fresh frame gets fresh local field state, so no draft leaks
           from the frame that was open before it. */}
-      <SheetContent key={pin.frameId} className="overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="font-display text-lg">
-            {pin.sharp ? 'Sharp frame' : 'Rough frame'}
-          </SheetTitle>
-          <SheetDescription>
-            {STATE_LABELS[pin.state]}
-            {pin.sharp
-              ? ''
-              : ' — a frame is sharp once it has both a problem and an appetite.'}
-          </SheetDescription>
-        </SheetHeader>
-
-        <Field label="Problem" hint="One line saying what hurts.">
-          <DraftTextarea value={pin.problem} rows={2} onCommit={set('problem')} />
-        </Field>
-
-        <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
-          <DraftInput value={pin.appetite} onCommit={set('appetite')} />
-        </Field>
-
-        {pin.candidateStatement && (
-          <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
-            {pin.candidateStatement}
-          </p>
-        )}
-
-        <Field
-          label="Business case"
-          hint="Who is affected, what it is worth, why now."
-        >
-          <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Kind" hint="How much it hurts.">
-            <Select value={pin.kind} onValueChange={set('kind')}>
-              <SelectTrigger aria-label="Kind">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FRAME_KINDS.map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {KIND_LABELS[k]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Type" hint="Selects the playbook.">
-            <Select value={pin.type} onValueChange={set('type')}>
-              <SelectTrigger aria-label="Type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FRAME_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-
-        <Field
-          label="Frame owner"
-          hint="The one person who cares that this gets addressed."
-        >
-          <Select
+      <DialogContent
+        key={pin.frameId}
+        className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5"
+      >
+        {/*
+          The problem IS the title, in the same language as capture and as the
+          new-card modal: a big borderless line you type straight into, with the
+          frame's facts as pills under it. A separate "Problem" field below a
+          generic heading made the frame read like a form.
+        */}
+        <DialogTitle className="sr-only">{pin.problem || 'Frame'}</DialogTitle>
+        <DraftTitle value={pin.problem} onCommit={set('problem')} />
+        {/*
+          The pills ARE the inputs, the same as capture. Kind, Type and the owner
+          are set right here; State, investment and fading are derived, so they
+          read as plain pills that nobody can set.
+        */}
+        <div className="flex flex-wrap items-center gap-2">
+          <PillSelect
+            value={pin.kind}
+            onChange={set('kind')}
+            label="Kind"
+            options={KIND_OPTIONS}
+            dot={pin.color}
+          />
+          <PillSelect
+            value={pin.type}
+            onChange={set('type')}
+            label="Type"
+            options={TYPE_OPTIONS}
+          />
+          {areas.length > 0 && (
+            <PillSelect
+              value={pin.areaId || UNMAPPED}
+              onChange={(v) => set('areaId')(v === UNMAPPED ? '' : v)}
+              label="Area"
+              options={[
+                { value: UNMAPPED, label: 'Unmapped' },
+                ...areas.map((a) => ({ value: a.id, label: a.label })),
+              ]}
+            />
+          )}
+          <PillSelect
             value={pin.owner ?? NOBODY}
-            onValueChange={(v) => set('owner')(v === NOBODY ? '' : v)}
-          >
-            <SelectTrigger aria-label="Frame owner">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NOBODY}>Nobody yet</SelectItem>
-              {users.map((u) => (
-                <SelectItem key={u.userId} value={u.userId}>
-                  {u.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+            onChange={(v) => set('owner')(v === NOBODY ? '' : v)}
+            label="Frame owner"
+            options={[
+              { value: NOBODY, label: 'Nobody yet' },
+              ...users.map((u) => ({ value: u.userId, label: u.name })),
+            ]}
+          />
+          <span className={PILL}>{STATE_LABELS[pin.state]}</span>
+          {pin.worked && <span className={PILL}>Worked before</span>}
+          {pin.dim && <span className={PILL}>Fading</span>}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {pin.sharp
+            ? 'Sharp — it has both a problem and an appetite, so it can be bet on.'
+            : 'Rough — a frame is sharp once it has both a problem and an appetite.'}
+        </p>
 
-        <Origin pin={pin} />
-        <Shapes pin={pin} />
-        <StillHurts pin={pin} />
-        <Pointers pin={pin} />
-        <Reports pin={pin} />
-        <Resolve pin={pin} onClose={onClose} />
-      </SheetContent>
-    </Sheet>
+        {/*
+          Tabs, not one long scroll. A frame carries four different kinds of
+          thing — the framing, the evidence, the dossier, and the history — and
+          only one of them is ever the reason somebody opened it. The counts are
+          on the tabs so nothing hides behind an unopened one.
+        */}
+        <Tabs defaultValue="framing" className="mt-1">
+          <TabsList>
+            <TabsTrigger value="framing">Framing</TabsTrigger>
+            <TabsTrigger value="reports">
+              Reports{pin.reports.length > 0 ? ` (${pin.reports.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="pointers">
+              Pointers{pin.pointers.length > 0 ? ` (${pin.pointers.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+
+          {/* The same order and the same question as capture. A field that means
+              one thing must not move between creating a frame and reading it. */}
+          <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
+            <Field label={WHY_LABEL} hint="Who is affected, what it is worth, why now.">
+              <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
+            </Field>
+
+            <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
+              <DraftInput value={pin.appetite} onCommit={set('appetite')} />
+            </Field>
+
+            {pin.candidateStatement && (
+              <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
+                {pin.candidateStatement}
+              </p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="reports" className="flex flex-col gap-3 pt-2">
+            <Reports pin={pin} />
+            {/* "Still hurts" belongs with the evidence: it is a mention without
+                a new report, and this is where somebody looking at the evidence
+                decides the problem is still live. */}
+            <StillHurts pin={pin} />
+          </TabsContent>
+
+          <TabsContent value="pointers" className="flex flex-col gap-3 pt-2">
+            <Pointers pin={pin} />
+          </TabsContent>
+
+          <TabsContent value="history" className="flex flex-col gap-3 pt-2">
+            <Shapes pin={pin} />
+            <Origin pin={pin} />
+            <Resolve pin={pin} onClose={onClose} />
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+type EditableField =
+  | 'problem'
+  | 'appetite'
+  | 'business_case'
+  | 'kind'
+  | 'type'
+  | 'owner'
+  | 'areaId'
 
 /**
  * The origin chain, and the way to add to it.
@@ -1150,6 +1277,28 @@ function DraftInput({
   )
 }
 
+/** The frame's problem, styled as its heading rather than as a form field. */
+function DraftTitle({
+  value,
+  onCommit,
+}: {
+  value: string
+  onCommit: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  return (
+    <textarea
+      rows={2}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft !== value && onCommit(draft)}
+      placeholder="What hurts?…"
+      aria-label="Problem"
+      className={TITLE_INPUT}
+    />
+  )
+}
+
 function DraftTextarea({
   value,
   rows,
@@ -1171,19 +1320,38 @@ function DraftTextarea({
 }
 
 /**
- * Capture costs one line and a Type. Type is required because it selects the
- * playbook (ADR 0025); everything else can wait for somebody to sharpen the
- * frame. Kind starts at pain_point so nobody has to grade a severity at 4pm on
- * a Friday, and the area can stay Unmapped.
+ * Capture, in the same language as the new-card modal on the Scope Map: a big
+ * borderless title, a row of pills, a divider, one primary action.
+ *
+ * The order is the order somebody thinks in. The title says what hurts. The
+ * struggle says what the customer cannot do, and it becomes the frame's FIRST
+ * REPORT rather than more prose — capture should leave evidence, not an
+ * assertion. Then why it matters to Vasco, then the appetite.
+ *
+ * There is deliberately no outcome field. A frame holds the problem; an outcome
+ * belongs to the Shape that attacks it, so the map stays about problems and
+ * shaping stays about solutions.
+ *
+ * Only the title is required. Type selects the playbook (ADR 0025) and defaults
+ * to a bug; Kind starts at pain_point so nobody has to grade a severity at 4pm
+ * on a Friday; the area can stay Unmapped.
  */
 function CaptureForm({
   areas,
   areaOwners,
+  open,
+  onOpenChange,
 }: {
   areas: AreaOption[]
   areaOwners: Record<string, string>
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
   const [problem, setProblem] = useState('')
+  const [struggle, setStruggle] = useState('')
+  const [customer, setCustomer] = useState('')
+  const [why, setWhy] = useState('')
+  const [appetite, setAppetite] = useState('')
   const [type, setType] = useState<FrameType>('bug')
   const [kind, setKind] = useState<FrameKind>(DEFAULT_KIND)
   const [areaId, setAreaId] = useState(UNMAPPED)
@@ -1193,121 +1361,185 @@ function CaptureForm({
     storage.get('frames').push(new LiveObject(frame))
   }, [])
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  function reset() {
+    setProblem('')
+    setStruggle('')
+    setCustomer('')
+    setWhy('')
+    setAppetite('')
+    setAreaId(UNMAPPED)
+  }
+
+  function create() {
     const text = problem.trim()
     if (!text) return
+    const today = getTeamToday(new Date())
     // Every frame leaves capture owned. The area's owner is the suggestion, and
     // it is only a suggestion — the capturer changes it in the frame detail. An
     // Unmapped frame falls back to the capturer, because somebody must care.
     const owner = areaOwners[areaId] ?? userId ?? ''
+    const struggleText = struggle.trim()
+    const who = customer.trim()
+
     captureFrame({
       id: nanoid(),
       kind,
       type,
       problem: text,
-      appetite: '',
-      business_case: '',
+      appetite: appetite.trim(),
+      business_case: why.trim(),
       ...(areaId === UNMAPPED ? {} : { areaId }),
       ...(owner ? { owner } : {}),
-      reports: [],
+      // The struggle is the first report. Naming a customer makes it a customer
+      // report, which is what the customer Heat lens reads.
+      reports: struggleText
+        ? [
+            {
+              capturer: userId ?? 'unknown',
+              source: who ? ('customer' as const) : ('internal' as const),
+              ...(who ? { customer: who } : {}),
+              text: struggleText,
+              date: today,
+            },
+          ]
+        : [],
       pointers: [],
       // A frame is born awake. Its clock starts on the day it was captured.
-      last_woken: getTeamToday(new Date()),
+      last_woken: today,
       resolved: false,
     })
-    setProblem('')
+    reset()
+    onOpenChange(false)
   }
 
   return (
-    <form onSubmit={onSubmit} className="mb-3 flex flex-wrap items-center gap-2">
-      <Input
-        className="min-w-64 flex-1"
-        placeholder="What hurts?"
-        aria-label="Problem"
-        value={problem}
-        onChange={(e) => setProblem(e.target.value)}
-      />
-      <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
-        <SelectTrigger className="w-36" aria-label="Type">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {FRAME_TYPES.map((t) => (
-            <SelectItem key={t} value={t}>
-              {TYPE_LABELS[t]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={kind} onValueChange={(v) => setKind(v as FrameKind)}>
-        <SelectTrigger className="w-40" aria-label="Kind">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {FRAME_KINDS.map((k) => (
-            <SelectItem key={k} value={k}>
-              {KIND_LABELS[k]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {areas.length > 0 && (
-        <Select value={areaId} onValueChange={setAreaId}>
-          <SelectTrigger className="w-40" aria-label="Area">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
-            {areas.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <Button type="submit" disabled={!problem.trim()}>
-        Capture
-      </Button>
-    </form>
-  )
-}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) reset()
+      }}
+    >
+      <DialogContent className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5">
+        <DialogTitle className="sr-only">Capture a frame</DialogTitle>
+        <textarea
+          autoFocus
+          rows={2}
+          value={problem}
+          onChange={(e) => setProblem(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter creates, so a frame noticed in passing costs one line and a
+            // keystroke. Shift+Enter still breaks the line.
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              create()
+            }
+          }}
+          placeholder="What hurts?…"
+          aria-label="Problem"
+          className={TITLE_INPUT}
+        />
 
-/**
- * An area needs a name and nothing else. Its position is the next free grid
- * slot, and the engine turns that into the shape — the same deal an agent gets
- * through `map_upsert_area`.
- */
-function AreaForm({ areaCount }: { areaCount: number }) {
-  const [name, setName] = useState('')
+        {/* The same pills the frame form uses, in the same place: directly under
+            the title. Capturing a frame and reading one are the same gesture. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <PillSelect
+            value={kind}
+            onChange={(v) => setKind(v as FrameKind)}
+            label="Kind"
+            options={KIND_OPTIONS}
+            dot={KIND_COLORS[kind]}
+          />
+          <PillSelect
+            value={type}
+            onChange={(v) => setType(v as FrameType)}
+            label="Type"
+            options={TYPE_OPTIONS}
+          />
+          {areas.length > 0 && (
+            <PillSelect
+              value={areaId}
+              onChange={setAreaId}
+              label="Area"
+              options={[
+                { value: UNMAPPED, label: 'Unmapped' },
+                ...areas.map((a) => ({ value: a.id, label: a.label })),
+              ]}
+            />
+          )}
+        </div>
 
-  const addArea = useProductMapMutation(({ storage }, area: Area) => {
-    storage.get('areas').push(new LiveObject(area))
-  }, [])
+        {/*
+          The same tab row the frame form has. Reports, pointers and history all
+          need a frame to point at, so they are shown and disabled rather than
+          hidden: what a frame will hold is visible from the moment it is made.
+        */}
+        <Tabs value="framing" className="mt-1">
+          <TabsList>
+            <TabsTrigger value="framing">Framing</TabsTrigger>
+            <TabsTrigger value="reports" disabled title="Once the frame exists">
+              Reports
+            </TabsTrigger>
+            <TabsTrigger value="pointers" disabled title="Once the frame exists">
+              Pointers
+            </TabsTrigger>
+            <TabsTrigger value="history" disabled title="Once the frame exists">
+              History
+            </TabsTrigger>
+          </TabsList>
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    const text = name.trim()
-    if (!text) return
-    // Three across, then wrap. Mirrors the writer's slot rule.
-    addArea({ id: nanoid(), name: text, x: areaCount % 3, y: Math.floor(areaCount / 3) })
-    setName('')
-  }
+          <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
+            <Field label={WHY_LABEL} hint="Who is affected, what it is worth, why now.">
+              <Textarea
+                rows={3}
+                value={why}
+                onChange={(e) => setWhy(e.target.value)}
+                placeholder="Free text — nobody scores this."
+              />
+            </Field>
 
-  return (
-    <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
-      <Input
-        className="min-w-48 max-w-64"
-        placeholder="Add an area, e.g. Integrations"
-        aria-label="Area name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <Button type="submit" variant="outline" disabled={!name.trim()}>
-        Add area
-      </Button>
-    </form>
+            <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
+              <Input
+                value={appetite}
+                onChange={(e) => setAppetite(e.target.value)}
+                placeholder="Two weeks, six weeks… a frame is sharp once it has one."
+                aria-label="Appetite"
+              />
+            </Field>
+
+            {/*
+              The struggle is the frame's first report, so it belongs to the
+              Reports tab — but that tab cannot exist yet, and capture has to
+              stay one screen. It sits here, named for what it becomes.
+            */}
+            <Field
+              label="First report — what is the customer struggling with?"
+              hint="Name a customer and it counts as a customer report, which is what the customer Heat lens reads."
+            >
+              <Textarea
+                rows={2}
+                value={struggle}
+                onChange={(e) => setStruggle(e.target.value)}
+                placeholder="What they cannot do today, in their words."
+              />
+              <Input
+                className="mt-1.5"
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                placeholder="Which customer? Leave empty if this came from us."
+                aria-label="Customer"
+              />
+            </Field>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter className="border-t border-border pt-3">
+          <Button onClick={create} disabled={!problem.trim()}>
+            Capture frame
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1319,10 +1551,117 @@ function ProductMapSkeleton() {
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+/**
+ * One CTA, two ways in. Capture with AI is the route that scales — an agent
+ * interviews you and fills the frame — and manual capture is the 4pm-on-a-Friday
+ * escape hatch, so noticing a problem never waits for an agent.
+ */
+function CaptureMenu({
+  areas,
+  areaOwners,
+}: {
+  areas: AreaOption[]
+  areaOwners: Record<string, string>
+}) {
+  const [manual, setManual] = useState(false)
+  const [withAi, setWithAi] = useState(false)
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button>Capture</Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setWithAi(true)}>
+            Capture with AI
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setManual(true)}>
+            Capture manually
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <CaptureForm areas={areas} areaOwners={areaOwners} open={manual} onOpenChange={setManual} />
+      <AiCaptureDialog open={withAi} onOpenChange={setWithAi} />
+    </>
+  )
+}
+
+/**
+ * There is nothing to fill in here. Capture through an agent happens in the
+ * conversation, so this says what to say and gets out of the way.
+ */
+function AiCaptureDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl gap-3 p-5">
+        <DialogTitle className="font-display text-lg">Capture with AI</DialogTitle>
+        <p className="text-sm text-muted-foreground">
+          Tell Claude what hurts and it fills the frame in: the problem, the
+          area it belongs to, the Kind, the Type, and the customers who raised
+          it. It writes to this map through the Cycles MCP server, so nothing
+          gets pasted anywhere.
+        </p>
+        <AskClaude />
+        <p className="text-xs text-muted-foreground">
+          Claude will ask about anything it needs. If you would rather not be
+          interviewed, capture manually instead.
+        </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Example prompts, shown wherever somebody needs an agent to do the work. */
+function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
+  const examples = drawTheMap
+    ? [
+        'Draw our product map. We have a front office (Slack, email, CRM write-back), a back office (MCP, onboarding, the agent and metric engines) and ten connector categories.',
+        'Read our integration requests in Notion and capture a frame for each one, in the right area.',
+      ]
+    : [
+        'Capture a frame: Stripe refunds are counted as revenue. Four customers have raised it.',
+        'Botpress is blocked because reconciliation only matches account-type fields. Capture that as a brand burn on Definitions.',
+        'Read yesterday\'s betting table notes and capture a frame for every product problem in them.',
+      ]
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs font-medium text-muted-foreground">Say something like</p>
+      <ul className="flex flex-col gap-1.5">
+        {examples.map((example) => (
+          <li
+            key={example}
+            className="rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs leading-relaxed"
+          >
+            {example}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Shell({
+  children,
+  action,
+}: {
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
   return (
     <main className="mx-auto w-full max-w-screen-xl px-6 py-8">
-      <h1 className="mb-6 font-display text-2xl">Product Map</h1>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h1 className="font-display text-2xl">Product Map</h1>
+        {action}
+      </div>
       {children}
     </main>
   )

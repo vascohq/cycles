@@ -1486,8 +1486,8 @@ describe('upsertArea', () => {
     expect(area.get('owner')).toBeUndefined()
   })
 
-  // An agent cannot draw, so the app places the area. Position is a grid slot,
-  // and the engine turns it into a shape.
+  // Position is a grid slot, not pixels. It only decides where a GENERATED shape
+  // goes: an area whose outline an agent drew is placed by that outline.
   it('lands a new area on the next free grid slot', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({
@@ -2294,5 +2294,109 @@ describe('deleteArea', () => {
     setupStorage({ areas: [makeAreaItem()] })
 
     await expect(deleteArea(MAP_ROOM, 'nope')).rejects.toThrow('Area not found: "nope"')
+  })
+})
+
+
+describe('upsertArea outlines', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const RING: [number, number][] = [
+    [0, 0],
+    [100, 0],
+    [100, 100],
+    [0, 100],
+  ]
+
+  it('stores the coastline an agent drew', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await upsertArea(MAP_ROOM, { name: 'Billing', outline: RING })
+
+    const area = storage.areas.find(() => true)!
+    expect(area.get('outline')).toEqual(RING)
+  })
+
+  it('leaves a new area with no outline, so the app generates its shape', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage()
+
+    await upsertArea(MAP_ROOM, { name: 'Billing' })
+
+    expect(storage.areas.find(() => true)!.get('outline')).toBeUndefined()
+  })
+
+  it('redraws the coastline on an existing area', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1' })] })
+
+    await upsertArea(MAP_ROOM, { id: 'a1', outline: RING })
+
+    expect(storage.areas.find(() => true)!.get('outline')).toEqual(RING)
+  })
+
+  // ADR 0011: a rename must not wipe the drawing.
+  it('leaves the coastline alone when the caller omits it', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', outline: RING })] })
+
+    await upsertArea(MAP_ROOM, { id: 'a1', name: 'Renamed' })
+
+    const area = storage.areas.find(() => true)!
+    expect(area.get('name')).toBe('Renamed')
+    expect(area.get('outline')).toEqual(RING)
+  })
+
+  it('clears the coastline on an empty array, back to a generated shape', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', outline: RING })] })
+
+    await upsertArea(MAP_ROOM, { id: 'a1', outline: [] })
+
+    expect(storage.areas.find(() => true)!.get('outline')).toBeUndefined()
+  })
+
+  it('refuses a ring too short to enclose anything', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    await expect(
+      upsertArea(MAP_ROOM, { name: 'Billing', outline: [[0, 0], [10, 10]] })
+    ).rejects.toThrow('at least 3 points')
+  })
+
+  it('refuses a coordinate that is not a finite number', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    await expect(
+      upsertArea(MAP_ROOM, {
+        name: 'Billing',
+        outline: [[0, 0], [10, Number.NaN], [20, 20]],
+      })
+    ).rejects.toThrow('finite number')
+  })
+
+  it('refuses a point that is not a pair', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    await expect(
+      upsertArea(MAP_ROOM, {
+        name: 'Billing',
+        outline: [[0, 0], [10, 10, 10], [20, 20]] as unknown as [number, number][],
+      })
+    ).rejects.toThrow('a pair')
+  })
+
+  it('refuses an outline past the point budget', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage()
+
+    const tooMany = Array.from({ length: 65 }, (_, i) => [i, i] as [number, number])
+    await expect(upsertArea(MAP_ROOM, { name: 'Billing', outline: tooMany })).rejects.toThrow(
+      'at most 64 points'
+    )
   })
 })

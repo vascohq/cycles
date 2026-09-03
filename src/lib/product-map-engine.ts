@@ -13,6 +13,18 @@ import type {
   PointerKind,
 } from '@/product-map-liveblocks.config'
 
+import {
+  centroid,
+  generateRing,
+  pinPosition,
+  ringBounds,
+  smoothPath,
+  unionBounds,
+  type Bounds,
+  type Point,
+  type Ring,
+} from './product-map-geometry'
+
 // Kind is how much a problem hurts. It is the only axis with a color on the Product Map.
 export const FRAME_KINDS = ['brand_burn', 'pain_point', 'unlock_win'] as const
 
@@ -454,6 +466,14 @@ export type RenderedPin = {
   gaps: PointerKind[]
   /** Reports that pass the active heat lens. Size reads this, nothing else. */
   reportCount: number
+  /**
+   * Whether this frame survives the active heat lens. Always true under `all`,
+   * INCLUDING a frame nobody has reported yet — a fresh capture must not vanish.
+   * Under `internal` or `customer` it takes at least one report from that side,
+   * so switching the lens visibly shrinks the areas only the other side is
+   * complaining about. That contrast is the point of the lens.
+   */
+  passesLens: boolean
   /** Diameter in pixels. Size is the second pin channel. */
   size: number
   /** A problem AND an appetite. A rough pin must never look like agreed work. */
@@ -488,24 +508,47 @@ export type RenderedPin = {
    * view and keeps every field and every report (ADR 0024).
    */
   dormant: boolean
+  /**
+   * Where the pin sits, in world space. Derived from the frame id alone, so a pin
+   * lands on the same spot forever and capturing a frame never moves the others.
+   * null for an Unmapped frame, which has no land to sit on and lives in the tray.
+   */
+  at: Point | null
 }
 
-// An area's shape is GENERATED from its grid position, because an agent must be
-// able to create an area and an agent cannot draw. Nothing about the geometry is
-// stored, so the app stays free to redraw the land later.
+// An area's fallback shape is GENERATED from its grid position, so an area
+// created before outlines existed still reads as land. An area that carries an
+// outline uses it, and nothing needs migrating.
 const AREA_WIDTH = 320
 const AREA_HEIGHT = 220
 export const AREA_GAP = 24
 /** Each level of nesting draws smaller, so a sub-area reads as inside its parent. */
 const SUB_AREA_SCALE = 0.7
 
-/** A region of the product, drawn from its position. Never colored by its frames. */
+/**
+ * How an area is drawn. The three levels are derived from the shape of the tree,
+ * never stored: a leaf is an `area`, whatever holds leaves is an `island`, and
+ * whatever holds islands is an `archipelago`. Anything deeper draws as a label,
+ * because four levels of coastline is past the legibility ceiling.
+ */
+export type AreaLevel = 'area' | 'island' | 'archipelago'
+
+/** A region of the product, drawn from its coastline. Never colored by its frames. */
 export type RenderedArea = {
   areaId: string
   name: string
   parentAreaId: string | null
   /** Generated from the area's grid position. See AREA_WIDTH. */
   shape: { x: number; y: number; width: number; height: number }
+  /** The area's coastline in world space: stored if drawn, generated if not. */
+  ring: Ring
+  /** `ring` as a smoothed closed SVG path. */
+  path: string
+  /** Where the name goes: inside the coastline, never rotated. */
+  labelAt: Point
+  /** The box round this area AND its children, which is what the zoom ladder measures. */
+  bounds: Bounds
+  level: AreaLevel
   /** The suggested Frame owner for this area, and nothing more. */
   owner: string | null
   pins: RenderedPin[]
@@ -637,17 +680,49 @@ function buildAreaTree(
   const drawn = new Set<string>()
   const render = (area: Area, depth: number): RenderedArea => {
     drawn.add(area.id)
+    const shape = areaShape(area, depth)
+    const children = (childrenOf.get(area.id) ?? [])
+      .filter((child) => !drawn.has(child.id))
+      .map((child) => render(child, depth + 1))
+    // A container has NO ring of its own: its coastline is the merged silhouette
+    // of the leaves under it, so generating a blob here would only put its label
+    // and its box in the wrong place.
+    const ring = children.length > 0 ? [] : areaRing(area, shape)
+    const bounds = subtreeBounds(ring, children)
+    const level = areaLevel(children)
+    const pins = pinsByArea.get(area.id) ?? []
+    // Assigned here rather than in renderPin, because a pin's spot depends on the
+    // coastline it sits inside. These are the same objects the flat `pins` list
+    // holds, so both surfaces agree on where a pin is.
+    for (const pin of pins) pin.at = pinPosition(pin.frameId, ring)
+
     return {
       areaId: area.id,
       name: area.name,
       parentAreaId: area.parentAreaId ?? null,
-      shape: areaShape(area, depth),
+      shape,
+      ring,
+      path: smoothPath(ring),
+      // A leaf names itself from the inside. A container names itself just above
+      // its coastline, where there are no pins to sit on top of.
+      // An archipelago's name clears its islands' names, so the two levels do not
+      // land on the same line.
+      labelAt:
+        children.length > 0
+          ? [
+              bounds.x + bounds.width / 2,
+              bounds.y -
+                (level === 'archipelago'
+                  ? Math.max(34, bounds.height * 0.12)
+                  : Math.max(12, bounds.height * 0.04)),
+            ]
+          : centroid(ring),
+      bounds,
+      level,
       owner: area.owner ?? null,
-      pins: pinsByArea.get(area.id) ?? [],
+      pins,
       resolved: resolvedByArea.get(area.id) ?? [],
-      children: (childrenOf.get(area.id) ?? [])
-        .filter((child) => !drawn.has(child.id))
-        .map((child) => render(child, depth + 1)),
+      children,
     }
   }
 
@@ -669,6 +744,135 @@ function areaShape(area: Area, depth: number): RenderedArea['shape'] {
   const width = AREA_WIDTH * scale
   const height = AREA_HEIGHT * scale
   return { x: area.x * (width + AREA_GAP), y: area.y * (height + AREA_GAP), width, height }
+}
+
+/** The drawn coastline, or one generated around the area's grid cell. */
+function areaRing(area: Area, shape: RenderedArea['shape']): Ring {
+  const drawn = area.outline
+  // Two points cannot enclose anything, so a truncated outline falls back rather
+  // than rendering a sliver nobody can click.
+  if (Array.isArray(drawn) && drawn.length >= 3) return drawn.map(([x, y]) => [x, y] as Point)
+  return generateRing(
+    area.id,
+    shape.x + shape.width / 2,
+    shape.y + shape.height / 2,
+    Math.min(shape.width, shape.height) / 2
+  )
+}
+
+/** An area's box, widened to hold its children. The zoom ladder measures this. */
+function subtreeBounds(ring: Ring, children: RenderedArea[]): Bounds {
+  const own = ringBounds(ring)
+  const boxes = [...(own ? [own] : []), ...children.map((c) => c.bounds)]
+  return unionBounds(boxes) ?? { x: 0, y: 0, width: 0, height: 0 }
+}
+
+/** Leaves are areas, what holds leaves is an island, what holds islands is an archipelago. */
+function areaLevel(children: RenderedArea[]): AreaLevel {
+  if (children.length === 0) return 'area'
+  return children.some((c) => c.children.length > 0) ? 'archipelago' : 'island'
+}
+
+/** Kind, worst first. A bubble takes the worst Kind it holds, never an average. */
+const KIND_SEVERITY: Record<FrameKind, number> = {
+  brand_burn: 3,
+  pain_point: 2,
+  unlock_win: 1,
+}
+
+/** One thing to draw on the canvas: either an area with its pins, or a bubble standing in for it. */
+export type CanvasNode =
+  | { kind: 'area'; area: RenderedArea }
+  | {
+      kind: 'bubble'
+      areaId: string
+      name: string
+      at: Point
+      /** How many frames are asleep under this bubble. Never a report count. */
+      count: number
+      /** The worst Kind inside. */
+      color: string
+      /** From the FRESHEST frame inside: a bubble never looks deader than its liveliest problem. */
+      opacity: number
+      /** Set if ANY frame inside has work on it, because that is what a zoomed-out reader wants. */
+      outline: PinOutline
+    }
+
+/** Below this many pixels on screen, an area collapses into a bubble. */
+export const SPLIT_AT_PX = 200
+
+/**
+ * The zoom ladder. Walks the area tree and decides, per area, whether it is big
+ * enough on screen to show its own contents or collapses into one numbered
+ * bubble. Measured in RENDERED PIXELS, not in zoom steps, so a two-island map
+ * splits early, a thirty-area map splits late, and there is no threshold to
+ * retune as the map grows.
+ *
+ * Kept out of `renderProductMap` on purpose: this is the only thing that depends
+ * on the viewport, which changes on every frame of a pinch, and the rest of the
+ * model does not need recomputing that often.
+ */
+export function clusterForViewport(
+  areas: RenderedArea[],
+  scale: number,
+  splitAtPx: number = SPLIT_AT_PX
+): CanvasNode[] {
+  const nodes: CanvasNode[] = []
+  const walk = (area: RenderedArea) => {
+    const onScreen = Math.hypot(area.bounds.width, area.bounds.height) * scale
+    // A bubble has to stand for MORE THAN ONE frame. A bubble reading "1" hides a
+    // pin behind a number and tells the reader nothing they could not already
+    // see — and a pin holds its size on screen, so it stays legible however far
+    // out the map is zoomed.
+    if (onScreen < splitAtPx && countPins(area) > 1) {
+      nodes.push(bubbleFor(area))
+      return
+    }
+    // Big enough to open: draw this area's own land and pins, then its children,
+    // each judged on its own size. Clustering never crosses an area boundary.
+    nodes.push({ kind: 'area', area })
+    for (const child of area.children) walk(child)
+  }
+  for (const area of areas) walk(area)
+  return nodes
+}
+
+function bubbleFor(area: RenderedArea): CanvasNode {
+  const pins = descendantPins(area).filter((p) => p.passesLens)
+  const worst = pins.reduce<FrameKind>(
+    (acc, pin) => (KIND_SEVERITY[pin.kind] > KIND_SEVERITY[acc] ? pin.kind : acc),
+    'unlock_win'
+  )
+  const outlines = new Set(pins.map((p) => p.outline))
+  return {
+    kind: 'bubble',
+    areaId: area.areaId,
+    name: area.name,
+    // The bounds centre, not `labelAt`: a container's label deliberately sits
+    // above its coastline, which is not where the area is.
+    at: [area.bounds.x + area.bounds.width / 2, area.bounds.y + area.bounds.height / 2],
+    count: pins.length,
+    color: KIND_COLORS[worst],
+    // The freshest, not the mean: averaging turns every bubble the same mid-grey.
+    opacity: pins.length === 0 ? MIN_OPACITY : Math.max(...pins.map((p) => p.opacity)),
+    outline: outlines.has('solid') ? 'solid' : outlines.has('dashed') ? 'dashed' : 'none',
+  }
+}
+
+/** Every awake pin under an area, its children included. */
+export function descendantPins(area: RenderedArea): RenderedPin[] {
+  return [...area.pins, ...area.children.flatMap(descendantPins)]
+}
+
+/**
+ * How many awake frames under an area survive the lens. Cheaper than building
+ * the list to measure it.
+ */
+function countPins(area: RenderedArea): number {
+  return (
+    area.pins.filter((p) => p.passesLens).length +
+    area.children.reduce((sum, c) => sum + countPins(c), 0)
+  )
 }
 
 function renderPin(
@@ -698,6 +902,7 @@ function renderPin(
     pointers: frame.pointers ?? [],
     gaps: gapList(frame),
     reportCount: count,
+    passesLens: lens === 'all' || count > 0,
     size: pinSize(count),
     sharp: isSharp(frame),
     state: frameState(frame, shapes),
@@ -711,6 +916,9 @@ function renderPin(
     opacity: pinOpacity(days, cycles, config),
     dim: elapsed >= config.dimAfterCycles && elapsed < config.dormantAfterCycles,
     dormant: elapsed >= config.dormantAfterCycles,
+    // Filled in when the area tree is built, because a pin's spot depends on the
+    // coastline it sits inside. An Unmapped frame keeps null and lives in the tray.
+    at: null,
   }
 }
 

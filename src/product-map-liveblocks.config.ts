@@ -13,9 +13,9 @@ export function productMapRoomId(orgPrefix: string): string {
  * A named region of the product, for example Integrations or Billing. An area
  * with a `parentAreaId` is a sub-area.
  *
- * `x` and `y` are a position on a coarse grid, NOT pixels. The app generates the
- * area's shape from that position (product-map-engine), because an agent must be
- * able to create an area and an agent cannot draw.
+ * An **Island** and an **Archipelago** are never stored: they are the merged
+ * silhouette of an area's children, fused at render time. Only leaf areas carry
+ * an `outline`, so there is one drawn thing and two derived ones.
  */
 export type Area = {
   id: string
@@ -24,6 +24,13 @@ export type Area = {
   parentAreaId?: string
   x: number
   y: number
+  /**
+   * The area's coastline: a closed ring of `[x, y]` points in the map's world
+   * space (0…1000 on both axes), which an agent writes from a description. An
+   * area with no outline gets one generated around its grid cell, so land drawn
+   * before this existed still renders and nothing needs migrating.
+   */
+  outline?: [number, number][]
   /** Clerk user id. The suggested Frame owner for this area, and nothing more. */
   owner?: string
 }

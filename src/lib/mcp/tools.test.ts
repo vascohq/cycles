@@ -1147,6 +1147,33 @@ describe('map_upsert_area', () => {
     expect(params.y).toBeUndefined()
     expect(params.parentAreaId).toBeUndefined()
     expect(params.owner).toBeUndefined()
+    // A wake or a rename must never wipe the coastline an agent drew.
+    expect(params.outline).toBeUndefined()
+  })
+
+  it('forwards the coastline an agent drew', async () => {
+    mockUpsertArea.mockResolvedValue({ created: false, id: 'a1' })
+    const outline: [number, number][] = [
+      [0, 0],
+      [100, 0],
+      [100, 100],
+      [0, 100],
+    ]
+
+    await handleUpsertArea(ORG_ID, { id: 'a1', outline })
+
+    const [, params] = mockUpsertArea.mock.calls[0]
+    expect(params.outline).toEqual(outline)
+    expect(params.name).toBeUndefined()
+  })
+
+  it('forwards an empty outline, which is how a coastline gets cleared', async () => {
+    mockUpsertArea.mockResolvedValue({ created: false, id: 'a1' })
+
+    await handleUpsertArea(ORG_ID, { id: 'a1', outline: [] })
+
+    const [, params] = mockUpsertArea.mock.calls[0]
+    expect(params.outline).toEqual([])
   })
 
   it('maps the snake_case parent argument onto the stored field', async () => {

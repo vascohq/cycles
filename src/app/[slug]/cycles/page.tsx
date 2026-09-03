@@ -12,6 +12,11 @@ import { liveblocks } from '@/lib/liveblocks'
 import { getCycleStorage } from '@/lib/mcp/liveblocks-reader'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
+import { getOrganizationUsers } from '@/lib/users'
+import { readCycleWindows } from '@/lib/mcp/liveblocks-reader'
+import { productMapRoomId } from '@/product-map-liveblocks.config'
+import { ProductMap } from '@/app/[slug]/product-map/product-map'
+import { linkedShapes } from '@/app/[slug]/product-map/linked-shapes'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -64,6 +69,14 @@ export default async function CyclesPage({
   }))
 
   const groups = groupCycles(summaries, today)
+
+  // The land, above the list. The Product Map holds the problems and a cycle
+  // holds the bets, so this page shows both: where the product hurts, and what
+  // is being bet on now. The frame LISTS stay on the Product Map's own page —
+  // this is a view onto the map, not the map's home.
+  const organizationUsers = await getOrganizationUsers(orgId)
+  const mapCycles = await readCycleWindows(roomPrefix)
+  const shapes = await linkedShapes(roomPrefix, mapCycles)
 
   // Pitch counts only for the Current hero(s) — one storage read each. The other
   // groups stay metadata-only so the list is cheap regardless of cycle count.
@@ -121,7 +134,28 @@ export default async function CyclesPage({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
-      <div className="mb-6 flex justify-between items-center">
+      {/* A big gap under the map, a small one above CURRENT: the Cycles heading
+          and its button belong to the list below them, not to the map above. */}
+      <section className="mb-12 flex flex-col gap-2">
+        <ProductMap
+          variant="canvas"
+          roomId={productMapRoomId(roomPrefix)}
+          organizationUsers={organizationUsers}
+          cycles={mapCycles}
+          shapes={shapes}
+          heading={<p className="font-display text-2xl">Product Map</p>}
+          action={
+            <Link
+              href={`/${urlSlug}/product-map`}
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Open the Product Map
+            </Link>
+          }
+        />
+      </section>
+
+      <div className="mb-3 flex justify-between items-center">
         <h1 className="text-2xl font-display">Cycles</h1>
         <CreateCycleDialog>
           <CreateCycleForm />

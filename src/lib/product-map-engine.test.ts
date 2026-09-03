@@ -13,6 +13,7 @@ import {
   PIN_MAX_SIZE,
   PIN_MIN_SIZE,
   candidateStatement,
+  clusterForViewport,
   frameState,
   cyclesSinceWoken,
   gapList,
@@ -1071,5 +1072,424 @@ describe('a resolved frame', () => {
       today: '2026-03-31',
     })
     expect(model.dormantReview).toEqual([])
+  })
+})
+
+const ISLAND: [number, number][] = [
+  [0, 0],
+  [200, 0],
+  [200, 200],
+  [0, 200],
+]
+
+describe('area coastlines', () => {
+  it('uses the outline an agent drew', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ outline: ISLAND })],
+      frames: [],
+      today: '2026-09-03',
+    })
+    expect(model.areas[0].ring).toEqual(ISLAND)
+    expect(model.areas[0].path).toContain('C')
+    expect(model.areas[0].path.endsWith(' Z')).toBe(true)
+  })
+
+  it('generates one for an area nobody has drawn, so old land still renders', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ outline: undefined })],
+      frames: [],
+      today: '2026-09-03',
+    })
+    expect(model.areas[0].ring.length).toBeGreaterThanOrEqual(3)
+    expect(model.areas[0].path).not.toBe('')
+  })
+
+  it('falls back rather than drawing a sliver from a truncated outline', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ outline: [[0, 0], [10, 10]] })],
+      frames: [],
+      today: '2026-09-03',
+    })
+    expect(model.areas[0].ring.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('puts the label inside the coastline', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ outline: ISLAND })],
+      frames: [],
+      today: '2026-09-03',
+    })
+    expect(model.areas[0].labelAt).toEqual([100, 100])
+  })
+
+  it('widens an area box to hold its children, because the zoom ladder measures it', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'a1', outline: ISLAND }),
+        makeArea({
+          id: 'a2',
+          parentAreaId: 'a1',
+          outline: [
+            [300, 300],
+            [400, 300],
+            [400, 400],
+          ],
+        }),
+      ],
+      frames: [],
+      today: '2026-09-03',
+    })
+    // The container's own outline is deliberately ignored: an island's coastline
+    // is the silhouette of its children, so its box is theirs.
+    expect(model.areas[0].bounds).toEqual({ x: 300, y: 300, width: 100, height: 100 })
+    expect(model.areas[0].ring).toEqual([])
+    expect(model.areas[0].path).toBe('')
+  })
+
+  it('names a container just above its coastline, where no pin can sit on the label', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'a1', name: 'Front office' }),
+        makeArea({
+          id: 'a2',
+          parentAreaId: 'a1',
+          outline: [
+            [100, 100],
+            [200, 100],
+            [200, 200],
+            [100, 200],
+          ],
+        }),
+      ],
+      frames: [],
+      today: '2026-09-03',
+    })
+    const [, labelY] = model.areas[0].labelAt
+    expect(model.areas[0].labelAt[0]).toBe(150)
+    expect(labelY).toBeLessThan(100)
+  })
+})
+
+describe('area levels', () => {
+  it('reads a leaf as an area, its parent as an island, and the grandparent as an archipelago', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'arch', name: 'Front office' }),
+        makeArea({ id: 'isle', name: 'Owned by Vasco', parentAreaId: 'arch' }),
+        makeArea({ id: 'leaf', name: 'Dashboards', parentAreaId: 'isle' }),
+      ],
+      frames: [],
+      today: '2026-09-03',
+    })
+    const arch = model.areas[0]
+    expect(arch.level).toBe('archipelago')
+    expect(arch.children[0].level).toBe('island')
+    expect(arch.children[0].children[0].level).toBe('area')
+  })
+
+  it('reads a lone area with no children as an area', () => {
+    const model = renderProductMap({ areas: [makeArea()], frames: [], today: '2026-09-03' })
+    expect(model.areas[0].level).toBe('area')
+  })
+})
+
+describe('pin placement', () => {
+  it('puts every pin inside the area it is filed in', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [
+        makeFrame({ id: 'f1', areaId: 'a1' }),
+        makeFrame({ id: 'f2', areaId: 'a1' }),
+        makeFrame({ id: 'f3', areaId: 'a1' }),
+      ],
+      today: '2026-09-03',
+    })
+    for (const pin of model.areas[0].pins) {
+      expect(pin.at).not.toBeNull()
+      const [x, y] = pin.at!
+      expect(x).toBeGreaterThan(0)
+      expect(x).toBeLessThan(200)
+      expect(y).toBeGreaterThan(0)
+      expect(y).toBeLessThan(200)
+    }
+  })
+
+  it('leaves an Unmapped frame with no position, because it lives in the tray', () => {
+    const model = renderProductMap({
+      areas: [],
+      frames: [makeFrame({ id: 'f1' })],
+      today: '2026-09-03',
+    })
+    expect(model.unmapped[0].at).toBeNull()
+  })
+
+  it('never moves a pin when another frame is captured', () => {
+    const args = { areas: [makeArea({ id: 'a1', outline: ISLAND })], today: '2026-09-03' }
+    const before = renderProductMap({ ...args, frames: [makeFrame({ id: 'f1', areaId: 'a1' })] })
+    const after = renderProductMap({
+      ...args,
+      frames: [
+        makeFrame({ id: 'f0', areaId: 'a1' }),
+        makeFrame({ id: 'f1', areaId: 'a1' }),
+        makeFrame({ id: 'f2', areaId: 'a1' }),
+      ],
+    })
+    const moved = after.pins.find((p) => p.frameId === 'f1')!
+    expect(moved.at).toEqual(before.pins[0].at)
+  })
+
+  it('agrees between the flat pin list and the area tree', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [makeFrame({ id: 'f1', areaId: 'a1' })],
+      today: '2026-09-03',
+    })
+    expect(model.pins[0].at).toEqual(model.areas[0].pins[0].at)
+  })
+})
+
+describe('the zoom ladder', () => {
+  const archipelago = () =>
+    renderProductMap({
+      areas: [
+        makeArea({ id: 'arch', name: 'Front office', outline: ISLAND }),
+        makeArea({
+          id: 'isle',
+          name: 'Owned by Vasco',
+          parentAreaId: 'arch',
+          outline: [
+            [10, 10],
+            [90, 10],
+            [90, 90],
+            [10, 90],
+          ],
+        }),
+        makeArea({
+          id: 'leaf',
+          name: 'Dashboards',
+          parentAreaId: 'isle',
+          outline: [
+            [20, 20],
+            [60, 20],
+            [60, 60],
+            [20, 60],
+          ],
+        }),
+      ],
+      frames: [
+        makeFrame({ id: 'f1', areaId: 'leaf', kind: 'pain_point' }),
+        makeFrame({ id: 'f2', areaId: 'isle', kind: 'brand_burn' }),
+      ],
+      today: '2026-09-03',
+    })
+
+  it('collapses a small archipelago into one bubble', () => {
+    const nodes = clusterForViewport(archipelago().areas, 0.1)
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0].kind).toBe('bubble')
+  })
+
+  it('counts every frame underneath the bubble, however deep', () => {
+    const [node] = clusterForViewport(archipelago().areas, 0.1)
+    expect(node.kind === 'bubble' && node.count).toBe(2)
+  })
+
+  it('numbers frames, never reports', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [
+        makeFrame({
+          id: 'f1',
+          areaId: 'a1',
+          reports: [makeReport(), makeReport(), makeReport()],
+        }),
+        makeFrame({ id: 'f2', areaId: 'a1', reports: [makeReport(), makeReport()] }),
+      ],
+      today: '2026-09-03',
+    })
+    const [node] = clusterForViewport(model.areas, 0.1)
+    expect(node.kind === 'bubble' && node.count).toBe(2)
+  })
+
+  it('takes the worst Kind it holds, not an average', () => {
+    const [node] = clusterForViewport(archipelago().areas, 0.1)
+    expect(node.kind === 'bubble' && node.color).toBe(KIND_COLORS.brand_burn)
+  })
+
+  it('opens up as the map gets bigger on screen', () => {
+    const areas = archipelago().areas
+    const zoomedOut = clusterForViewport(areas, 0.1)
+    const zoomedIn = clusterForViewport(areas, 8)
+    expect(zoomedOut).toHaveLength(1)
+    expect(zoomedIn.every((n) => n.kind === 'area')).toBe(true)
+    expect(zoomedIn).toHaveLength(3)
+  })
+
+  it('judges each child on its own size, so one big area does not open a tiny sibling', () => {
+    const model = renderProductMap({
+      areas: [
+        makeArea({ id: 'parent', name: 'Parent' }),
+        makeArea({ id: 'big', name: 'Big', parentAreaId: 'parent', outline: ISLAND }),
+        makeArea({
+          id: 'small',
+          name: 'Small',
+          parentAreaId: 'parent',
+          outline: [
+            [205, 5],
+            [215, 5],
+            [215, 15],
+          ],
+        }),
+      ],
+      frames: [
+        makeFrame({ id: 'f1', areaId: 'small' }),
+        makeFrame({ id: 'f2', areaId: 'small' }),
+        makeFrame({ id: 'f3', areaId: 'big' }),
+        makeFrame({ id: 'f4', areaId: 'big' }),
+      ],
+      today: '2026-09-03',
+    })
+    // The parent spans 215 units and opens; inside it the 200-unit child opens
+    // and the 10-unit child does not.
+    const nodes = clusterForViewport(model.areas, 1.5)
+    expect(nodes.map((n) => n.kind)).toEqual(['area', 'area', 'bubble'])
+  })
+
+  it('takes an outline when ANY frame inside has work on it', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [makeFrame({ id: 'f1', areaId: 'a1' }), makeFrame({ id: 'f2', areaId: 'a1' })],
+      shapes: [
+        {
+          frameId: 'f2',
+          shapeId: 's1',
+          title: 'Fix imports',
+          stage: 'building',
+          cycleSlug: 'c1',
+          cycleTitle: 'Cycle 1',
+          currentCycle: true,
+        },
+      ],
+      today: '2026-09-03',
+    })
+    const [node] = clusterForViewport(model.areas, 0.1)
+    expect(node.kind === 'bubble' && node.outline).toBe('solid')
+  })
+
+  it('takes its opacity from the freshest frame inside, never the mean', () => {
+    const cycles: CycleWindow[] = [
+      { slug: 'c1', title: 'Cycle 1', type: 'build', start_date: '2026-01-01', end_date: '2026-02-11' },
+      { slug: 'c2', title: 'Cycle 2', type: 'build', start_date: '2026-02-12', end_date: '2026-03-25' },
+      { slug: 'c3', title: 'Cycle 3', type: 'build', start_date: '2026-03-26', end_date: '2026-05-06' },
+    ]
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [
+        // Dim, not dormant: a dormant frame leaves the map and would not count.
+        makeFrame({ id: 'stale', areaId: 'a1', last_woken: '2026-02-20' }),
+        makeFrame({ id: 'fresh', areaId: 'a1', last_woken: '2026-05-01' }),
+        makeFrame({ id: 'fresh2', areaId: 'a1', last_woken: '2026-05-02' }),
+      ],
+      cycles,
+      today: '2026-05-06',
+    })
+    const stale = model.pins.find((p) => p.frameId === 'stale')!
+    const freshest = Math.max(...model.pins.map((p) => p.opacity))
+    const [node] = clusterForViewport(model.areas, 0.1)
+    expect(node.kind === 'bubble' && node.opacity).toBe(freshest)
+    // The mean would have dragged it down towards the stale one.
+    expect(freshest).toBeGreaterThan(stale.opacity)
+  })
+
+  // A bubble reading "1" hides a pin behind a number and says nothing extra, and
+  // a pin holds its size on screen however far out the map is zoomed.
+  it('shows the pin rather than a bubble reading one', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [makeFrame({ id: 'f1', areaId: 'a1' })],
+      today: '2026-09-03',
+    })
+    const nodes = clusterForViewport(model.areas, 0.1)
+    expect(nodes.map((n) => n.kind)).toEqual(['area'])
+  })
+
+  it('never bubbles an empty area', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: ISLAND })],
+      frames: [],
+      today: '2026-09-03',
+    })
+    const nodes = clusterForViewport(model.areas, 0.1)
+    expect(nodes.map((n) => n.kind)).toEqual(['area'])
+  })
+
+  it('draws nothing when there is no land', () => {
+    expect(clusterForViewport([], 1)).toEqual([])
+  })
+})
+
+describe('the heat lens on the land', () => {
+  const AREA_RING: [number, number][] = [
+    [0, 0],
+    [200, 0],
+    [200, 200],
+    [0, 200],
+  ]
+
+  function mapWith(lens: 'all' | 'internal' | 'customer') {
+    return renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: AREA_RING })],
+      frames: [
+        makeFrame({
+          id: 'internal-only',
+          areaId: 'a1',
+          reports: [makeReport({ source: 'internal' })],
+        }),
+        makeFrame({
+          id: 'customer-1',
+          areaId: 'a1',
+          reports: [makeReport({ source: 'customer', customer: 'Northwind' })],
+        }),
+        makeFrame({
+          id: 'customer-2',
+          areaId: 'a1',
+          reports: [makeReport({ source: 'customer', customer: 'Contoso' })],
+        }),
+      ],
+      lens,
+      today: '2026-09-03',
+    })
+  }
+
+  it('lets everything through under the everyone lens', () => {
+    expect(mapWith('all').pins.every((p) => p.passesLens)).toBe(true)
+  })
+
+  it('keeps a frame nobody has reported yet, so a fresh capture never vanishes', () => {
+    const model = renderProductMap({
+      areas: [makeArea({ id: 'a1', outline: AREA_RING })],
+      frames: [makeFrame({ id: 'f1', areaId: 'a1', reports: [] })],
+      lens: 'all',
+      today: '2026-09-03',
+    })
+    expect(model.pins[0].passesLens).toBe(true)
+  })
+
+  it('drops a frame only the team raised, under the customer lens', () => {
+    const passing = mapWith('customer').pins.filter((p) => p.passesLens).map((p) => p.frameId)
+    expect(passing).toEqual(['customer-1', 'customer-2'])
+  })
+
+  it('shrinks the bubble to what customers actually raised', () => {
+    const everyone = clusterForViewport(mapWith('all').areas, 0.1)
+    const customers = clusterForViewport(mapWith('customer').areas, 0.1)
+    expect(everyone[0].kind === 'bubble' && everyone[0].count).toBe(3)
+    expect(customers[0].kind === 'bubble' && customers[0].count).toBe(2)
+  })
+
+  it('drops the customer frames under the internal lens', () => {
+    const internal = clusterForViewport(mapWith('internal').areas, 0.1)
+    // One frame left, so it draws as a pin rather than a bubble reading "1".
+    expect(internal.map((n) => n.kind)).toEqual(['area'])
   })
 })

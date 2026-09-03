@@ -1062,6 +1062,8 @@ type AreaFields = {
   parentAreaId: string
   x: number
   y: number
+  /** The drawn coastline. An empty array clears it back to a generated shape. */
+  outline: [number, number][]
   owner: string
 }
 
@@ -1091,6 +1093,8 @@ export async function upsertArea(
   if (params.parentAreaId && params.parentAreaId === id) {
     throw new Error('An area cannot be its own parent.')
   }
+  // A caller writes this by hand, so it is checked here rather than trusted.
+  if (params.outline !== undefined) validateOutline(params.outline)
 
   await ensureProductMapRoom(roomId)
 
@@ -1106,6 +1110,7 @@ export async function upsertArea(
         x: params.x ?? slot.x,
         y: params.y ?? slot.y,
         ...(params.parentAreaId ? { parentAreaId: params.parentAreaId } : {}),
+        ...(params.outline?.length ? { outline: params.outline } : {}),
         ...(params.owner ? { owner: params.owner } : {}),
       }
       areas.push(new LiveObject(area))
@@ -1123,12 +1128,42 @@ export async function upsertArea(
     if (params.name !== undefined) existing.set('name', params.name)
     if (params.x !== undefined) existing.set('x', params.x)
     if (params.y !== undefined) existing.set('y', params.y)
+    // An empty array clears the coastline, the way '' clears an optional string.
+    if (params.outline !== undefined) {
+      if (params.outline.length === 0) existing.delete('outline')
+      else existing.set('outline', params.outline)
+    }
     setOrClear(existing, 'parentAreaId', params.parentAreaId)
     setOrClear(existing, 'owner', params.owner)
   })
 
   if (notFound) throw new Error(`Area not found: "${id}"`)
   return { created, id }
+}
+
+/**
+ * A coastline needs at least a triangle, and every point needs two real numbers.
+ * A shorter or malformed ring would draw a sliver nobody can see or click, so it
+ * is refused at the boundary rather than silently generated over.
+ */
+function validateOutline(outline: [number, number][]): void {
+  if (outline.length === 0) return
+  if (outline.length < 3) {
+    throw new Error('An outline needs at least 3 points. Pass [] to clear it instead.')
+  }
+  if (outline.length > 64) {
+    throw new Error('An outline takes at most 64 points. A coastline needs about a dozen.')
+  }
+  for (const point of outline) {
+    if (!Array.isArray(point) || point.length !== 2) {
+      throw new Error('Every outline point is a pair, [x, y].')
+    }
+    for (const n of point) {
+      if (typeof n !== 'number' || !Number.isFinite(n)) {
+        throw new Error('Every outline coordinate is a finite number.')
+      }
+    }
+  }
 }
 
 /** Three across, then wrap. Enough to keep new areas off each other. */
