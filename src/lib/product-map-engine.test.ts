@@ -18,6 +18,8 @@ import {
   gapList,
   inCooldown,
   isPointerKind,
+  linkedShapesFrom,
+  pinOutline,
   pinOpacity,
   pinSize,
   reportCount,
@@ -63,9 +65,9 @@ function makeReport(overrides: Partial<FrameReport> = {}): FrameReport {
 
 /** Two six-week build cycles, back to back, then a cooldown. */
 const CYCLES: CycleWindow[] = [
-  { slug: 'c1', type: 'build', start_date: '2026-01-05', end_date: '2026-02-13' },
-  { slug: 'c2', type: 'build', start_date: '2026-02-16', end_date: '2026-03-27' },
-  { slug: 'cool', type: 'cooldown', start_date: '2026-03-30', end_date: '2026-04-03' },
+  { slug: 'c1', title: 'One', type: 'build', start_date: '2026-01-05', end_date: '2026-02-13' },
+  { slug: 'c2', title: 'Two', type: 'build', start_date: '2026-02-16', end_date: '2026-03-27' },
+  { slug: 'cool', title: 'Cooldown', type: 'cooldown', start_date: '2026-03-30', end_date: '2026-04-03' },
 ]
 
 function makeShape(overrides: Partial<LinkedShape> = {}): LinkedShape {
@@ -675,7 +677,7 @@ describe('counting cycles since the last wake', () => {
 
   it('ignores an undated cycle, because it has no boundary to cross', () => {
     const undated: CycleWindow[] = [
-      { slug: 'x', type: 'build', start_date: '', end_date: '' },
+      { slug: 'x', title: 'Undated', type: 'build', start_date: '', end_date: '' },
     ]
     expect(cyclesSinceWoken('2026-01-20', undated, '2026-09-02')).toBe(0)
   })
@@ -819,5 +821,118 @@ describe('the sweep', () => {
     expect(sleeper.businessCase).toBe('Two customers churned')
     expect(sleeper.reports).toHaveLength(1)
     expect(sleeper.pointers).toHaveLength(1)
+  })
+})
+
+describe('the engagement ring', () => {
+  it('draws nothing when nobody is working on the frame', () => {
+    expect(pinOutline([])).toBe('none')
+  })
+
+  it('draws dashed while a linked shape is being shaped', () => {
+    expect(pinOutline([makeShape({ stage: 'shaping', currentCycle: false })])).toBe('dashed')
+  })
+
+  it('draws solid while a linked shape runs in the cycle happening now', () => {
+    expect(pinOutline([makeShape({ stage: 'building', currentCycle: true })])).toBe('solid')
+  })
+
+  it('draws nothing once every linked shape is done', () => {
+    expect(pinOutline([makeShape({ stage: 'done', currentCycle: true })])).toBe('none')
+  })
+
+  it('prefers the current cycle when a frame carries an old shape too', () => {
+    const shapes = [
+      makeShape({ shapeId: 's1', stage: 'shaping', currentCycle: false }),
+      makeShape({ shapeId: 's2', stage: 'building', currentCycle: true }),
+    ]
+    expect(pinOutline(shapes)).toBe('solid')
+  })
+})
+
+describe('reading the shapes out of the cycle rooms', () => {
+  const cycle = CYCLES[1]
+
+  it('keeps only the shapes that point at a frame', () => {
+    const shapes = linkedShapesFrom(
+      [
+        {
+          cycle,
+          shapes: [
+            { id: 's1', title: 'Fix imports', stage: 'building', frameId: 'f1' },
+            { id: 's2', title: 'Something else', stage: 'building' },
+          ],
+        },
+      ],
+      '2026-03-01'
+    )
+    expect(shapes.map((s) => s.shapeId)).toEqual(['s1'])
+    expect(shapes[0].frameId).toBe('f1')
+  })
+
+  it('names the cycle, so the frame detail reads a title and not a slug', () => {
+    const [shape] = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', frameId: 'f1' }] }],
+      '2026-03-01'
+    )
+    expect(shape.cycleTitle).toBe('Two')
+  })
+
+  it('marks a shape in the cycle running today as current', () => {
+    const [inside] = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frameId: 'f1' }] }],
+      '2026-03-01'
+    )
+    const [outside] = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frameId: 'f1' }] }],
+      '2026-09-02'
+    )
+    expect(inside.currentCycle).toBe(true)
+    expect(outside.currentCycle).toBe(false)
+  })
+
+  // Stored data outlives the code that wrote it: a room written before ADR 0023
+  // still holds `framing`, and losing the shape over it would be worse.
+  it('reads a stored framing stage as shaping', () => {
+    const [shape] = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', frameId: 'f1' }] }],
+      '2026-03-01'
+    )
+    expect(shape.stage).toBe('shaping')
+  })
+})
+
+describe('a frame that has been bet on', () => {
+  it('carries its shapes, its ring and its investment mark', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ id: 'f1', appetite: '6 weeks' })],
+      shapes: [makeShape({ frameId: 'f1', stage: 'building', currentCycle: true })],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].shapes).toHaveLength(1)
+    expect(model.pins[0].outline).toBe('solid')
+    expect(model.pins[0].worked).toBe(true)
+    expect(model.pins[0].state).toBe('in_flight')
+  })
+
+  it('carries no mark and no ring when nobody has bet on it', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ appetite: '6 weeks' })],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].worked).toBe(false)
+    expect(model.pins[0].outline).toBe('none')
+  })
+
+  it('lists both bets when the same frame is attacked again later', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ id: 'f1', appetite: '6 weeks' })],
+      shapes: [
+        makeShape({ frameId: 'f1', shapeId: 's1', stage: 'done', cycleSlug: '2024-q1', currentCycle: false }),
+        makeShape({ frameId: 'f1', shapeId: 's2', stage: 'shaping', currentCycle: true }),
+      ],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].shapes.map((s) => s.cycleSlug)).toEqual(['2024-q1', '2026-q3'])
   })
 })

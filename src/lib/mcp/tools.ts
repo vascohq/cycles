@@ -501,6 +501,11 @@ function preparePitchParams(params: WriteParams): WriteParams {
     const notion = validateNotionUrl(params.notion_url)
     prepared.notion_url = notion.isValidUrl ? notion.value : ''
   }
+  // The tool speaks snake_case; the writer holds the stored field name.
+  if (params.frame_id !== undefined) {
+    prepared.frameId = params.frame_id
+    delete prepared.frame_id
+  }
   return prepared
 }
 
@@ -697,6 +702,7 @@ async function mapCycleWindows(orgId: string): Promise<CycleWindow[]> {
     const rooms = (await listCycleRooms(orgId)) ?? []
     return rooms.map((room) => ({
       slug: room.slug,
+      title: room.name,
       type: room.type === 'cooldown' ? ('cooldown' as const) : ('build' as const),
       start_date: room.start_date,
       end_date: room.end_date,
@@ -1169,7 +1175,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_pitch',
-    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcome, timebox_start, timebox_end, emoji, notion_url, squad) is left unchanged — only fields you pass are overwritten.',
+    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcome, timebox_start, timebox_end, emoji, notion_url, squad, frame_id) is left unchanged — only fields you pass are overwritten. A pitch is a SHAPE: the work. The problem it attacks is a Frame on the Product Map — pass "frame_id" so the bet points at the problem, and copy the frame\'s problem text into "frame_problem".',
     {
       ...orgArg,
       ...cycleSlugArg,
@@ -1182,8 +1188,19 @@ export function registerCyclesTools(server: any): void {
       // stay optional (not .default('')) — a default would coerce an omitted
       // field to '' and silently wipe it on update (the timebox-nullification
       // incident). On create, the writer falls back to '' for any omitted field.
-      frame_problem: z.string().optional(),
+      frame_problem: z
+        .string()
+        .optional()
+        .describe(
+          'The Frame as bet: a copy of the frame\'s problem text taken when the bet was made. The frame on the map keeps changing; this copy never does, so a past cycle always shows what was committed to.'
+        ),
       frame_outcome: z.string().optional(),
+      frame_id: z
+        .string()
+        .optional()
+        .describe(
+          'The Frame on the Product Map this shape attacks (map_list_frames names them). Only a SHARP frame — one with both a problem and an appetite — should be bet on. Editing this shape never writes back to the map. Pass "" to clear.'
+        ),
       timebox_start: z.string().optional(),
       timebox_end: z.string().optional(),
       emoji: z
@@ -1217,7 +1234,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; frame_id?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)

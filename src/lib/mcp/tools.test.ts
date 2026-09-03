@@ -1668,3 +1668,28 @@ describe('handleWakeFrame', () => {
     expect(result.content[0].text).toBe('Frame not found: "nope"')
   })
 })
+
+describe('upsert_pitch frame pointer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function schemaFor(toolName: string): Record<string, z.ZodTypeAny> {
+    let captured: Record<string, z.ZodTypeAny> | undefined
+    const server = {
+      tool(name: string, _d: string, schema: Record<string, z.ZodTypeAny>) {
+        if (name === toolName) captured = schema
+      },
+    }
+    registerCyclesTools(server)
+    if (!captured) throw new Error(`tool not registered: ${toolName}`)
+    return captured
+  }
+
+  it('takes an optional frame_id, so a shape with no frame stays valid', () => {
+    const schema = z.object(schemaFor('upsert_pitch'))
+
+    const base = { cycle_slug: '2026-q3', title: 'x', stage: 'shaping' as const }
+
+    expect(schema.parse(base).frame_id).toBeUndefined()
+    expect(schema.parse({ ...base, frame_id: 'f1' }).frame_id).toBe('f1')
+  })
+})

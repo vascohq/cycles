@@ -238,6 +238,10 @@ export async function upsertPitch(
     squad?: string
     // Pitch view (see ADR 0018). undefined = leave unchanged / default on create.
     view?: 'scope_map' | 'kanban'
+    // The Frame on the Product Map this shape attacks (ADR 0022). '' clears it.
+    // Writing it never touches the frame: the shape points at the frame, not
+    // the reverse.
+    frameId?: string
   },
   injectedRoot?: any
 ): Promise<UpsertResult> {
@@ -279,6 +283,7 @@ export async function upsertPitch(
         notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
         ...(params.view ? { view: params.view } : {}),
+        ...(params.frameId ? { frameId: params.frameId } : {}),
       }
       resultStart = pitch.timebox_start
       resultEnd = pitch.timebox_end
@@ -301,6 +306,7 @@ export async function upsertPitch(
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       if (params.view !== undefined) existing.set('view', params.view)
+      setOrClear(existing, 'frameId', params.frameId)
       resultStart = getField(existing, 'timebox_start') ?? ''
       resultEnd = getField(existing, 'timebox_end') ?? ''
       // squadId: null = clear (remove key), string = assign, undefined = leave.

@@ -32,12 +32,14 @@ import {
   renderProductMap,
   type CycleWindow,
   type FrameState,
+  type LinkedShape,
   type HeatLens,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
+import { betOnFrame } from './actions'
 import {
   OrganizationUsersProvider,
   useOrganizationUsers,
@@ -109,14 +111,19 @@ const NOBODY = '__nobody__'
  */
 const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
 
+/** The cycles a frame can be bet into. Read once, at the page boundary. */
+const CyclesContext = createContext<CycleWindow[]>([])
+
 export function ProductMap({
   roomId,
   organizationUsers,
   cycles,
+  shapes,
 }: {
   roomId: string
   organizationUsers: OrganizationUser[]
   cycles: CycleWindow[]
+  shapes: LinkedShape[]
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -126,14 +133,20 @@ export function ProductMap({
         initialStorage={productMapInitialStorage()}
       >
         <ClientSideSuspense fallback={<ProductMapSkeleton />}>
-          {() => <ProductMapView cycles={cycles} />}
+          {() => <ProductMapView cycles={cycles} shapes={shapes} />}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
   )
 }
 
-function ProductMapView({ cycles }: { cycles: CycleWindow[] }) {
+function ProductMapView({
+  cycles,
+  shapes,
+}: {
+  cycles: CycleWindow[]
+  shapes: LinkedShape[]
+}) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
@@ -148,6 +161,7 @@ function ProductMapView({ cycles }: { cycles: CycleWindow[] }) {
     frames,
     lens,
     cycles,
+    shapes,
     today: getTeamToday(new Date()),
   })
   const options = areaOptions(model.areas)
@@ -156,26 +170,28 @@ function ProductMapView({ cycles }: { cycles: CycleWindow[] }) {
 
   return (
     <OpenFrameContext.Provider value={setOpenFrameId}>
-      <Shell>
-        <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <AreaForm areaCount={areas.length} />
-          <LensToggle lens={lens} onChange={setLens} />
-        </div>
-        {model.pins.length === 0 && model.areas.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
-            <p className="font-display text-lg">Nothing on the Product Map yet</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              An area is a region of your product. A frame records one problem in
-              it. The first of either appears here.
-            </p>
+      <CyclesContext.Provider value={cycles}>
+        <Shell>
+          <CaptureForm areas={options} areaOwners={areaOwners(model.areas)} />
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <AreaForm areaCount={areas.length} />
+            <LensToggle lens={lens} onChange={setLens} />
           </div>
-        )}
-        {model.areas.length > 0 && <AreaField areas={model.areas} options={options} />}
-        <UnmappedGroup pins={model.unmapped} options={options} />
-        <DormantReview pins={model.dormantReview} options={options} />
-        <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} />
-      </Shell>
+          {model.pins.length === 0 && model.areas.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
+              <p className="font-display text-lg">Nothing on the Product Map yet</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                An area is a region of your product. A frame records one problem
+                in it. The first of either appears here.
+              </p>
+            </div>
+          )}
+          {model.areas.length > 0 && <AreaField areas={model.areas} options={options} />}
+          <UnmappedGroup pins={model.unmapped} options={options} />
+          <DormantReview pins={model.dormantReview} options={options} />
+          <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} />
+        </Shell>
+      </CyclesContext.Provider>
     </OpenFrameContext.Provider>
   )
 }
@@ -330,9 +346,10 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
       style={{ opacity: pin.opacity }}
       className="flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-sm"
     >
-      {/* A rough pin is drawn hollow, so a raw capture never reads as agreed
-          work. This modulates the color channel (Kind) rather than adding a
-          fifth channel, which is the map's legibility ceiling (ADR 0025). */}
+      {/* All four pin channels, and no more (ADR 0025): color is the Kind, size
+          is the report count under the lens, opacity (on the row) is freshness,
+          and the ring is engagement. A rough pin draws hollow, which modulates
+          the color channel rather than adding a fifth one. */}
       <span
         aria-hidden
         className="shrink-0 rounded-full border-2"
@@ -341,6 +358,7 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
           height: pin.size,
           borderColor: pin.color,
           backgroundColor: pin.sharp ? pin.color : 'transparent',
+          ...outlineStyle(pin.outline),
         }}
       />
       <button
@@ -350,6 +368,16 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
       >
         {pin.problem}
       </button>
+      {/* Investment is a mark and never a number: sunk cost must not read as
+          priority (ADR 0024). */}
+      {pin.worked && (
+        <span
+          className="shrink-0 text-xs text-muted-foreground"
+          title="We have bet on this before"
+        >
+          ✳
+        </span>
+      )}
       <span className="shrink-0 text-xs text-muted-foreground">
         {KIND_LABELS[pin.kind]} · {TYPE_LABELS[pin.type]} · {STATE_LABELS[pin.state]}
         {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
@@ -375,6 +403,19 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
       )}
     </li>
   )
+}
+
+/**
+ * The engagement ring, the fourth pin channel. Dashed means a linked shape is
+ * being shaped, solid means one is running in the cycle happening now, and
+ * nothing means nobody is on it.
+ */
+function outlineStyle(outline: RenderedPin['outline']): React.CSSProperties {
+  if (outline === 'none') return {}
+  return {
+    outline: `2px ${outline === 'solid' ? 'solid' : 'dashed'} currentColor`,
+    outlineOffset: 2,
+  }
 }
 
 /**
@@ -555,6 +596,7 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
           </Select>
         </Field>
 
+        <Shapes pin={pin} />
         <StillHurts pin={pin} />
         <Pointers pin={pin} />
         <Reports pin={pin} />
@@ -564,6 +606,82 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
 }
 
 type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+
+/**
+ * Every shape that attacked this frame, with its cycle, plus the way to bet on
+ * it. A frame outlives the work done against it, so the same problem can be
+ * attacked again years later and both bets stay visible. The list is read from
+ * the cycle rooms and never stored on the frame (ADR 0022).
+ */
+function Shapes({ pin }: { pin: RenderedPin }) {
+  const cycles = useContext(CyclesContext)
+  const [cycleSlug, setCycleSlug] = useState('')
+  const [error, setError] = useState('')
+  const [betting, setBetting] = useState(false)
+
+  async function bet() {
+    setBetting(true)
+    setError('')
+    try {
+      await betOnFrame({ frameId: pin.frameId, cycleSlug, title: pin.problem })
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBetting(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t pt-4">
+      <Label>Bets on this frame ({pin.shapes.length})</Label>
+      <ul className="flex flex-col gap-1">
+        {pin.shapes.map((shape) => (
+          <li key={shape.shapeId} className="text-sm">
+            {shape.title}{' '}
+            <span className="text-xs text-muted-foreground">
+              {shape.cycleTitle} · {shape.stage}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {/* Only a sharp frame can be bet on, so a rough one is offered no bet at
+          all. The action re-checks server-side: this is the courtesy, not the
+          rule. */}
+      {pin.sharp && cycles.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Select value={cycleSlug} onValueChange={setCycleSlug}>
+            <SelectTrigger className="h-8 flex-1" aria-label="Bet into cycle">
+              <SelectValue placeholder="Bet into a cycle…" />
+            </SelectTrigger>
+            <SelectContent>
+              {cycles.map((cycle) => (
+                <SelectItem key={cycle.slug} value={cycle.slug}>
+                  {cycle.title || cycle.slug}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8"
+            disabled={!cycleSlug || betting}
+            onClick={bet}
+          >
+            Bet
+          </Button>
+        </div>
+      )}
+      {!pin.sharp && (
+        <p className="text-xs text-muted-foreground">
+          Give this frame an appetite before betting on it. Nobody bets on half a
+          frame.
+        </p>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  )
+}
 
 /**
  * Opening a frame does NOT wake it. This button is how a reader who still feels

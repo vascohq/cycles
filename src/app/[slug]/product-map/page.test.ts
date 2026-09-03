@@ -18,16 +18,18 @@ vi.mock('@/lib/users', () => ({
   getOrganizationUsers: vi.fn(async () => []),
 }))
 
-// The page reads the cycle BOUNDARIES, because freshness is counted in cycles.
-// Stubbed so this file needs no Liveblocks credentials.
+// The page reads the cycle BOUNDARIES, because freshness is counted in cycles,
+// and each cycle room, because a frame's shape list is never stored on the
+// frame. Stubbed so this file needs no Liveblocks credentials.
 vi.mock('@/lib/mcp/liveblocks-reader', () => ({
   listCycleRooms: vi.fn(async () => []),
+  getCycleStorage: vi.fn(async () => ({ pitches: [] })),
 }))
 
 import ProductMapPage from './page'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import { listCycleRooms } from '@/lib/mcp/liveblocks-reader'
+import { listCycleRooms, getCycleStorage } from '@/lib/mcp/liveblocks-reader'
 
 const mockAuth = vi.mocked(auth)
 const mockRedirect = vi.mocked(redirect)
@@ -69,6 +71,32 @@ describe('ProductMapPage', () => {
   it('hands over the cycle windows without requiring a cycle', async () => {
     const element: any = await ProductMapPage(params('my-org'))
     expect(element.props.cycles).toEqual([])
+  })
+
+  // A frame never stores its shape list, so the page reads the cycle rooms
+  // (ADR 0022).
+  it('hands over the shapes that point at a frame', async () => {
+    vi.mocked(listCycleRooms).mockResolvedValueOnce([
+      {
+        slug: '2026-q3',
+        name: 'Q3',
+        type: 'build',
+        start_date: '2026-08-01',
+        end_date: '2026-09-11',
+        archived: false,
+      },
+    ])
+    vi.mocked(getCycleStorage).mockResolvedValueOnce({
+      pitches: [
+        { id: 'p1', title: 'Fix imports', stage: 'building', frameId: 'f1' },
+        { id: 'p2', title: 'No frame here', stage: 'building' },
+      ],
+    } as never)
+
+    const element: any = await ProductMapPage(params('my-org'))
+
+    expect(element.props.shapes).toHaveLength(1)
+    expect(element.props.shapes[0].frameId).toBe('f1')
   })
 
   it('still opens when the cycle rooms cannot be read, with nothing aged', async () => {

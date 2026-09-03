@@ -3,8 +3,9 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
 import { getOrganizationUsers } from '@/lib/users'
-import { listCycleRooms } from '@/lib/mcp/liveblocks-reader'
-import type { CycleWindow } from '@/lib/product-map-engine'
+import { listCycleRooms, getCycleStorage } from '@/lib/mcp/liveblocks-reader'
+import { linkedShapesFrom, type CycleWindow, type LinkedShape } from '@/lib/product-map-engine'
+import { getTeamToday } from '@/lib/team-time'
 import { ProductMap } from './product-map'
 
 export const metadata: Metadata = {
@@ -31,15 +32,43 @@ export default async function ProductMapPage({
   // The map names no cycle and needs none to open (ADR 0021). It does read the
   // cycle BOUNDARIES, because freshness is counted in cycles: no cycles means
   // nothing ages, which is the right answer for a team that has never run one.
-  const cycles = await mapCycleWindows(orgId ?? userId)
+  const orgPrefix = orgId ?? userId
+  const cycles = await mapCycleWindows(orgPrefix)
+  const shapes = await linkedShapes(orgPrefix, cycles)
 
   return (
     <ProductMap
-      roomId={productMapRoomId(orgId ?? userId)}
+      roomId={productMapRoomId(orgPrefix)}
       organizationUsers={organizationUsers}
       cycles={cycles}
+      shapes={shapes}
     />
   )
+}
+
+/**
+ * The shapes that point home to a frame. A frame never stores its shape list,
+ * so it is read from the cycle rooms every load (ADR 0022).
+ *
+ * ponytail: one room read per cycle, in parallel, fail-soft per room. A team
+ * with dozens of cycles pays for all of them — cache or read only the recent
+ * ones if that ever shows up in the page's timing.
+ */
+async function linkedShapes(
+  orgPrefix: string,
+  cycles: CycleWindow[]
+): Promise<LinkedShape[]> {
+  const rooms = await Promise.all(
+    cycles.map(async (cycle) => {
+      try {
+        const storage = await getCycleStorage(orgPrefix, cycle.slug)
+        return { cycle, shapes: storage.pitches ?? [] }
+      } catch {
+        return { cycle, shapes: [] }
+      }
+    })
+  )
+  return linkedShapesFrom(rooms, getTeamToday(new Date()))
 }
 
 async function mapCycleWindows(orgPrefix: string): Promise<CycleWindow[]> {
@@ -47,6 +76,7 @@ async function mapCycleWindows(orgPrefix: string): Promise<CycleWindow[]> {
     const rooms = await listCycleRooms(orgPrefix)
     return rooms.map((room) => ({
       slug: room.slug,
+      title: room.name,
       type: room.type === 'cooldown' ? 'cooldown' : 'build',
       start_date: room.start_date,
       end_date: room.end_date,

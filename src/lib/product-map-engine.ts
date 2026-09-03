@@ -76,6 +76,60 @@ export type LinkedShape = {
 }
 
 /**
+ * Engagement, the fourth and last pin channel:
+ *
+ * - `dashed` — a linked shape is still being shaped
+ * - `solid` — a linked shape is in the cycle running now
+ * - `none` — nobody is working on this
+ */
+export type PinOutline = 'none' | 'dashed' | 'solid'
+
+export function pinOutline(shapes: LinkedShape[]): PinOutline {
+  // A shape in the current cycle is the loudest signal, so it wins.
+  if (shapes.some((s) => s.currentCycle && s.stage !== 'done')) return 'solid'
+  if (shapes.some((s) => s.stage === 'shaping')) return 'dashed'
+  return 'none'
+}
+
+/**
+ * The shapes that attacked a frame, read from the cycle rooms. A frame never
+ * stores its shape list: a shape points at its frame, not the reverse (ADR
+ * 0022). Shapes with no frame are dropped — they attack nothing on the map.
+ */
+export function linkedShapesFrom(
+  rooms: {
+    cycle: CycleWindow
+    shapes: { id: string; title: string; stage: string; frameId?: string }[]
+  }[],
+  today: string
+): LinkedShape[] {
+  return rooms.flatMap(({ cycle, shapes }) => {
+    const currentCycle =
+      !!cycle.start_date &&
+      !!cycle.end_date &&
+      today >= cycle.start_date &&
+      today <= cycle.end_date
+    return shapes
+      .filter((shape) => !!shape.frameId)
+      .map((shape) => ({
+        frameId: shape.frameId as string,
+        shapeId: shape.id,
+        title: shape.title,
+        // A room written before ADR 0023 can still hold a `framing` stage, and
+        // an unreadable stage is not a reason to lose the shape.
+        stage: isShapeStage(shape.stage) ? shape.stage : 'shaping',
+        cycleSlug: cycle.slug,
+        cycleTitle: cycle.title || cycle.slug,
+        currentCycle,
+      }))
+  })
+}
+
+function isShapeStage(value: unknown): value is ShapeStage {
+  return value === 'shaping' || value === 'building' || value === 'done'
+}
+
+/**
  * A frame is **sharp** when it has both a problem and an appetite. Derived,
  * never a stored flag, the same way the cycle phase is date-derived (ADR 0015).
  * Only a sharp frame can be bet on, so nobody bets on half a frame.
@@ -130,6 +184,8 @@ function text(value: string | undefined): string {
  */
 export type CycleWindow = {
   slug: string
+  /** What the cycle is called, so the frame detail names it rather than its slug. */
+  title: string
   type: 'build' | 'cooldown'
   /** ISO dates (YYYY-MM-DD), or '' when the cycle is undated. */
   start_date: string
@@ -348,6 +404,15 @@ export type RenderedPin = {
   /** A problem AND an appetite. A rough pin must never look like agreed work. */
   sharp: boolean
   state: FrameState
+  /** Engagement, the fourth pin channel: read from the linked shapes' stages. */
+  outline: PinOutline
+  /** Every shape that attacked this frame, with its cycle. Never stored. */
+  shapes: LinkedShape[]
+  /**
+   * Somebody has bet on this before. The map shows a MARK and no number: past
+   * investment must never read as priority (ADR 0024).
+   */
+  worked: boolean
   /** Built from the problem and the appetite. null for a rough frame. */
   candidateStatement: string | null
   /**
@@ -539,6 +604,9 @@ function renderPin(
     size: pinSize(count),
     sharp: isSharp(frame),
     state: frameState(frame, shapes),
+    outline: pinOutline(shapes),
+    shapes,
+    worked: shapes.length > 0,
     candidateStatement: candidateStatement(frame),
     daysSinceWoken: days,
     cyclesSinceWoken: elapsed,

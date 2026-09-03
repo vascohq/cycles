@@ -2060,3 +2060,53 @@ describe('wakeFrame', () => {
     )
   })
 })
+
+describe('upsertPitch frame pointer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const ROOM = 'org_1:cycle:2026-q3'
+
+  it('stores the frame the shape attacks', async () => {
+    const storage = setupStorage()
+
+    await upsertPitch(ROOM, {
+      title: 'Fix silent imports',
+      stage: 'shaping',
+      frame_problem: 'Imports fail silently',
+      frameId: 'f1',
+    })
+
+    const pitch = storage.pitches.find(() => true)!
+    expect(pitch.get('frameId')).toBe('f1')
+    // The Frame as bet: a copy taken now, which the map can never rewrite.
+    expect(pitch.get('frame_problem')).toBe('Imports fail silently')
+  })
+
+  it('leaves a shape created with no frame without one', async () => {
+    const storage = setupStorage()
+
+    await upsertPitch(ROOM, { title: 'Cooldown chores', stage: 'building' })
+
+    expect(storage.pitches.find(() => true)!.get('frameId')).toBeUndefined()
+  })
+
+  it('leaves the frame pointer alone when the caller omits it (ADR 0011)', async () => {
+    const storage = setupStorage({
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frameId: 'f1' })],
+    })
+
+    await upsertPitch(ROOM, { id: 'p1', title: 'Renamed', stage: 'building' })
+
+    expect(storage.pitches.find(() => true)!.get('frameId')).toBe('f1')
+  })
+
+  it('clears the frame pointer on an empty string', async () => {
+    const storage = setupStorage({
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frameId: 'f1' })],
+    })
+
+    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', frameId: '' })
+
+    expect(storage.pitches.find(() => true)!.get('frameId')).toBeUndefined()
+  })
+})
