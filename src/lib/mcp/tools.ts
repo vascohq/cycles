@@ -16,7 +16,7 @@ import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
-import { FRAME_KINDS, FRAME_TYPES } from '@/lib/product-map-engine'
+import { FRAME_KINDS, FRAME_TYPES, POINTER_KINDS } from '@/lib/product-map-engine'
 import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
 import {
   createCycle,
@@ -39,6 +39,7 @@ import {
   upsertArea,
   upsertFrame,
   attachReport,
+  linkPointer,
 } from './liveblocks-writer'
 import {
   getOrganizationUsers,
@@ -720,6 +721,34 @@ export async function handleAttachReport(
       link: params.link,
       text: params.text,
       date: params.date,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleLinkPointer(
+  orgId: string,
+  params: { frame_id?: string; url?: string; kind?: string; label?: string }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  if (!params.url?.trim()) {
+    return errorResult('A pointer needs a "url" — the artifact lives at the other end.')
+  }
+  if (!params.kind) {
+    return errorResult(
+      `A pointer needs a "kind". One of: ${POINTER_KINDS.join(', ')}. There is no kind for a Shape: a shape points at its frame, not the reverse.`
+    )
+  }
+  try {
+    const result = await linkPointer(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      url: params.url,
+      kind: params.kind as never,
+      label: params.label,
     })
     return jsonResult(result)
   } catch (err) {
@@ -1847,6 +1876,46 @@ export function registerCyclesTools(server: any): void {
         ...params,
         capturer: params.capturer?.trim() || getUserId(extra),
       })
+    }
+  )
+
+  defineTool(
+    server,
+    'map_link_pointer',
+    'Attach an outbound link to a frame: a GitHub issue, a wayfinder map, a research artifact, the shaped writeup, a pull request, or the conversation it came from. The artifact stays where it lives — a frame packages pointers and never imports, syncs or mirrors. There is NO kind for a Shape: a shape points at its frame, not the reverse. This touches nothing else on the frame, and it does not wake it.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame this pointer belongs to.'),
+      url: z.string().describe('Where the artifact lives.'),
+      kind: z
+        .enum(POINTER_KINDS)
+        .describe(
+          "What is at the other end. The frame's Type decides which kinds its playbook expects, and the ones it lacks are its gap list — a prompt, never a gate."
+        ),
+      label: z
+        .string()
+        .optional()
+        .describe('What to call the link. Defaults to the name of its kind.'),
+    },
+    {
+      title: 'Link a pointer to a frame',
+      readOnlyHint: false,
+      destructiveHint: false,
+      // NOT idempotent: two calls with the same url file the link twice.
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        ...params
+      }: { org?: string; frame_id?: string; url?: string; kind?: string; label?: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleLinkPointer(resolved.org.id, params)
     }
   )
 }

@@ -9,13 +9,22 @@ import type {
   PitchUpdate,
   Squad,
 } from '@/cycle-liveblocks.config'
-import type { Area, Frame, FrameReport } from '@/product-map-liveblocks.config'
+import type {
+  Area,
+  Frame,
+  FramePointer,
+  FrameReport,
+  PointerKind,
+} from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
   FRAME_KINDS,
   FRAME_TYPES,
+  POINTER_KINDS,
+  POINTER_KIND_LABELS,
   isFrameKind,
   isFrameType,
+  isPointerKind,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
@@ -1283,6 +1292,51 @@ export async function attachReport(
 
   if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
   return { frameId: params.frameId, reportCount }
+}
+
+/**
+ * Attach a pointer to a frame. A frame packages pointers; the artifact stays
+ * where it lives, so the map never becomes a second copy that drifts.
+ *
+ * This writes ONE field: the pointer list. It does not wake the frame, because
+ * only three things do and filing a link is not one of them (ADR 0024).
+ */
+export async function linkPointer(
+  roomId: string,
+  params: { frameId: string; url: string; kind: PointerKind; label?: string }
+): Promise<{ frameId: string; pointerCount: number }> {
+  if (!params.url.trim()) {
+    throw new Error('A pointer needs a url — the artifact lives at the other end of it.')
+  }
+  if (!isPointerKind(params.kind)) {
+    throw new Error(
+      `Invalid pointer kind: "${params.kind}". One of: ${POINTER_KINDS.join(', ')}.`
+    )
+  }
+
+  let notFound = false
+  let pointerCount = 0
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    const pointer: FramePointer = {
+      url: params.url.trim(),
+      // A pointer with no label still needs something to click. The kind is the
+      // honest fallback, and a caller can rename it later.
+      label: params.label?.trim() || POINTER_KIND_LABELS[params.kind],
+      kind: params.kind,
+    }
+    const pointers = (getField(existing, 'pointers') ?? []) as FramePointer[]
+    existing.set('pointers', [...pointers, pointer])
+    pointerCount = pointers.length + 1
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, pointerCount }
 }
 
 function setOrClear(item: any, key: string, value: string | undefined): void {

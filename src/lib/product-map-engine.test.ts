@@ -5,10 +5,14 @@ import {
   FRAME_TYPES,
   KIND_COLORS,
   HEAT_LENSES,
+  PLAYBOOKS,
+  POINTER_KINDS,
   PIN_MAX_SIZE,
   PIN_MIN_SIZE,
   candidateStatement,
   frameState,
+  gapList,
+  isPointerKind,
   pinSize,
   reportCount,
   isFrameKind,
@@ -17,7 +21,12 @@ import {
   renderProductMap,
   type LinkedShape,
 } from './product-map-engine'
-import type { Area, Frame, FrameReport } from '@/product-map-liveblocks.config'
+import type {
+  Area,
+  Frame,
+  FramePointer,
+  FrameReport,
+} from '@/product-map-liveblocks.config'
 
 function makeFrame(overrides: Partial<Frame> = {}): Frame {
   return {
@@ -566,5 +575,67 @@ describe('the rendered pin under each lens', () => {
       today: '2026-09-02',
     })
     expect(model.pins[0].reports).toHaveLength(4)
+  })
+})
+
+describe('playbooks and the gap list', () => {
+  function pointer(kind: FramePointer['kind']): FramePointer {
+    return { url: 'https://example.test/1', label: 'x', kind }
+  }
+
+  it('gives every Type a playbook, so a Type with none would be a bug', () => {
+    for (const type of FRAME_TYPES) {
+      expect(PLAYBOOKS[type]).toBeDefined()
+    }
+  })
+
+  it('expects less of a bug than of an idea, so a small fix carries no ceremony', () => {
+    expect(PLAYBOOKS.bug.expects.length).toBeLessThan(PLAYBOOKS.idea.expects.length)
+  })
+
+  it('expects a pull request on a security frame', () => {
+    expect(PLAYBOOKS.security.expects).toContain('pull_request')
+  })
+
+  it('names no pointer kind for a Shape, because a shape points at its frame', () => {
+    expect(isPointerKind('shape')).toBe(false)
+    expect([...POINTER_KINDS]).not.toContain('shape')
+  })
+
+  it('lists what the playbook expects and the frame lacks', () => {
+    const frame = makeFrame({ type: 'bug', pointers: [pointer('issue')] })
+    expect(gapList(frame)).toEqual(['pull_request'])
+  })
+
+  it('lists nothing once the frame points at everything expected', () => {
+    const frame = makeFrame({
+      type: 'bug',
+      pointers: [pointer('issue'), pointer('pull_request')],
+    })
+    expect(gapList(frame)).toEqual([])
+  })
+
+  it('lists nothing for a Type whose playbook expects nothing', () => {
+    expect(gapList(makeFrame({ type: 'irritant', pointers: [] }))).toEqual([])
+  })
+
+  it('ignores a pointer the playbook never asked for', () => {
+    const frame = makeFrame({ type: 'irritant', pointers: [pointer('wayfinder')] })
+    expect(gapList(frame)).toEqual([])
+  })
+
+  it('reads a frame stored before pointers existed as one full gap list', () => {
+    const frame = makeFrame({ type: 'bug' })
+    delete (frame as Partial<Frame>).pointers
+    expect(gapList(frame)).toEqual(['issue', 'pull_request'])
+  })
+
+  it('hands the pin its pointers and its gaps', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ type: 'bug', pointers: [pointer('issue')] })],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].pointers).toHaveLength(1)
+    expect(model.pins[0].gaps).toEqual(['pull_request'])
   })
 })

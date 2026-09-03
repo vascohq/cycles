@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -31,6 +31,7 @@ vi.mock('./liveblocks-writer', () => ({
   upsertArea: vi.fn(),
   upsertFrame: vi.fn(),
   attachReport: vi.fn(),
+  linkPointer: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
   openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
@@ -50,7 +51,7 @@ vi.mock('@/lib/users', async (importOriginal) => ({
 }))
 
 import { listCycleRooms, getCycleStorage, resolvePitch, getProductMapStorage } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -1428,6 +1429,65 @@ describe('handleAttachReport', () => {
       frame_id: 'nope',
       capturer: 'user_2',
       text: 'again',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Frame not found: "nope"')
+  })
+})
+
+describe('handleLinkPointer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockLinkPointer = vi.mocked(linkPointer)
+
+  it('attaches a pointer to an existing frame', async () => {
+    mockLinkPointer.mockResolvedValue({ frameId: 'f1', pointerCount: 2 })
+
+    const result = await handleLinkPointer(ORG_ID, {
+      frame_id: 'f1',
+      url: 'https://notion.test/doc',
+      kind: 'shaped_doc',
+      label: 'The writeup',
+    })
+
+    expect(mockLinkPointer).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      frameId: 'f1',
+      url: 'https://notion.test/doc',
+      kind: 'shaped_doc',
+      label: 'The writeup',
+    })
+    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', pointerCount: 2 })
+  })
+
+  it('rejects a pointer with no frame, no url or no kind, and writes nothing', async () => {
+    expect((await handleLinkPointer(ORG_ID, { url: 'https://x.test', kind: 'issue' })).isError).toBe(true)
+    expect((await handleLinkPointer(ORG_ID, { frame_id: 'f1', kind: 'issue' })).isError).toBe(true)
+    expect((await handleLinkPointer(ORG_ID, { frame_id: 'f1', url: 'https://x.test' })).isError).toBe(true)
+    expect(mockLinkPointer).not.toHaveBeenCalled()
+  })
+
+  it('says a Shape is not a pointer when the kind is missing', async () => {
+    const result = await handleLinkPointer(ORG_ID, { frame_id: 'f1', url: 'https://x.test' })
+
+    expect(result.content[0].text).toContain('Shape')
+  })
+
+  it('passes an omitted label through as undefined (ADR 0011)', async () => {
+    mockLinkPointer.mockResolvedValue({ frameId: 'f1', pointerCount: 1 })
+
+    await handleLinkPointer(ORG_ID, { frame_id: 'f1', url: 'https://x.test', kind: 'issue' })
+
+    expect(mockLinkPointer.mock.calls[0][1].label).toBeUndefined()
+  })
+
+  it('reports a writer failure as an error, not a success', async () => {
+    mockLinkPointer.mockRejectedValue(new Error('Frame not found: "nope"'))
+
+    const result = await handleLinkPointer(ORG_ID, {
+      frame_id: 'nope',
+      url: 'https://x.test',
+      kind: 'issue',
     })
 
     expect(result.isError).toBe(true)

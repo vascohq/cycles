@@ -7,8 +7,10 @@ import type {
   Area,
   Frame,
   FrameKind,
+  FramePointer,
   FrameReport,
   FrameType,
+  PointerKind,
 } from '@/product-map-liveblocks.config'
 
 // Kind is how much a problem hurts. It is the only axis with a color on the map.
@@ -122,6 +124,75 @@ function text(value: string | undefined): string {
 }
 
 /**
+ * The kinds of artifact a frame can point at. A frame holds ONLY pointers — the
+ * artifacts live in GitHub, in Notion or in a wayfinder map and stay there, so
+ * the map never becomes a second copy that drifts.
+ *
+ * There is deliberately no kind for a Shape. A shape points at its frame, not
+ * the reverse, so a frame's shape list is read from the cycle rooms (ADR 0022).
+ */
+export const POINTER_KINDS = [
+  'issue',
+  'wayfinder',
+  'research',
+  'shaped_doc',
+  'pull_request',
+  'conversation',
+] as const satisfies readonly PointerKind[]
+
+export type { PointerKind }
+
+export function isPointerKind(value: unknown): value is PointerKind {
+  return (POINTER_KINDS as readonly unknown[]).includes(value)
+}
+
+/**
+ * Prose for each pointer kind. Shared, because the writer needs it as the
+ * fallback label for a pointer that arrived without one, and the view needs it
+ * to name a gap.
+ */
+export const POINTER_KIND_LABELS: Record<PointerKind, string> = {
+  issue: 'Issue',
+  wayfinder: 'Wayfinder map',
+  research: 'Research',
+  shaped_doc: 'Shaped writeup',
+  pull_request: 'Pull request',
+  conversation: 'Conversation',
+}
+
+/**
+ * Type selects the playbook, and a playbook names the pointer kinds its frames
+ * expect (ADR 0025). This is routing, not decoration: a bug expects less than
+ * an idea, because a small fix should not carry Shape Up ceremony.
+ *
+ * The expected set minus the frame's own pointers is its **Gap list**. A gap
+ * blocks NOTHING. It is a prompt, never a gate.
+ */
+export const PLAYBOOKS: Record<FrameType, { expects: readonly PointerKind[] }> = {
+  // Reproduce it, fix it, point at the fix. No shaping ceremony.
+  bug: { expects: ['issue', 'pull_request'] },
+  // A feature runs Shape Up: read first, shape it, then build it.
+  idea: { expects: ['research', 'shaped_doc', 'pull_request'] },
+  // A request starts in a conversation, and it still has to be shaped.
+  request: { expects: ['conversation', 'shaped_doc'] },
+  // One pull request per service is how these actually get fixed. The gap list
+  // cannot count services — there is no service model — so it asks for the
+  // first pull request and the playbook prose carries the rest.
+  security: { expects: ['issue', 'pull_request'] },
+  // An irritant expects nothing. It is a note, not a project.
+  irritant: { expects: [] },
+}
+
+/** The pointer kinds a frame's playbook expects and the frame does not have. */
+export function gapList(frame: Pick<Frame, 'type' | 'pointers'>): PointerKind[] {
+  const playbook = PLAYBOOKS[frame.type]
+  // A Type with no playbook would be a bug, not a reason to throw at read time.
+  if (!playbook) return []
+  const have = new Set((frame.pointers ?? []).map((p) => p.kind))
+  return playbook.expects.filter((kind) => !have.has(kind))
+}
+
+/**
  * Which reports count towards a pin's size. A frame has ONE freshness clock;
  * the lens only filters what feeds the size. A frame hot with customers and
  * cold internally is the most useful thing the map can show.
@@ -174,6 +245,10 @@ export type RenderedPin = {
   color: string
   /** Every report on the frame, unfiltered — the detail shows the evidence. */
   reports: FrameReport[]
+  /** The outbound links this frame packages. No artifact is ever stored. */
+  pointers: FramePointer[]
+  /** What the playbook expects and the frame lacks. A prompt, never a gate. */
+  gaps: PointerKind[]
   /** Reports that pass the active heat lens. Size reads this, nothing else. */
   reportCount: number
   /** Diameter in pixels. Size is the second pin channel. */
@@ -325,6 +400,8 @@ function renderPin(
     owner: frame.owner ?? null,
     color: KIND_COLORS[kind],
     reports: frame.reports ?? [],
+    pointers: frame.pointers ?? [],
+    gaps: gapList(frame),
     reportCount: count,
     size: pinSize(count),
     sharp: isSharp(frame),

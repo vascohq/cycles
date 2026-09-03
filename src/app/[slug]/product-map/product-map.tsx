@@ -15,8 +15,10 @@ import type {
   Area,
   Frame,
   FrameKind,
+  FramePointer,
   FrameReport,
   FrameType,
+  PointerKind,
 } from '@/product-map-liveblocks.config'
 import {
   AREA_GAP,
@@ -25,6 +27,8 @@ import {
   FRAME_KINDS,
   FRAME_TYPES,
   HEAT_LENSES,
+  POINTER_KINDS,
+  POINTER_KIND_LABELS,
   renderProductMap,
   type FrameState,
   type HeatLens,
@@ -477,6 +481,7 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
           </Select>
         </Field>
 
+        <Pointers pin={pin} />
         <Reports pin={pin} />
       </SheetContent>
     </Sheet>
@@ -484,6 +489,105 @@ function FrameDetail({ pin, onClose }: { pin: RenderedPin | null; onClose: () =>
 }
 
 type EditableField = 'problem' | 'appetite' | 'business_case' | 'kind' | 'type' | 'owner'
+
+/**
+ * The dossier. A frame packages links and never copies the artifact, so the
+ * whole dossier is reachable from one place without anything drifting.
+ *
+ * Under it, the **Gap list**: what this frame's playbook expects and the frame
+ * does not have. It refuses nothing — it is a prompt, never a gate (ADR 0025).
+ */
+function Pointers({ pin }: { pin: RenderedPin }) {
+  const [url, setUrl] = useState('')
+  const [label, setLabel] = useState('')
+  const [kind, setKind] = useState<PointerKind>('issue')
+
+  const addPointer = useProductMapMutation(
+    ({ storage }, frameId: string, pointer: FramePointer) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      const pointers = (frame.get('pointers') ?? []) as FramePointer[]
+      frame.set('pointers', [...pointers, pointer])
+      // Deliberately no wake: filing a link is not one of the three things that
+      // wake a frame (ADR 0024).
+    },
+    []
+  )
+
+  function onSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    const href = url.trim()
+    if (!href) return
+    addPointer(pin.frameId, {
+      url: href,
+      label: label.trim() || POINTER_KIND_LABELS[kind],
+      kind,
+    })
+    setUrl('')
+    setLabel('')
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-t pt-4">
+      <Label>Pointers ({pin.pointers.length})</Label>
+      <ul className="flex flex-col gap-1.5">
+        {pin.pointers.map((pointer, i) => (
+          <li key={i} className="flex items-center gap-2 text-sm">
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {POINTER_KIND_LABELS[pointer.kind] ?? pointer.kind}
+            </span>
+            <a
+              className="truncate underline"
+              href={pointer.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {pointer.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+      {pin.gaps.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          A {TYPE_LABELS[pin.type].toLowerCase()} frame usually also points at:{' '}
+          {pin.gaps.map((gap) => POINTER_KIND_LABELS[gap]).join(', ')}. Nothing is
+          blocked while these are missing.
+        </p>
+      )}
+      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+        <Input
+          className="min-w-40 flex-1"
+          placeholder="https://…"
+          aria-label="Pointer url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <Select value={kind} onValueChange={(v) => setKind(v as PointerKind)}>
+          <SelectTrigger className="w-40" aria-label="Pointer kind">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {POINTER_KINDS.map((k) => (
+              <SelectItem key={k} value={k}>
+                {POINTER_KIND_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          className="w-32"
+          placeholder="Label"
+          aria-label="Pointer label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <Button type="submit" variant="outline" disabled={!url.trim()}>
+          Link
+        </Button>
+      </form>
+    </div>
+  )
+}
 
 /**
  * The evidence. A reader needs the reports and not only the count, so an agent's

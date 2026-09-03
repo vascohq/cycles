@@ -33,6 +33,7 @@ import {
   upsertArea,
   upsertFrame,
   attachReport,
+  linkPointer,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -1924,6 +1925,94 @@ describe('attachReport', () => {
 
     await expect(
       attachReport(MAP_ROOM, { frameId: 'nope', capturer: 'user_2', text: 'again' })
+    ).rejects.toThrow('Frame not found: "nope"')
+  })
+})
+
+describe('linkPointer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('attaches the pointer and reports the new count', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await linkPointer(MAP_ROOM, {
+      frameId: 'f1',
+      url: 'https://github.test/org/repo/pull/9',
+      kind: 'pull_request',
+      label: 'The fix',
+    })
+
+    expect(result).toEqual({ frameId: 'f1', pointerCount: 2 })
+    const pointers = storage.frames.find(() => true)!.get('pointers') as any[]
+    expect(pointers[1]).toEqual({
+      url: 'https://github.test/org/repo/pull/9',
+      label: 'The fix',
+      kind: 'pull_request',
+    })
+  })
+
+  // The core ADR 0011 guarantee for this tool.
+  it('leaves every other field untouched, and does not wake the frame', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await linkPointer(MAP_ROOM, {
+      frameId: 'f1',
+      url: 'https://notion.test/doc',
+      kind: 'shaped_doc',
+    })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('appetite')).toBe('2 weeks')
+    expect(frame.get('business_case')).toBe('Three customers hit this last month')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('reports')).toHaveLength(1)
+    // Filing a link is not one of the three things that wake a frame (ADR 0024).
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+  })
+
+  it('falls back to the kind for a label, so there is always something to click', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ pointers: [] })] })
+
+    await linkPointer(MAP_ROOM, {
+      frameId: 'f1',
+      url: 'https://github.test/org/repo/issues/1',
+      kind: 'wayfinder',
+    })
+
+    const pointers = storage.frames.find(() => true)!.get('pointers') as any[]
+    expect(pointers[0].label).toBe('Wayfinder map')
+  })
+
+  // A shape points at its frame, not the reverse (ADR 0022), so the vocabulary
+  // has no kind for one and the writer refuses it.
+  it('refuses a pointer kind outside the vocabulary, a Shape included', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      linkPointer(MAP_ROOM, { frameId: 'f1', url: 'https://x.test', kind: 'shape' as never })
+    ).rejects.toThrow('Invalid pointer kind')
+  })
+
+  it('refuses a pointer with no url', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      linkPointer(MAP_ROOM, { frameId: 'f1', url: '  ', kind: 'issue' })
+    ).rejects.toThrow('A pointer needs a url')
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      linkPointer(MAP_ROOM, { frameId: 'nope', url: 'https://x.test', kind: 'issue' })
     ).rejects.toThrow('Frame not found: "nope"')
   })
 })
