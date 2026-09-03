@@ -31,15 +31,112 @@ export function isFrameType(value: unknown): value is FrameType {
   return (FRAME_TYPES as readonly unknown[]).includes(value)
 }
 
-/** A pin is only how a frame is drawn. It holds no data of its own. */
+/**
+ * A frame's position in its life. Derived from what the frame points at and
+ * never stored, so it can never drift from the truth (ADR 0025):
+ *
+ * `rough` (no appetite) → `candidate` (sharp, no Shape yet) → `in_flight` (a
+ * Shape that is not done) → `released` (its Shape reached done this cycle) →
+ * `monitoring` (released, and nobody has resolved it) → `resolved` (a person
+ * decided the problem is gone).
+ */
+export type FrameState =
+  | 'rough'
+  | 'candidate'
+  | 'in_flight'
+  | 'released'
+  | 'monitoring'
+  | 'resolved'
+
+/** A Shape's lifecycle phase. Mirrors the cycle model's Stage (ADR 0023). */
+export type ShapeStage = 'shaping' | 'building' | 'done'
+
+/**
+ * A Shape that points home to a frame. Passed in, because a frame never stores
+ * its shape list — the list is read from the cycle rooms (ADR 0022). The engine
+ * takes summaries so it stays free of Liveblocks.
+ */
+export type LinkedShape = {
+  frameId: string
+  shapeId: string
+  title: string
+  stage: ShapeStage
+  cycleSlug: string
+  cycleTitle: string
+  /** True when this shape sits in the cycle that is current today. */
+  currentCycle: boolean
+}
+
+/**
+ * A frame is **sharp** when it has both a problem and an appetite. Derived,
+ * never a stored flag, the same way the cycle phase is date-derived (ADR 0015).
+ * Only a sharp frame can be bet on, so nobody bets on half a frame.
+ */
+export function isSharp(frame: Pick<Frame, 'problem' | 'appetite'>): boolean {
+  return text(frame.problem) !== '' && text(frame.appetite) !== ''
+}
+
+/**
+ * The sentence the map shows under a sharp frame. The app builds it from the
+ * problem and the appetite, so nobody types it. null for a rough frame: there
+ * is no commitment to state until an appetite exists.
+ */
+export function candidateStatement(
+  frame: Pick<Frame, 'problem' | 'appetite'>
+): string | null {
+  if (!isSharp(frame)) return null
+  return `If we can shape this into something doable in ${text(frame.appetite)}, that is meaningful to us.`
+}
+
+/**
+ * A frame's state, from its appetite, its linked shapes and the resolved flag.
+ * Nothing here is stored.
+ */
+export function frameState(
+  frame: Pick<Frame, 'problem' | 'appetite' | 'resolved'>,
+  shapes: LinkedShape[] = []
+): FrameState {
+  // A person's decision outranks every derivation. Nothing resolves on a timer.
+  if (frame.resolved) return 'resolved'
+  if (shapes.length > 0) {
+    // One shape still moving means work is in flight, even beside an older
+    // release: a frame can be attacked again years later (ADR 0022).
+    if (shapes.some((s) => s.stage !== 'done')) return 'in_flight'
+    // Every shape is done. `released` while the release is this cycle's news;
+    // `monitoring` once it is not. Monitoring has no end condition, so only a
+    // person moves a frame on from here (ADR 0025).
+    return shapes.some((s) => s.currentCycle) ? 'released' : 'monitoring'
+  }
+  return isSharp(frame) ? 'candidate' : 'rough'
+}
+
+/** Stored strings outlive the code that wrote them, so read them defensively. */
+function text(value: string | undefined): string {
+  return (value ?? '').trim()
+}
+
+/**
+ * Everything the map and the frame detail draw for one frame. The **Pin** proper
+ * is only the marker; the rest of these fields are the frame's own text, carried
+ * here so the view derives nothing for itself.
+ */
 export type RenderedPin = {
   frameId: string
   areaId: string
   kind: FrameKind
   type: FrameType
   problem: string
+  appetite: string
+  businessCase: string
+  /** Clerk user id of the frame owner, or null when nobody holds it. */
+  owner: string | null
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
+  /** A problem AND an appetite. A rough pin must never look like agreed work. */
+  sharp: boolean
+  state: FrameState
+  /** Built from the problem and the appetite. null for a rough frame. */
+  candidateStatement: string | null
   /**
    * Whole days between the frame's last wake and today. null when the frame has
    * never been woken or carries an unreadable date. Freshness reads this (#224).
@@ -81,11 +178,16 @@ export function renderProductMap(input: {
   areas?: Area[]
   frames: Frame[]
   today: string
+  /** Shapes that point home to a frame, read from the cycle rooms (ADR 0022). */
+  shapes?: LinkedShape[]
 }): ProductMapModel {
   const areas = input.areas ?? []
+  const shapesByFrame = groupShapesByFrame(input.shapes ?? [])
   // A resolved frame leaves the map: a person decided the problem is gone.
   // It is never deleted, so it stays readable through a filtered query.
-  const pins = input.frames.filter((f) => !f.resolved).map((f) => renderPin(f, input.today))
+  const pins = input.frames
+    .filter((f) => !f.resolved)
+    .map((f) => renderPin(f, input.today, shapesByFrame.get(f.id) ?? []))
 
   const known = new Set(areas.map((a) => a.id))
   const pinsByArea = new Map<string, RenderedPin[]>()
@@ -155,7 +257,7 @@ function areaShape(area: Area, depth: number): RenderedArea['shape'] {
   return { x: area.x * (width + AREA_GAP), y: area.y * (height + AREA_GAP), width, height }
 }
 
-function renderPin(frame: Frame, today: string): RenderedPin {
+function renderPin(frame: Frame, today: string, shapes: LinkedShape[]): RenderedPin {
   const kind = isFrameKind(frame.kind) ? frame.kind : DEFAULT_KIND
   return {
     frameId: frame.id,
@@ -163,9 +265,25 @@ function renderPin(frame: Frame, today: string): RenderedPin {
     kind,
     type: frame.type,
     problem: frame.problem,
+    appetite: frame.appetite ?? '',
+    businessCase: frame.business_case ?? '',
+    owner: frame.owner ?? null,
     color: KIND_COLORS[kind],
+    sharp: isSharp(frame),
+    state: frameState(frame, shapes),
+    candidateStatement: candidateStatement(frame),
     daysSinceWoken: daysBetween(frame.last_woken, today),
   }
+}
+
+function groupShapesByFrame(shapes: LinkedShape[]): Map<string, LinkedShape[]> {
+  const byFrame = new Map<string, LinkedShape[]>()
+  for (const shape of shapes) {
+    const bucket = byFrame.get(shape.frameId)
+    if (bucket) bucket.push(shape)
+    else byFrame.set(shape.frameId, [shape])
+  }
+  return byFrame
 }
 
 /** Whole days from `from` to `to`, both ISO calendar dates. null if either is unreadable. */

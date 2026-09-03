@@ -4,9 +4,13 @@ import {
   FRAME_KINDS,
   FRAME_TYPES,
   KIND_COLORS,
+  candidateStatement,
+  frameState,
   isFrameKind,
   isFrameType,
+  isSharp,
   renderProductMap,
+  type LinkedShape,
 } from './product-map-engine'
 import type { Area, Frame } from '@/product-map-liveblocks.config'
 
@@ -22,6 +26,19 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
     pointers: [],
     last_woken: '2026-09-01',
     resolved: false,
+    ...overrides,
+  }
+}
+
+function makeShape(overrides: Partial<LinkedShape> = {}): LinkedShape {
+  return {
+    frameId: 'f1',
+    shapeId: 's1',
+    title: 'Silent import failures',
+    stage: 'building',
+    cycleSlug: '2026-q3',
+    cycleTitle: 'Q3',
+    currentCycle: true,
     ...overrides,
   }
 }
@@ -333,5 +350,119 @@ describe("an area's generated shape", () => {
       today: '2026-09-02',
     })
     expect(model.areas[0].children[0].shape.width).toBeLessThan(model.areas[0].shape.width)
+  })
+})
+
+describe('sharp', () => {
+  it('is true only when the frame has both a problem and an appetite', () => {
+    expect(isSharp(makeFrame({ problem: 'Imports fail', appetite: '2 weeks' }))).toBe(true)
+  })
+
+  it('is false for a problem with no appetite', () => {
+    expect(isSharp(makeFrame({ problem: 'Imports fail', appetite: '' }))).toBe(false)
+  })
+
+  it('is false for an appetite with no problem', () => {
+    expect(isSharp(makeFrame({ problem: '', appetite: '2 weeks' }))).toBe(false)
+  })
+
+  it('is false for whitespace, so a stray space never sharpens a frame', () => {
+    expect(isSharp(makeFrame({ problem: 'Imports fail', appetite: '   ' }))).toBe(false)
+  })
+})
+
+describe('the candidate statement', () => {
+  it('is built from the appetite, so nobody types it', () => {
+    expect(candidateStatement(makeFrame({ appetite: '6 weeks' }))).toBe(
+      'If we can shape this into something doable in 6 weeks, that is meaningful to us.'
+    )
+  })
+
+  it('is absent for a rough frame: there is no commitment to state yet', () => {
+    expect(candidateStatement(makeFrame({ appetite: '' }))).toBeNull()
+  })
+})
+
+describe('frame state', () => {
+  it('reads rough with no appetite', () => {
+    expect(frameState(makeFrame({ appetite: '' }))).toBe('rough')
+  })
+
+  it('reads candidate when sharp with no shape yet', () => {
+    expect(frameState(makeFrame({ appetite: '2 weeks' }), [])).toBe('candidate')
+  })
+
+  it('reads in_flight while a linked shape is not done', () => {
+    const frame = makeFrame({ appetite: '2 weeks' })
+    expect(frameState(frame, [makeShape({ stage: 'shaping' })])).toBe('in_flight')
+    expect(frameState(frame, [makeShape({ stage: 'building' })])).toBe('in_flight')
+  })
+
+  it('reads released once the shape is done in the current cycle', () => {
+    const frame = makeFrame({ appetite: '2 weeks' })
+    expect(frameState(frame, [makeShape({ stage: 'done', currentCycle: true })])).toBe(
+      'released'
+    )
+  })
+
+  it('reads monitoring once the release is behind us, and never ends by itself', () => {
+    const frame = makeFrame({ appetite: '2 weeks' })
+    expect(frameState(frame, [makeShape({ stage: 'done', currentCycle: false })])).toBe(
+      'monitoring'
+    )
+  })
+
+  it('reads in_flight when a new shape attacks a frame released years ago', () => {
+    const frame = makeFrame({ appetite: '2 weeks' })
+    const shapes = [
+      makeShape({ shapeId: 's1', stage: 'done', currentCycle: false, cycleSlug: '2024-q1' }),
+      makeShape({ shapeId: 's2', stage: 'shaping', currentCycle: true }),
+    ]
+    expect(frameState(frame, shapes)).toBe('in_flight')
+  })
+
+  it('reads resolved whatever the shapes say, because a person decided', () => {
+    const frame = makeFrame({ appetite: '2 weeks', resolved: true })
+    expect(frameState(frame, [makeShape({ stage: 'building' })])).toBe('resolved')
+    expect(frameState(makeFrame({ appetite: '', resolved: true }))).toBe('resolved')
+  })
+})
+
+describe('the rendered pin carries the derived frame fields', () => {
+  it('marks a sharp frame sharp and hands over its candidate statement', () => {
+    const model = renderProductMap({
+      frames: [makeFrame({ appetite: '6 weeks', business_case: 'Two customers churned' })],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].sharp).toBe(true)
+    expect(model.pins[0].state).toBe('candidate')
+    expect(model.pins[0].candidateStatement).toContain('6 weeks')
+    expect(model.pins[0].appetite).toBe('6 weeks')
+    expect(model.pins[0].businessCase).toBe('Two customers churned')
+  })
+
+  it('marks a raw capture rough, so it never reads as agreed work', () => {
+    const model = renderProductMap({ frames: [makeFrame()], today: '2026-09-02' })
+    expect(model.pins[0].sharp).toBe(false)
+    expect(model.pins[0].state).toBe('rough')
+    expect(model.pins[0].candidateStatement).toBeNull()
+  })
+
+  it('reads the shapes of that frame only, never a neighbour frame shapes', () => {
+    const model = renderProductMap({
+      frames: [
+        makeFrame({ id: 'f1', appetite: '2 weeks' }),
+        makeFrame({ id: 'f2', appetite: '2 weeks' }),
+      ],
+      shapes: [makeShape({ frameId: 'f1', stage: 'building' })],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].state).toBe('in_flight')
+    expect(model.pins[1].state).toBe('candidate')
+  })
+
+  it('reports no owner as null rather than an empty string', () => {
+    const model = renderProductMap({ frames: [makeFrame()], today: '2026-09-02' })
+    expect(model.pins[0].owner).toBeNull()
   })
 })

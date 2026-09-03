@@ -12,6 +12,12 @@ vi.mock('./product-map', () => ({
   ProductMap: () => null,
 }))
 
+// The page reads the org's members so the frame detail can name a Frame owner.
+// Clerk is stubbed here: this file is about routing, not about membership.
+vi.mock('@/lib/users', () => ({
+  getOrganizationUsers: vi.fn(async () => []),
+}))
+
 import ProductMapPage from './page'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
@@ -44,6 +50,11 @@ describe('ProductMapPage', () => {
     const element: any = await ProductMapPage(params('my-org'))
     expect(element).toBeTruthy()
     expect(mockRedirect).not.toHaveBeenCalled()
+  })
+
+  it('hands the frame detail the org members, so an owner reads as a name', async () => {
+    const element: any = await ProductMapPage(params('my-org'))
+    expect(element.props.organizationUsers).toEqual([])
   })
 
   it('falls back to the user id in a personal workspace', async () => {
