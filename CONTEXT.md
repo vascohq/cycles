@@ -134,6 +134,11 @@ _Avoid_: Inbox, triage, uncategorized
 **Resolve**:
 To remove a frame from the Product Map because the problem is gone. Only a person resolves a frame. Nothing resolves on a timer. The frame's **Area** keeps the record and the **Shapes** that closed it.
 _Avoid_: Close, done, complete, delete
+_Not_: **Delete**. Resolve is for a problem that is gone. Delete is for a frame that never described a problem ([ADR 0026](docs/adr/0026-a-frame-can-be-deleted-only-for-map-hygiene.md)).
+
+**Delete** (Product Map):
+To erase a frame or an area that should never have been captured, such as a duplicate, a test or a mistake. It destroys the record, and no tool puts it back. Deleting an area keeps what is inside it: its frames go back to **Unmapped** and its sub-areas move to the top level.
+_Avoid_: Remove, archive, clear
 
 **Investment**:
 The **Shapes** that attacked a frame, with their cycles. The Product Map shows a mark on a worked frame and no number. Investment does not stop a frame from going dormant, because sunk cost must never set priority.

@@ -805,7 +805,7 @@ describe('tool annotations', () => {
   }
 
   const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_frames', 'map_list_areas']
-  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch']
+  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch', 'map_delete_frame', 'map_delete_area']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
     const tools = collectTools()

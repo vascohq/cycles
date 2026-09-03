@@ -18,13 +18,13 @@ The team also decided that agents drive every operation on the map. Existing MCP
 
 Its MCP tools live in the same server as the cycle tools. They are org-scoped and they carry a `map_` prefix, so no caller confuses them with the cycle-scoped tools:
 
-- `map_list_areas`, `map_upsert_area`
-- `map_list_frames`, `map_upsert_frame`, `map_resolve_frame`
+- `map_list_areas`, `map_upsert_area`, `map_delete_area`
+- `map_list_frames`, `map_upsert_frame`, `map_resolve_frame`, `map_delete_frame`
 - `map_wake_frame`
 - `map_attach_report`
 - `map_link_pointer`
 
-Every one obeys [ADR 0011](0011-mcp-upsert-tools-are-partial-updates.md). All non-identity fields are optional, and the writer only writes what the caller sent. **A wake must never erase a frame.**
+Every one obeys [ADR 0011](0011-mcp-upsert-tools-are-partial-updates.md). All non-identity fields are optional, and the writer only writes what the caller sent. **A wake must never erase a frame.** The two delete tools are the exception to partial updates: they erase, and only for map hygiene ([ADR 0026](0026-a-frame-can-be-deleted-only-for-map-hygiene.md)).
 
 `map_list_frames` needs a filter to return **Dormant** frames. There is no unfiltered dormant listing, by design.
 

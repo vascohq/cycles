@@ -36,6 +36,8 @@ import {
   linkPointer,
   wakeFrame,
   resolveFrame,
+  deleteFrame,
+  deleteArea,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
@@ -2222,5 +2224,75 @@ describe('resolveFrame', () => {
     await expect(resolveFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
       'Frame not found: "nope"'
     )
+  })
+})
+
+describe('deleteFrame', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('removes the frame and clears any origin pointer at it', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      frames: [makeFrameItem(), makeFrameItem({ id: 'f2', originFrameId: 'f1' })],
+    })
+
+    await deleteFrame(MAP_ROOM, 'f1')
+
+    expect(storage.frames.map((f) => f.get('id'))).toEqual(['f2'])
+    expect(storage.frames.find(() => true)!.get('originFrameId')).toBeUndefined()
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(deleteFrame(MAP_ROOM, 'nope')).rejects.toThrow('Frame not found: "nope"')
+  })
+})
+
+describe('deleteArea', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('unfiles its frames and lifts its sub-areas, deleting neither', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      areas: [makeAreaItem(), makeAreaItem({ id: 'a2', parentAreaId: 'a1' })],
+      frames: [makeFrameItem({ areaId: 'a1' }), makeFrameItem({ id: 'f2', areaId: 'a2' })],
+    })
+
+    await deleteArea(MAP_ROOM, 'a1')
+
+    expect(storage.areas.map((a) => a.get('id'))).toEqual(['a2'])
+    expect(storage.areas.find(() => true)!.get('parentAreaId')).toBeUndefined()
+    expect(storage.frames.map((f) => f.get('areaId'))).toEqual([undefined, 'a2'])
+  })
+
+  it('moves every lifted sub-area to a free grid slot, off each other', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    // Both sub-areas sit on their parent's slot, which is what a sub-area does.
+    // Lifted to the top level unchanged, they would draw on top of each other.
+    const storage = setupStorage({
+      areas: [
+        makeAreaItem({ id: 'a1', x: 0, y: 0 }),
+        makeAreaItem({ id: 'keep', x: 1, y: 0 }),
+        makeAreaItem({ id: 'sub1', parentAreaId: 'a1', x: 0, y: 0 }),
+        makeAreaItem({ id: 'sub2', parentAreaId: 'a1', x: 0, y: 0 }),
+      ],
+    })
+
+    await deleteArea(MAP_ROOM, 'a1')
+
+    // The property that matters is that no two areas share a slot. Which free
+    // slot each one lands on is the grid's business, not this test's.
+    const slots = storage.areas.map((a) => `${a.get('x')},${a.get('y')}`)
+    expect(new Set(slots).size).toBe(3)
+    expect(storage.areas.filter((a) => a.get('parentAreaId') !== undefined)).toHaveLength(0)
+  })
+
+  it('throws when the area id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ areas: [makeAreaItem()] })
+
+    await expect(deleteArea(MAP_ROOM, 'nope')).rejects.toThrow('Area not found: "nope"')
   })
 })
