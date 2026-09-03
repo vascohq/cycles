@@ -1423,19 +1423,16 @@ export async function resolveFrame(
 /**
  * Delete a frame outright, because it should never have been captured — a
  * duplicate, a test, a mistake. This is NOT how a solved problem leaves the
- * map: that is map_resolve_frame, which keeps the record (ADR 0025).
+ * Product Map: that is resolveFrame, which keeps the record (ADR 0026).
  *
- * Any frame that named this one as its origin loses that pointer, so the map
- * keeps no reference to a frame that is gone.
+ * Any frame that named this one as its origin loses that pointer. Only this
+ * room is cleaned: a Shape's `frame_id` lives in a cycle room and can be left
+ * pointing at a frame that is gone (ADR 0026, open question 2).
  */
-export async function deleteFrame(
-  roomId: string,
-  id: string,
-  injectedRoot?: any
-): Promise<void> {
+export async function deleteFrame(roomId: string, id: string): Promise<void> {
   let notFound = false
 
-  await withRoot(roomId, injectedRoot, (root: any) => {
+  await withRoot(roomId, undefined, (root: any) => {
     const frames = root.get('frames')
     const idx = frames.findIndex((f: any) => getField(f, 'id') === id)
     if (idx === -1) {
@@ -1454,17 +1451,16 @@ export async function deleteFrame(
 
 /**
  * Delete an area. Nothing inside it is deleted: its frames go back to Unmapped
- * and its sub-areas lift to the top level, because an area is a place on the
- * map and losing the place must not lose the problems.
+ * and its sub-areas move to the top level, because an area is a place on the
+ * Product Map and losing the place must not lose the problems (ADR 0026).
+ *
+ * A lifted sub-area also takes a free grid slot. Its old x/y were scaled by its
+ * old depth, so kept as they are they can draw on top of a top-level area.
  */
-export async function deleteArea(
-  roomId: string,
-  id: string,
-  injectedRoot?: any
-): Promise<void> {
+export async function deleteArea(roomId: string, id: string): Promise<void> {
   let notFound = false
 
-  await withRoot(roomId, injectedRoot, (root: any) => {
+  await withRoot(roomId, undefined, (root: any) => {
     const areas = root.get('areas')
     const idx = areas.findIndex((a: any) => getField(a, 'id') === id)
     if (idx === -1) {
@@ -1474,7 +1470,14 @@ export async function deleteArea(
     areas.delete(idx)
 
     for (const a of areas) {
-      if (getField(a, 'parentAreaId') === id) a.delete('parentAreaId')
+      if (getField(a, 'parentAreaId') !== id) continue
+      // Re-read every time: each lifted area must miss the one before it too.
+      const slot = nextFreeGridSlot(
+        areas.map((o: any) => ({ x: getField(o, 'x'), y: getField(o, 'y') }))
+      )
+      a.delete('parentAreaId')
+      a.set('x', slot.x)
+      a.set('y', slot.y)
     }
     for (const f of root.get('frames')) {
       if (getField(f, 'areaId') === id) f.delete('areaId')

@@ -837,25 +837,31 @@ export async function handleResolveFrame(
   }
 }
 
-export async function handleDeleteFrame(orgId: string, params: { id?: string }): Promise<ToolResult> {
-  if (!params.id) {
-    return errorResult('Which frame? Pass "id" — map_list_frames names them.')
+export async function handleDeleteFrame(
+  orgId: string,
+  params: { frame_id?: string }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
   }
   try {
-    await deleteFrame(productMapRoomId(orgId), params.id)
-    return jsonResult({ deleted: true, id: params.id })
+    await deleteFrame(productMapRoomId(orgId), params.frame_id)
+    return jsonResult({ deleted: true, frameId: params.frame_id })
   } catch (err) {
     return errorResult((err as Error).message)
   }
 }
 
-export async function handleDeleteArea(orgId: string, params: { id?: string }): Promise<ToolResult> {
-  if (!params.id) {
-    return errorResult('Which area? Pass "id" — map_list_areas names them.')
+export async function handleDeleteArea(
+  orgId: string,
+  params: { area_id?: string }
+): Promise<ToolResult> {
+  if (!params.area_id) {
+    return errorResult('Which area? Pass "area_id" — map_list_areas names them.')
   }
   try {
-    await deleteArea(productMapRoomId(orgId), params.id)
-    return jsonResult({ deleted: true, id: params.id })
+    await deleteArea(productMapRoomId(orgId), params.area_id)
+    return jsonResult({ deleted: true, areaId: params.area_id })
   } catch (err) {
     return errorResult((err as Error).message)
   }
@@ -2116,8 +2122,11 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_delete_frame',
-    'Delete a frame for good, because it should never have been on the map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the map: a problem somebody fixed gets map_resolve_frame, which keeps the frame and its record. Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any frame that named this one as its origin simply loses that pointer.',
-    { ...orgArg, id: z.string().describe('Frame id to delete. map_list_frames names them.') },
+    'Delete a frame for good, because it should never have been on the Product Map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the Product Map: a problem somebody fixed gets map_resolve_frame, which keeps the frame and its record (ADR 0026). Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any frame that named this one as its origin loses that pointer. A Shape that was bet on this frame keeps a frame_id pointing at nothing, so check the cycle before you delete a frame that was ever bet on.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('Frame to delete. map_list_frames names them.'),
+    },
     {
       title: 'Delete a frame',
       readOnlyHint: false,
@@ -2125,7 +2134,7 @@ export function registerCyclesTools(server: any): void {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ org, ...params }: { org?: string; id?: string }, extra: ToolExtra) => {
+    async ({ org, ...params }: { org?: string; frame_id?: string }, extra: ToolExtra) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
@@ -2136,8 +2145,11 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_delete_area',
-    'Delete an area of the Product Map. Nothing inside it is deleted: its frames go back to Unmapped and its sub-areas lift to the top level, so losing the place never loses the problems. Rename with map_upsert_area instead when the region still exists under another name.',
-    { ...orgArg, id: z.string().describe('Area id to delete. map_list_areas names them.') },
+    'Delete an area of the Product Map. Nothing inside it is deleted: its frames go back to Unmapped and its sub-areas lift to the top level, so losing the place never loses the problems (ADR 0026). Each lifted sub-area also takes a free grid slot, because its old position only made sense at its old depth. Rename with map_upsert_area instead when the region still exists under another name.',
+    {
+      ...orgArg,
+      area_id: z.string().describe('Area to delete. map_list_areas names them.'),
+    },
     {
       title: 'Delete an area',
       readOnlyHint: false,
@@ -2145,7 +2157,7 @@ export function registerCyclesTools(server: any): void {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ org, ...params }: { org?: string; id?: string }, extra: ToolExtra) => {
+    async ({ org, ...params }: { org?: string; area_id?: string }, extra: ToolExtra) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)

@@ -2267,6 +2267,28 @@ describe('deleteArea', () => {
     expect(storage.frames.map((f) => f.get('areaId'))).toEqual([undefined, 'a2'])
   })
 
+  it('moves every lifted sub-area to a free grid slot, off each other', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    // Both sub-areas sit on their parent's slot, which is what a sub-area does.
+    // Lifted to the top level unchanged, they would draw on top of each other.
+    const storage = setupStorage({
+      areas: [
+        makeAreaItem({ id: 'a1', x: 0, y: 0 }),
+        makeAreaItem({ id: 'keep', x: 1, y: 0 }),
+        makeAreaItem({ id: 'sub1', parentAreaId: 'a1', x: 0, y: 0 }),
+        makeAreaItem({ id: 'sub2', parentAreaId: 'a1', x: 0, y: 0 }),
+      ],
+    })
+
+    await deleteArea(MAP_ROOM, 'a1')
+
+    // The property that matters is that no two areas share a slot. Which free
+    // slot each one lands on is the grid's business, not this test's.
+    const slots = storage.areas.map((a) => `${a.get('x')},${a.get('y')}`)
+    expect(new Set(slots).size).toBe(3)
+    expect(storage.areas.filter((a) => a.get('parentAreaId') !== undefined)).toHaveLength(0)
+  })
+
   it('throws when the area id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     setupStorage({ areas: [makeAreaItem()] })
