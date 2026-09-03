@@ -134,16 +134,13 @@ export default async function CyclesPage({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
-      <div className="mb-6 flex justify-between items-center">
-        <h1 className="text-2xl font-display">Cycles</h1>
-        <CreateCycleDialog>
-          <CreateCycleForm />
-        </CreateCycleDialog>
-      </div>
-
       <section className="mb-8 flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
-          <SectionLabel>Product Map</SectionLabel>
+          {/* Plain text, not a SectionLabel: this sits ABOVE the page's h1, and
+              an h2 before an h1 puts the heading order out of sequence. */}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Product Map
+          </p>
           <Link
             href={`/${urlSlug}/product-map`}
             className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
@@ -159,6 +156,13 @@ export default async function CyclesPage({
           shapes={shapes}
         />
       </section>
+
+      <div className="mb-6 flex justify-between items-center">
+        <h1 className="text-2xl font-display">Cycles</h1>
+        <CreateCycleDialog>
+          <CreateCycleForm />
+        </CreateCycleDialog>
+      </div>
 
       {isEmpty ? (
         <div className="flex flex-col items-center justify-center gap-3 border border-dashed rounded-xl p-12 text-center">
