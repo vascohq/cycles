@@ -365,7 +365,7 @@ function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
  * canvas is focusable, but Chrome does not expose an SVG group to the
  * accessibility tree at all, so the map alone would leave a mapped frame
  * unreachable — and it is also where each area's resolved frames live, off the
- * land, because a resolved pin would lie about where the product hurts.
+ * land, because a resolved pin would lie about where the product stands.
  */
 function AreaList({ areas, options }: { areas: RenderedArea[]; options: AreaOption[] }) {
   const flat = flattenAreas(areas).filter(
@@ -1292,7 +1292,7 @@ function DraftTitle({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => draft !== value && onCommit(draft)}
-      placeholder="What hurts?…"
+      placeholder="What hurts, or what could we unlock?…"
       aria-label="Problem"
       className={TITLE_INPUT}
     />
@@ -1323,7 +1323,9 @@ function DraftTextarea({
  * Capture, in the same language as the new-card modal on the Scope Map: a big
  * borderless title, a row of pills, a divider, one primary action.
  *
- * The order is the order somebody thinks in. The title says what hurts. The
+ * The order is the order somebody thinks in. The title says what hurts, or what
+ * value sits unclaimed — a win to unlock breaks nothing, and it belongs here
+ * beside the burns. The
  * struggle says what the customer cannot do, and it becomes the frame's FIRST
  * REPORT rather than more prose — capture should leave evidence, not an
  * assertion. Then why it matters to Vasco, then the appetite.
@@ -1435,7 +1437,7 @@ function CaptureForm({
               create()
             }
           }}
-          placeholder="What hurts?…"
+          placeholder="What hurts, or what could we unlock?…"
           aria-label="Problem"
           className={TITLE_INPUT}
         />
@@ -1604,7 +1606,8 @@ function AiCaptureDialog({
       <DialogContent className="max-w-2xl gap-3 p-5">
         <DialogTitle className="font-display text-lg">Capture with AI</DialogTitle>
         <p className="text-sm text-muted-foreground">
-          Tell Claude what hurts and it fills the frame in: the problem, the
+          Tell Claude what hurts, or what value is sitting unclaimed, and it
+          fills the frame in: the problem, the
           area it belongs to, the Kind, the Type, and the customers who raised
           it. It writes to this map through the Cycles MCP server, so nothing
           gets pasted anywhere.
