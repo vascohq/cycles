@@ -28,6 +28,29 @@ _Avoid_: Timebox (reserved for pitches), Sprint, deadline
 
 ### Product Map
 
+**Why it exists.** A team that keeps a list of everything it could build grooms
+the list instead of working. The Product Map holds problems, not work, and it
+forgets a problem nobody mentions. What stays visible is what people keep
+talking about.
+
+**What it is for.** The betting table decides on evidence. The map shows where
+the product hurts, how much, and who said so — so a bet answers a problem
+somebody has, and not whoever spoke last.
+
+Three goals:
+
+1. **Anyone captures anything, in one line.** A bug, an idea, a request, a
+   security problem, an irritant, a win to unlock: each one needs a **Frame**.
+   There is no second inbox for the inputs that do not fit.
+2. **An agent does the reading.** An agent on a schedule reads the betting
+   table notes, the customer conversations and the sales calls, then reports
+   what it finds onto the map through MCP. Every part of the model is writable
+   that way, so the map fills itself.
+3. **The map forgets on its own.** A **Report** is one mention. A frame nobody
+   mentions for two cycles goes **dormant** and leaves the view. Nothing is
+   deleted, and one mention wakes it. Nobody grooms the map, so it never
+   becomes a backlog.
+
 **Product Map**:
 A picture of the product as land. **Areas** are drawn as regions, and each **Frame** appears on one as a **Pin**. The Product Map holds problems. A **Cycle** holds the bets. There is one Product Map per organization. It needs no cycle and it outlives every cycle (see [ADR 0021](docs/adr/0021-product-map-is-org-scoped.md)).
 _Avoid_: Roadmap, backlog, board. Never write "map" alone — this app also has a **Scope Map**, and the agent harness has a wayfinder map.
