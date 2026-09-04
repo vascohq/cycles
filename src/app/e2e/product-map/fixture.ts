@@ -108,6 +108,7 @@ function frame(
       })),
     ],
     pointers: [],
+    outcomes: [],
     last_woken: options.woken ?? '2026-09-01',
     resolved: false,
   }

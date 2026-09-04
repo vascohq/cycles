@@ -1236,6 +1236,7 @@ describe('map_list_frames', () => {
           business_case: '',
           reports: [],
           pointers: [],
+          outcomes: [],
           last_woken: '2026-09-01',
           resolved: false,
         },
@@ -1325,6 +1326,32 @@ describe('map_upsert_frame', () => {
     expect(params.business_case).toBeUndefined()
     expect(params.owner).toBeUndefined()
     expect(params.areaId).toBeUndefined()
+  })
+
+  it('forwards the outcomes an agent framed, so /to-frame can write them', async () => {
+    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+
+    await handleUpsertFrame(ORG_ID, {
+      id: 'f1',
+      outcomes: ['A failed import tells the importer why', 'RevOps stops re-keying rows'],
+    })
+
+    const [, params] = mockUpsertFrame.mock.calls[0]
+    expect(params.outcomes).toEqual([
+      'A failed import tells the importer why',
+      'RevOps stops re-keying rows',
+    ])
+  })
+
+  // ADR 0011 again, for the field most likely to be wiped: an agent updating
+  // the appetite must never erase the outcomes somebody framed by hand.
+  it('leaves the outcomes alone when the call omits them', async () => {
+    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+
+    await handleUpsertFrame(ORG_ID, { id: 'f1', appetite: '6 weeks' })
+
+    const [, params] = mockUpsertFrame.mock.calls[0]
+    expect(params.outcomes).toBeUndefined()
   })
 
   it('reports a writer failure as an error, not a success', async () => {

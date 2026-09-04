@@ -69,6 +69,20 @@ export type PointerKind =
   | 'pull_request'
   | 'conversation'
 
+/**
+ * One observable change the frame says must be true afterwards. Each outcome is
+ * ONE item, because the shape is checked against them one at a time: a reader
+ * has to be able to tell whether each one happened.
+ *
+ * An outcome states a change in the world, never delivered functionality. "A
+ * gym owner knows on the day a payment fails" is an outcome; "the user can
+ * filter the table" is a mechanism.
+ */
+export type FrameOutcome = {
+  id: string
+  text: string
+}
+
 /** An outbound link a frame packages. The artifact itself is never stored. */
 export type FramePointer = {
   url: string
@@ -81,9 +95,10 @@ export type FramePointer = {
  * Product Map. A frame is not a piece of work: work is a Shape in a cycle that
  * points home to the frame (ADR 0022).
  *
- * A frame holds NO outcome. Outcome is a product of shaping and lives on the
- * Shape. Sharpness, frame state, the candidate statement and the gap list are
- * all DERIVED in product-map-engine, never stored.
+ * A frame holds its OUTCOMES: what must be true afterwards. Framing decides
+ * that, not shaping, so two shapes attacking one frame chase the same win.
+ * Sharpness, frame state, the candidate statement and the gap list are all
+ * DERIVED in product-map-engine, never stored.
  */
 export type Frame = {
   id: string
@@ -102,6 +117,12 @@ export type Frame = {
   originFrameId?: string
   reports: FrameReport[]
   pointers: FramePointer[]
+  /**
+   * What must be true afterwards. A frame with none is not sharp: nobody bets
+   * on a frame that never says what changes. Frames captured before outcomes
+   * existed have no such field, so every reader treats it as possibly absent.
+   */
+  outcomes: FrameOutcome[]
   /**
    * ISO date (YYYY-MM-DD) of the last wake. Only three things set it: a new
    * report, a wake call, and an explicit "still hurts" click (ADR 0024).

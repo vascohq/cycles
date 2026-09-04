@@ -15,6 +15,7 @@ import type {
   Area,
   Frame,
   FrameKind,
+  FrameOutcome,
   FramePointer,
   FrameReport,
   FrameType,
@@ -711,8 +712,8 @@ function FrameDetail({
         </div>
         <p className="text-sm text-muted-foreground">
           {pin.sharp
-            ? 'Sharp — it has both a problem and an appetite, so it can be bet on.'
-            : 'Rough — a frame is sharp once it has both a problem and an appetite.'}
+            ? 'Sharp — it has a problem, an appetite and an outcome, so it can be bet on.'
+            : 'Rough — a frame is sharp once it has a problem, an appetite and an outcome.'}
         </p>
 
         {/*
@@ -743,6 +744,8 @@ function FrameDetail({
             <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
               <DraftInput value={pin.appetite} onCommit={set('appetite')} />
             </Field>
+
+            <Outcomes pin={pin} />
 
             {pin.candidateStatement && (
               <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
@@ -820,6 +823,8 @@ function Origin({ pin }: { pin: RenderedPin }) {
       originFrameId: pin.frameId,
       reports: [],
       pointers: [],
+      // Capture stays one line. Outcomes are what framing adds later.
+      outcomes: [],
       last_woken: getTeamToday(new Date()),
       resolved: false,
     })
@@ -1022,6 +1027,78 @@ function StillHurts({ pin }: { pin: RenderedPin }) {
  * Under it, the **Gap list**: what this frame's playbook expects and the frame
  * does not have. It refuses nothing — it is a prompt, never a gate (ADR 0025).
  */
+/**
+ * The outcomes, and the way to add one.
+ *
+ * Each outcome is ONE item, because the shape gets checked against them one at
+ * a time. An outcome states a change in the world a reader can check after the
+ * fact, never delivered functionality, so the placeholder shows the shape of a
+ * good one rather than explaining the rule.
+ */
+function Outcomes({ pin }: { pin: RenderedPin }) {
+  const [text, setText] = useState('')
+
+  const write = useProductMapMutation(
+    ({ storage }, frameId: string, next: (current: FrameOutcome[]) => FrameOutcome[]) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      frame.set('outcomes', next((frame.get('outcomes') ?? []) as FrameOutcome[]))
+      // Deliberately no wake: framing a frame is not somebody mentioning the
+      // problem again (ADR 0024).
+    },
+    []
+  )
+
+  function onSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    const line = text.trim()
+    if (!line) return
+    write(pin.frameId, (current) => [...current, { id: nanoid(), text: line }])
+    setText('')
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Outcomes ({pin.outcomes.length})</Label>
+      <p className="text-xs text-muted-foreground">
+        What is different in the world afterwards, one per line. A reader has to be
+        able to tell whether it happened.
+      </p>
+      {pin.outcomes.length > 0 && (
+        <ol className="flex list-decimal flex-col gap-1 pl-5">
+          {pin.outcomes.map((outcome) => (
+            <li key={outcome.id} className="flex items-start justify-between gap-2 text-sm">
+              <span>{outcome.text}</span>
+              <button
+                type="button"
+                className="shrink-0 text-xs text-muted-foreground underline"
+                onClick={() =>
+                  write(pin.frameId, (current) => current.filter((o) => o.id !== outcome.id))
+                }
+                aria-label={`Remove outcome: ${outcome.text}`}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+        <Input
+          className="min-w-40 flex-1"
+          placeholder="A failed import tells the importer why…"
+          aria-label="Outcome"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <Button type="submit" variant="outline" size="sm" disabled={!text.trim()}>
+          Add
+        </Button>
+      </form>
+    </div>
+  )
+}
+
 function Pointers({ pin }: { pin: RenderedPin }) {
   const [url, setUrl] = useState('')
   const [label, setLabel] = useState('')
@@ -1406,6 +1483,8 @@ function CaptureForm({
           ]
         : [],
       pointers: [],
+      // Capture stays one line. Outcomes are what framing adds later.
+      outcomes: [],
       // A frame is born awake. Its clock starts on the day it was captured.
       last_woken: today,
       resolved: false,
