@@ -15,6 +15,7 @@ import type {
   Area,
   Frame,
   FrameKind,
+  FrameOutcome,
   FramePointer,
   FrameReport,
   FrameType,
@@ -51,8 +52,11 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
+  DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -711,8 +715,8 @@ function FrameDetail({
         </div>
         <p className="text-sm text-muted-foreground">
           {pin.sharp
-            ? 'Sharp — it has both a problem and an appetite, so it can be bet on.'
-            : 'Rough — a frame is sharp once it has both a problem and an appetite.'}
+            ? 'Sharp — it has a problem, an appetite and an outcome, so it can be bet on.'
+            : 'Rough — a frame is sharp once it has a problem, an appetite and an outcome.'}
         </p>
 
         {/*
@@ -743,6 +747,8 @@ function FrameDetail({
             <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
               <DraftInput value={pin.appetite} onCommit={set('appetite')} />
             </Field>
+
+            <Outcomes pin={pin} />
 
             {pin.candidateStatement && (
               <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
@@ -802,10 +808,9 @@ function Origin({ pin }: { pin: RenderedPin }) {
     storage.get('frames').push(new LiveObject(frame))
   }, [])
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  function onSubmit(): boolean {
     const text = problem.trim()
-    if (!text) return
+    if (!text) return false
     captureFrame({
       id: nanoid(),
       kind: DEFAULT_KIND,
@@ -820,10 +825,13 @@ function Origin({ pin }: { pin: RenderedPin }) {
       originFrameId: pin.frameId,
       reports: [],
       pointers: [],
+      // Capture stays one line. Outcomes are what framing adds later.
+      outcomes: [],
       last_woken: getTeamToday(new Date()),
       resolved: false,
     })
     setProblem('')
+    return true
   }
 
   return (
@@ -847,36 +855,34 @@ function Origin({ pin }: { pin: RenderedPin }) {
         </>
       )}
       {(pin.state === 'released' || pin.state === 'monitoring') && (
-        <form onSubmit={onSubmit} className="flex flex-col gap-2">
-          <Label>Found a problem in this release?</Label>
-          <p className="text-xs text-muted-foreground">
-            It becomes a new frame pointing back at this one, with its own
-            appetite. This frame stays in monitoring.
-          </p>
+        <AddDialog
+          cta="Found a problem in this release?"
+          title="Capture a follow-on problem"
+          hint="It becomes a new frame pointing back at this one, with its own appetite. This frame is never reopened and stays in monitoring."
+          submit="Capture it"
+          disabled={!problem.trim()}
+          onSubmit={onSubmit}
+          onOpen={() => setProblem('')}
+        >
           <Input
             placeholder="What is wrong now?"
             aria-label="Follow-on problem"
             value={problem}
             onChange={(e) => setProblem(e.target.value)}
           />
-          <div className="flex items-center gap-2">
-            <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
-              <SelectTrigger className="w-36" aria-label="Follow-on Type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FRAME_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" variant="outline" disabled={!problem.trim()}>
-              Capture it
-            </Button>
-          </div>
-        </form>
+          <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
+            <SelectTrigger className="w-36" aria-label="Follow-on Type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FRAME_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {TYPE_LABELS[t]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </AddDialog>
       )}
     </div>
   )
@@ -944,7 +950,7 @@ function Shapes({ pin }: { pin: RenderedPin }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t pt-4">
+    <div className="flex flex-col gap-2">
       <Label>Bets on this frame ({pin.shapes.length})</Label>
       <ul className="flex flex-col gap-1">
         {pin.shapes.map((shape) => (
@@ -1022,6 +1028,153 @@ function StillHurts({ pin }: { pin: RenderedPin }) {
  * Under it, the **Gap list**: what this frame's playbook expects and the frame
  * does not have. It refuses nothing — it is a prompt, never a gate (ADR 0025).
  */
+/**
+ * Adding to a list opens its own dialog on top of the frame, rather than
+ * sitting inline under the list.
+ *
+ * The frame detail is already dense — four tabs of lists — and an inline form
+ * under each list reads as another row of that list. A CTA and a dialog make
+ * the difference between reading a frame and writing to it visible, and it
+ * gives every add form room for its fields instead of one cramped line.
+ *
+ * The dialog closes when `onSubmit` returns true, so a form that rejected its
+ * own input keeps what the writer typed.
+ */
+function AddDialog({
+  cta,
+  title,
+  hint,
+  submit,
+  disabled,
+  onSubmit,
+  onOpen,
+  children,
+}: {
+  cta: string
+  title: string
+  hint?: string
+  submit: string
+  disabled?: boolean
+  onSubmit: () => boolean
+  /** Seed the fields from an existing item, or clear them for a new one. */
+  onOpen?: () => void
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) onOpen?.()
+        setOpen(next)
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="self-start">
+          {cta}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg gap-3 p-5">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg">{title}</DialogTitle>
+          {hint && <DialogDescription>{hint}</DialogDescription>}
+        </DialogHeader>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (onSubmit()) setOpen(false)
+          }}
+        >
+          {children}
+          <DialogFooter>
+            <Button type="submit" disabled={disabled}>
+              {submit}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * The outcomes, and the way to add one.
+ *
+ * Each outcome is ONE item, because the shape gets checked against them one at
+ * a time. An outcome states a change in the world a reader can check after the
+ * fact, never delivered functionality, so the placeholder shows the shape of a
+ * good one rather than explaining the rule.
+ */
+function Outcomes({ pin }: { pin: RenderedPin }) {
+  const [text, setText] = useState('')
+
+  const write = useProductMapMutation(
+    ({ storage }, frameId: string, next: (current: FrameOutcome[]) => FrameOutcome[]) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      frame.set('outcomes', next((frame.get('outcomes') ?? []) as FrameOutcome[]))
+      // Deliberately no wake: framing a frame is not somebody mentioning the
+      // problem again (ADR 0024).
+    },
+    []
+  )
+
+  function onSubmit(): boolean {
+    const line = text.trim()
+    if (!line) return false
+    write(pin.frameId, (current) => [...current, { id: nanoid(), text: line }])
+    setText('')
+    return true
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Outcomes ({pin.outcomes.length})</Label>
+      <p className="text-xs text-muted-foreground">
+        What is different in the world afterwards, one per line. A reader has to be
+        able to tell whether it happened.
+      </p>
+      {pin.outcomes.length > 0 && (
+        <ol className="flex list-decimal flex-col gap-1 pl-5">
+          {pin.outcomes.map((outcome) => (
+            <li key={outcome.id} className="flex items-start justify-between gap-2 text-sm">
+              <span>{outcome.text}</span>
+              <button
+                type="button"
+                className="shrink-0 text-xs text-muted-foreground underline"
+                onClick={() =>
+                  write(pin.frameId, (current) => current.filter((o) => o.id !== outcome.id))
+                }
+                aria-label={`Remove outcome: ${outcome.text}`}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <AddDialog
+        cta="Add an outcome"
+        title="Add an outcome"
+        hint="What is different in the world afterwards. A reader has to be able to tell whether it happened, so write the change and not the mechanism."
+        submit="Add outcome"
+        disabled={!text.trim()}
+        onSubmit={onSubmit}
+        onOpen={() => setText('')}
+      >
+        <Input
+          placeholder="A failed import tells the importer why…"
+          aria-label="Outcome"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </AddDialog>
+    </div>
+  )
+}
+
 function Pointers({ pin }: { pin: RenderedPin }) {
   const [url, setUrl] = useState('')
   const [label, setLabel] = useState('')
@@ -1039,10 +1192,9 @@ function Pointers({ pin }: { pin: RenderedPin }) {
     []
   )
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  function onSubmit(): boolean {
     const href = url.trim()
-    if (!href) return
+    if (!href) return false
     addPointer(pin.frameId, {
       url: href,
       label: label.trim() || POINTER_KIND_LABELS[kind],
@@ -1050,10 +1202,11 @@ function Pointers({ pin }: { pin: RenderedPin }) {
     })
     setUrl('')
     setLabel('')
+    return true
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t pt-4">
+    <div className="flex flex-col gap-3">
       <Label>Pointers ({pin.pointers.length})</Label>
       <ul className="flex flex-col gap-1.5">
         {pin.pointers.map((pointer, i) => (
@@ -1079,37 +1232,46 @@ function Pointers({ pin }: { pin: RenderedPin }) {
           blocked while these are missing.
         </p>
       )}
-      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+      <AddDialog
+        cta="Link a pointer"
+        title="Link a pointer"
+        hint="The artifact stays where it lives. A frame holds the link and never a copy."
+        submit="Link it"
+        disabled={!url.trim()}
+        onSubmit={onSubmit}
+        onOpen={() => {
+          setUrl('')
+          setLabel('')
+        }}
+      >
         <Input
-          className="min-w-40 flex-1"
           placeholder="https://…"
           aria-label="Pointer url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
-        <Select value={kind} onValueChange={(v) => setKind(v as PointerKind)}>
-          <SelectTrigger className="w-40" aria-label="Pointer kind">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {POINTER_KINDS.map((k) => (
-              <SelectItem key={k} value={k}>
-                {POINTER_KIND_LABELS[k]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          className="w-32"
-          placeholder="Label"
-          aria-label="Pointer label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-        />
-        <Button type="submit" variant="outline" disabled={!url.trim()}>
-          Link
-        </Button>
-      </form>
+        <div className="flex items-center gap-2">
+          <Select value={kind} onValueChange={(v) => setKind(v as PointerKind)}>
+            <SelectTrigger className="w-40" aria-label="Pointer kind">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {POINTER_KINDS.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {POINTER_KIND_LABELS[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            className="flex-1"
+            placeholder="Label"
+            aria-label="Pointer label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+      </AddDialog>
     </div>
   )
 }
@@ -1141,13 +1303,12 @@ function Reports({ pin }: { pin: RenderedPin }) {
     []
   )
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  function onSubmit(): boolean {
     const line = text.trim()
     // Nothing reaches a frame unmediated: a report with no capturer would be an
     // anonymous claim, and the whole point is that a reader can judge who made
     // it. The submit button is disabled for the same reason.
-    if (!line || !userId) return
+    if (!line || !userId) return false
     const today = getTeamToday(new Date())
     addReport(
       pin.frameId,
@@ -1162,10 +1323,11 @@ function Reports({ pin }: { pin: RenderedPin }) {
     )
     setText('')
     setCustomer('')
+    return true
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t pt-4">
+    <div className="flex flex-col gap-3">
       <Label>Reports ({pin.reports.length})</Label>
       {pin.reports.length === 0 && (
         <p className="text-xs text-muted-foreground">
@@ -1192,9 +1354,20 @@ function Reports({ pin }: { pin: RenderedPin }) {
           </li>
         ))}
       </ul>
-      <form onSubmit={onSubmit} className="flex flex-col gap-2">
+      <AddDialog
+        cta="Add a report"
+        title="Add a report"
+        hint="One record of the problem happening. A report wakes the frame, because a fresh report is the conversation the freshness clock listens for."
+        submit="Add report"
+        disabled={!text.trim() || !userId}
+        onSubmit={onSubmit}
+        onOpen={() => {
+          setText('')
+          setCustomer('')
+        }}
+      >
         <Textarea
-          rows={2}
+          rows={3}
           placeholder="What happened?"
           aria-label="Report"
           value={text}
@@ -1222,11 +1395,8 @@ function Reports({ pin }: { pin: RenderedPin }) {
               onChange={(e) => setCustomer(e.target.value)}
             />
           )}
-          <Button type="submit" variant="outline" disabled={!text.trim() || !userId}>
-            Add report
-          </Button>
         </div>
-      </form>
+      </AddDialog>
     </div>
   )
 }
@@ -1406,6 +1576,8 @@ function CaptureForm({
           ]
         : [],
       pointers: [],
+      // Capture stays one line. Outcomes are what framing adds later.
+      outcomes: [],
       // A frame is born awake. Its clock starts on the day it was captured.
       last_woken: today,
       resolved: false,

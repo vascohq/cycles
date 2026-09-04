@@ -7,6 +7,7 @@ import type {
   Area,
   Frame,
   FrameKind,
+  FrameOutcome,
   FramePointer,
   FrameReport,
   FrameType,
@@ -172,12 +173,24 @@ function isShapeStage(value: unknown): value is ShapeStage {
 }
 
 /**
- * A frame is **sharp** when it has both a problem and an appetite. Derived,
- * never a stored flag, the same way the cycle phase is date-derived (ADR 0015).
- * Only a sharp frame can be bet on, so nobody bets on half a frame.
+ * A frame is **sharp** when it has a problem, an appetite and at least one
+ * outcome. Derived, never a stored flag, the same way the cycle phase is
+ * date-derived (ADR 0015). Only a sharp frame can be bet on, so nobody bets on
+ * a frame that never says what would change.
  */
-export function isSharp(frame: Pick<Frame, 'problem' | 'appetite'>): boolean {
-  return text(frame.problem) !== '' && text(frame.appetite) !== ''
+export function isSharp(frame: Pick<Frame, 'problem' | 'appetite' | 'outcomes'>): boolean {
+  return (
+    text(frame.problem) !== '' && text(frame.appetite) !== '' && statedOutcomes(frame).length > 0
+  )
+}
+
+/**
+ * A frame's outcomes, ignoring the blank ones. Frames captured before outcomes
+ * existed carry no such field at all, so the list is read defensively — the
+ * same reason `text` exists.
+ */
+export function statedOutcomes(frame: Pick<Frame, 'outcomes'>): FrameOutcome[] {
+  return (frame.outcomes ?? []).filter((outcome) => text(outcome?.text) !== '')
 }
 
 /**
@@ -186,7 +199,7 @@ export function isSharp(frame: Pick<Frame, 'problem' | 'appetite'>): boolean {
  * is no commitment to state until an appetite exists.
  */
 export function candidateStatement(
-  frame: Pick<Frame, 'problem' | 'appetite'>
+  frame: Pick<Frame, 'problem' | 'appetite' | 'outcomes'>
 ): string | null {
   if (!isSharp(frame)) return null
   return `If we can shape this into something doable in ${text(frame.appetite)}, that is meaningful to us.`
@@ -197,7 +210,7 @@ export function candidateStatement(
  * Nothing here is stored.
  */
 export function frameState(
-  frame: Pick<Frame, 'problem' | 'appetite' | 'resolved'>,
+  frame: Pick<Frame, 'problem' | 'appetite' | 'outcomes' | 'resolved'>,
   shapes: LinkedShape[] = []
 ): FrameState {
   // A person's decision outranks every derivation. Nothing resolves on a timer.
@@ -454,6 +467,8 @@ export type RenderedPin = {
   problem: string
   appetite: string
   businessCase: string
+  /** What must be true afterwards. Blank lines never reach here. */
+  outcomes: FrameOutcome[]
   /** Clerk user id of the frame owner, or null when nobody holds it. */
   owner: string | null
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
@@ -476,7 +491,7 @@ export type RenderedPin = {
   passesLens: boolean
   /** Diameter in pixels. Size is the second pin channel. */
   size: number
-  /** A problem AND an appetite. A rough pin must never look like agreed work. */
+  /** A problem, an appetite AND an outcome. A rough pin must never look like agreed work. */
   sharp: boolean
   state: FrameState
   /** Engagement, the fourth pin channel: read from the linked shapes' stages. */
@@ -896,6 +911,7 @@ function renderPin(
     problem: frame.problem,
     appetite: frame.appetite ?? '',
     businessCase: frame.business_case ?? '',
+    outcomes: statedOutcomes(frame),
     owner: frame.owner ?? null,
     color: KIND_COLORS[kind],
     reports: frame.reports ?? [],

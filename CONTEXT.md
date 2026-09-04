@@ -125,12 +125,16 @@ _Avoid_: Attachment, child, document, embed
 The **Pointers** a frame's **Playbook** expects and the frame does not have, derived and never stored. A gap blocks nothing. It is a prompt, not a gate.
 _Avoid_: Checklist, requirement, blocker
 
-**Frame**’s three text fields — **Problem**, **Appetite**, **Business case**:
-**Problem** says what hurts, or what value sits unclaimed. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. A frame holds no outcome. Outcome comes from shaping and lives on the **Shape**.
+**Frame**’s text fields — **Problem**, **Appetite**, **Business case**:
+**Problem** says what hurts, or what value sits unclaimed. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. The frame also holds its **Outcomes**.
 _Avoid_: Brief, requirements, spec, PRD, estimate (for appetite)
 
+**Outcome**:
+One observable change the frame says must be true afterwards. Each outcome is **one item** on the frame, because a shape is checked against them one at a time. An outcome states a change in the world, never delivered functionality: "a failed import tells the importer why" is an outcome, "the user can filter the table" is a mechanism. Never invent a number. If no metric exists, write the observable change and stop. Framing decides the outcomes, not shaping, so two shapes that attack one frame chase the same win.
+_Avoid_: Goal, success metric, KPI, acceptance criteria, requirement
+
 **Sharp**:
-A frame with both a problem and an **Appetite**. A frame with no appetite is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp frame can be bet on.**
+A frame with a problem, an **Appetite** and at least one **Outcome**. A frame that has fewer is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp frame can be bet on**, so nobody bets on a frame that never says what would change.
 _Avoid_: Framed, ready, validated, approved
 
 **Frame state**:
