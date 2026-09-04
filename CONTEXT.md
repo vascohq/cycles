@@ -28,6 +28,33 @@ _Avoid_: Timebox (reserved for pitches), Sprint, deadline
 
 ### Product Map
 
+**Why it exists.** A team that keeps a list of everything it could build grooms
+the list instead of working. The Product Map holds problems, not work, and it
+forgets a problem nobody mentions. What stays visible is what people keep
+talking about.
+
+**What it is for.** The betting table decides on evidence. The map shows where
+the product hurts, where value sits unclaimed, how much either one is worth, and
+who said so. A bet then answers something real, and not whoever spoke last.
+
+The map is not only a pain register. A **win to unlock** breaks nothing: the
+product works, and value sits on the table that nobody has picked up. That
+belongs on the map beside the burns, and it competes for the same bets.
+
+Three goals:
+
+1. **Anyone captures anything, in one line.** A bug, an idea, a request, a
+   security problem, an irritant, a win to unlock: each one needs a **Frame**.
+   There is no second inbox for the inputs that do not fit.
+2. **An agent does the reading.** An agent on a schedule reads the betting
+   table notes, the customer conversations and the sales calls, then reports
+   what it finds onto the map through MCP. Every part of the model is writable
+   that way, so the map fills itself.
+3. **The map forgets on its own.** A **Report** is one mention. A frame nobody
+   mentions for two cycles goes **dormant** and leaves the view. Nothing is
+   deleted, and one mention wakes it. Nobody grooms the map, so it never
+   becomes a backlog.
+
 **Product Map**:
 A picture of the product as land. **Areas** are drawn as regions, and each **Frame** appears on one as a **Pin**. The Product Map holds problems. A **Cycle** holds the bets. There is one Product Map per organization. It needs no cycle and it outlives every cycle (see [ADR 0021](docs/adr/0021-product-map-is-org-scoped.md)).
 _Avoid_: Roadmap, backlog, board. Never write "map" alone — this app also has a **Scope Map**, and the agent harness has a wayfinder map.
@@ -65,8 +92,8 @@ The one person who cares that a frame gets addressed. A frame owner is not the p
 _Avoid_: Assignee, DRI, responsible
 
 **Kind**:
-How much a problem hurts: `brand_burn`, `pain_point`, or `unlock_win`. A person sets it. Kind is the only axis with a color on the map.
-_Avoid_: Severity, priority, type (**Type** is a different axis)
+What is at stake. `brand_burn` costs reputation or revenue right now. `pain_point` hurts, and nobody is leaving over it. `unlock_win` breaks nothing and leaves value unclaimed. A person sets it. Kind is the only axis with a color on the map.
+_Avoid_: Severity, priority, type (**Type** is a different axis). Do not read Kind as a pain scale — a win to unlock is not a small pain.
 
 **Type**:
 Where a problem came from and how it gets worked: `bug`, `idea`, `request`, `security`, or `irritant`. **Type selects the Playbook.** Type has no visual channel on the map. It appears in the frame detail and in `map_list_frames` filters (see [ADR 0025](docs/adr/0025-type-selects-the-playbook.md)).
@@ -99,7 +126,7 @@ The **Pointers** a frame's **Playbook** expects and the frame does not have, der
 _Avoid_: Checklist, requirement, blocker
 
 **Frame**’s three text fields — **Problem**, **Appetite**, **Business case**:
-**Problem** says what hurts. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. A frame holds no outcome. Outcome comes from shaping and lives on the **Shape**.
+**Problem** says what hurts, or what value sits unclaimed. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. A frame holds no outcome. Outcome comes from shaping and lives on the **Shape**.
 _Avoid_: Brief, requirements, spec, PRD, estimate (for appetite)
 
 **Sharp**:
@@ -434,6 +461,6 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **"pin" vs "frame"** — the record is a **Frame** and the **Pin** is only how it is drawn. "Pin" named the marker, so it never names the thing. Resolved: capture produces a frame, the map shows a pin, and a pin holds no data of its own.
 - **"an agent cannot draw"** was the reason the app generated every area shape. It is wrong: an agent writes a ring of coordinates as easily as any other field. Resolved: an agent draws the coastline of an area, and a generated ring is only the fallback for an area nobody has drawn. The out-of-scope note in the pitch meant uploaded artwork, which an agent really cannot write into.
 - **"cluster"** names the zoom behavior and nothing else. Resolved: a **Cluster** is an area collapsing into one numbered bubble because it is too small on screen. A group of areas is an **Island**, and a group of islands is an **Archipelago**. Never use "cluster" for either.
-- **"kind" vs "type"** — two axes on one frame, and they answer different questions. Resolved: **Kind** is how much it hurts (`brand_burn`, `pain_point`, `unlock_win`) and is the only axis with a color. **Type** is where it came from and how it gets worked (`bug`, `idea`, `request`, `security`, `irritant`) and it selects the **Playbook**. Type gets no visual channel, because four channels is the legibility ceiling of a pin.
+- **"kind" vs "type"** — two axes on one frame, and they answer different questions. Resolved: **Kind** is what is at stake (`brand_burn`, `pain_point`, `unlock_win`) and is the only axis with a color. It is not a pain scale: a win to unlock breaks nothing. **Type** is where it came from and how it gets worked (`bug`, `idea`, `request`, `security`, `irritant`) and it selects the **Playbook**. Type gets no visual channel, because four channels is the legibility ceiling of a pin.
 - **"betting table" vs "Debating Table"** — a design session used "Debating Table" while Shape Up says betting table. Resolved: **betting table**, everywhere. Never write "Debating Table" in the glossary, the UI, or the skills.
 - **the area-owner alert** — a design session proposed alerting an **Area owner** when frames cluster in their area. This app defines an area owner as a default and nothing more. Deferred, not resolved: an alert makes the owner answerable for the region, which is a different role and needs its own decision.
