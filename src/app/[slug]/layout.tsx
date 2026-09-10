@@ -1,9 +1,4 @@
-import {
-  OrganizationSwitcher,
-  SignInButton,
-  SignedIn,
-  SignedOut,
-} from '@clerk/nextjs'
+import { OrganizationSwitcher, Show, SignInButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -46,7 +41,7 @@ export default async function OrgLayout({
               />
               Cycles
             </Link>
-            <SignedIn>
+            <Show when="signed-in">
               <span className="text-border" aria-hidden>
                 /
               </span>
@@ -64,20 +59,20 @@ export default async function OrgLayout({
                   }}
                 />
               </div>
-            </SignedIn>
+            </Show>
           </div>
           <div className="flex items-center gap-3">
-            <SignedOut>
+            <Show when="signed-out">
               <SignInButton>
                 <Button variant="ghost" size="sm">
                   Sign in
                 </Button>
               </SignInButton>
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <CommandSearchButton />
               <UserMenu slug={slug} />
-            </SignedIn>
+            </Show>
           </div>
         </div>
       </header>

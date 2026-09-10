@@ -19,9 +19,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider dynamic>
-      <html lang="en" suppressHydrationWarning>
-        <body className={`flex flex-col min-h-[100dvh] font-sans antialiased ${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`flex flex-col min-h-[100dvh] font-sans antialiased ${inter.variable} ${jetbrainsMono.variable}`}>
+        <ClerkProvider dynamic>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"
@@ -32,8 +32,8 @@ export default function RootLayout({
 
             <Toaster />
           </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   )
 }
