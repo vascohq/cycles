@@ -28,9 +28,15 @@ verified object carries the user id, so the same membership lookup works.
 
 - An OAuth token keeps its current path through `verifyClerkToken`.
 - An API key skips `verifyClerkToken`. The server builds the same auth shape
-  from the verified Clerk object: the token, the key id as `clientId`, empty
-  `scopes`, and the user id. Nothing in this server reads `clientId` or
-  `scopes`, so the stand-in values change no behavior.
+  from the verified Clerk object: the token, the key id as `clientId`, the
+  scopes of the key, and the user id. A key has no OAuth client, so the key id
+  stands in for one. Nothing in this server reads `clientId` or `scopes` today,
+  and the scopes pass through so that a later scope check reads the same field
+  for both token types.
+- **The key must belong to a user.** Clerk makes a key for a user or for an
+  organization, through the `subject` field. A key made for an organization has
+  a null `userId`, and the tools need a user id, so the server refuses it and
+  writes the reason to the log.
 - Both paths refuse a token with no user id or no org membership, and both hand
   the memberships to `resolveOrg`. A service user gets access to an org by
   being a member of it, the same way a person does.
@@ -55,3 +61,6 @@ verified object carries the user id, so the same membership lookup works.
 - Writes from the agent carry the service user's id, so the audit trail names
   it.
 - API keys must be enabled in the Clerk dashboard for the key path to verify.
+- Every refusal writes one line to the log that names the cause: no user id on
+  the key, no org membership, or a failed call to Clerk. A person who sets up a
+  key reads that line instead of the source.

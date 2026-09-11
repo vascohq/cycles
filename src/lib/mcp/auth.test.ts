@@ -125,11 +125,12 @@ describe('verifyMcpToken with an API key', () => {
     vi.clearAllMocks()
   })
 
-  function mockApiKeyAuth(userId: string | null) {
+  function mockApiKeyAuth(userId: string | null, scopes: string[] = []) {
     mockAuth.mockResolvedValue({
       tokenType: 'api_key',
       isAuthenticated: true,
       id: 'ak_1',
+      scopes,
       userId,
     } as never)
   }
@@ -149,6 +150,14 @@ describe('verifyMcpToken with an API key', () => {
         memberships: [{ id: 'org_1', slug: 'vasco' }],
       },
     })
+  })
+
+  it('carries the scopes of the key', async () => {
+    mockApiKeyAuth('user_stewart', ['cycles:read'])
+    mockMembershipApi([{ id: 'org_1', slug: 'vasco' }])
+
+    const result = await verifyMcpToken(makeRequest(), 'ak_secret')
+    expect(result?.scopes).toEqual(['cycles:read'])
   })
 
   it('refuses a key with no user id', async () => {

@@ -15,25 +15,36 @@ export async function verifyMcpToken(
   const clerkAuth = await auth({ acceptsToken: ['oauth_token', 'api_key'] })
   if (!bearerToken || !clerkAuth.isAuthenticated) return undefined
 
-  // A Clerk API key belongs to a user. It has no OAuth client and no scopes,
-  // so the key id stands in for clientId and scopes stays empty: nothing in
-  // this server reads either field. userId is null for an org-owned key.
+  // A Clerk API key carries its own id, scopes and subject, so it has no OAuth
+  // client: the key id stands in for clientId. A key made for an organization
+  // has a null userId, and this server needs a user, so it refuses one.
   const authInfo: AuthInfo | undefined =
     clerkAuth.tokenType === 'api_key'
       ? {
           token: bearerToken,
           clientId: clerkAuth.id,
-          scopes: [],
+          scopes: clerkAuth.scopes,
           extra: { userId: clerkAuth.userId ?? undefined },
         }
       : verifyClerkToken(clerkAuth, bearerToken)
   if (!authInfo) return undefined
 
+  // Only the API key path arrives here without a user id. verifyClerkToken
+  // refuses an OAuth token that has none.
   const userId = authInfo.extra?.userId as string | undefined
-  if (!userId) return undefined
+  if (!userId) {
+    console.error(
+      'Clerk error: the API key has no userId. Create the key for a user, not for an organization.'
+    )
+    return undefined
+  }
 
   const memberships = await fetchOrgMemberships(userId)
-  if (!memberships || memberships.length === 0) return undefined
+  if (!memberships) return undefined
+  if (memberships.length === 0) {
+    console.error(`Clerk error: user ${userId} is a member of no organization`)
+    return undefined
+  }
 
   return {
     ...authInfo,
@@ -54,7 +65,8 @@ async function fetchOrgMemberships(
       id: m.organization.id,
       slug: m.organization.slug,
     }))
-  } catch {
+  } catch (error) {
+    console.error('Clerk error: could not list org memberships:', error)
     return undefined
   }
 }
