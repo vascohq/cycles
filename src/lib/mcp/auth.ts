@@ -12,8 +12,21 @@ export async function verifyMcpToken(
   _req: Request,
   bearerToken?: string
 ): Promise<McpAuthInfo | undefined> {
-  const clerkAuth = await auth({ acceptsToken: 'oauth_token' })
-  const authInfo = verifyClerkToken(clerkAuth, bearerToken)
+  const clerkAuth = await auth({ acceptsToken: ['oauth_token', 'api_key'] })
+  if (!bearerToken || !clerkAuth.isAuthenticated) return undefined
+
+  // A Clerk API key belongs to a user. It has no OAuth client and no scopes,
+  // so the key id stands in for clientId and scopes stays empty: nothing in
+  // this server reads either field. userId is null for an org-owned key.
+  const authInfo: AuthInfo | undefined =
+    clerkAuth.tokenType === 'api_key'
+      ? {
+          token: bearerToken,
+          clientId: clerkAuth.id,
+          scopes: [],
+          extra: { userId: clerkAuth.userId ?? undefined },
+        }
+      : verifyClerkToken(clerkAuth, bearerToken)
   if (!authInfo) return undefined
 
   const userId = authInfo.extra?.userId as string | undefined

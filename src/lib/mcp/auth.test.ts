@@ -17,6 +17,8 @@ const mockAuth = vi.mocked(auth)
 const mockClerkClient = vi.mocked(clerkClient)
 const mockVerifyClerkToken = vi.mocked(verifyClerkToken)
 
+const oauthAuth = { tokenType: 'oauth_token', isAuthenticated: true }
+
 function makeRequest(): Request {
   return new Request('http://localhost/api/mcp')
 }
@@ -36,8 +38,19 @@ describe('verifyMcpToken', () => {
     vi.clearAllMocks()
   })
 
+  it('returns undefined when Clerk did not authenticate the token', async () => {
+    mockAuth.mockResolvedValue({
+      tokenType: null,
+      isAuthenticated: false,
+    } as never)
+
+    const result = await verifyMcpToken(makeRequest(), 'bad-token')
+    expect(result).toBeUndefined()
+    expect(mockVerifyClerkToken).not.toHaveBeenCalled()
+  })
+
   it('returns undefined when verifyClerkToken returns undefined', async () => {
-    mockAuth.mockResolvedValue({} as never)
+    mockAuth.mockResolvedValue(oauthAuth as never)
     mockVerifyClerkToken.mockReturnValue(undefined)
 
     const result = await verifyMcpToken(makeRequest(), 'bad-token')
@@ -45,7 +58,7 @@ describe('verifyMcpToken', () => {
   })
 
   it('returns undefined when user has no org memberships', async () => {
-    mockAuth.mockResolvedValue({} as never)
+    mockAuth.mockResolvedValue(oauthAuth as never)
     mockVerifyClerkToken.mockReturnValue({
       token: 'tok',
       scopes: ['profile'],
@@ -59,7 +72,7 @@ describe('verifyMcpToken', () => {
   })
 
   it('returns authInfo with memberships when user belongs to one org', async () => {
-    mockAuth.mockResolvedValue({} as never)
+    mockAuth.mockResolvedValue(oauthAuth as never)
     mockVerifyClerkToken.mockReturnValue({
       token: 'tok',
       scopes: ['profile'],
@@ -76,7 +89,7 @@ describe('verifyMcpToken', () => {
   })
 
   it('returns all memberships when user belongs to multiple orgs', async () => {
-    mockAuth.mockResolvedValue({} as never)
+    mockAuth.mockResolvedValue(oauthAuth as never)
     mockVerifyClerkToken.mockReturnValue({
       token: 'tok',
       scopes: ['profile'],
@@ -93,7 +106,7 @@ describe('verifyMcpToken', () => {
   })
 
   it('returns undefined when Clerk API call throws', async () => {
-    mockAuth.mockResolvedValue({} as never)
+    mockAuth.mockResolvedValue(oauthAuth as never)
     mockVerifyClerkToken.mockReturnValue({
       token: 'tok',
       scopes: ['profile'],
@@ -104,6 +117,66 @@ describe('verifyMcpToken', () => {
 
     const result = await verifyMcpToken(makeRequest(), 'tok')
     expect(result).toBeUndefined()
+  })
+})
+
+describe('verifyMcpToken with an API key', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function mockApiKeyAuth(userId: string | null) {
+    mockAuth.mockResolvedValue({
+      tokenType: 'api_key',
+      isAuthenticated: true,
+      id: 'ak_1',
+      userId,
+    } as never)
+  }
+
+  it('accepts a key whose user has memberships, without verifyClerkToken', async () => {
+    mockApiKeyAuth('user_stewart')
+    mockMembershipApi([{ id: 'org_1', slug: 'vasco' }])
+
+    const result = await verifyMcpToken(makeRequest(), 'ak_secret')
+    expect(mockVerifyClerkToken).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      token: 'ak_secret',
+      clientId: 'ak_1',
+      scopes: [],
+      extra: {
+        userId: 'user_stewart',
+        memberships: [{ id: 'org_1', slug: 'vasco' }],
+      },
+    })
+  })
+
+  it('refuses a key with no user id', async () => {
+    mockApiKeyAuth(null)
+    mockMembershipApi([{ id: 'org_1', slug: 'vasco' }])
+
+    const result = await verifyMcpToken(makeRequest(), 'ak_secret')
+    expect(result).toBeUndefined()
+    expect(mockClerkClient).not.toHaveBeenCalled()
+  })
+
+  it('refuses a key whose user has no memberships', async () => {
+    mockApiKeyAuth('user_stewart')
+    mockMembershipApi([])
+
+    const result = await verifyMcpToken(makeRequest(), 'ak_secret')
+    expect(result).toBeUndefined()
+  })
+
+  it('refuses a key Clerk did not authenticate', async () => {
+    mockAuth.mockResolvedValue({
+      tokenType: 'api_key',
+      isAuthenticated: false,
+    } as never)
+
+    const result = await verifyMcpToken(makeRequest(), 'ak_bad')
+    expect(result).toBeUndefined()
+    expect(mockClerkClient).not.toHaveBeenCalled()
   })
 })
 
