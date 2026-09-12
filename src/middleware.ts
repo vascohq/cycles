@@ -1,9 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 // Routes that bypass Clerk's session protection in every environment:
-// - /mcp runs its own OAuth verification via withMcpAuth (src/app/mcp/route.ts);
-//   otherwise auth.protect() 404s the JSON-RPC POST, which carries an MCP bearer
-//   token, not a Clerk session.
+// - /mcp verifies its own bearer token via withMcpAuth (src/app/mcp/route.ts),
+//   which accepts a Clerk OAuth token or a Clerk API key; otherwise
+//   auth.protect() 404s the JSON-RPC POST, which carries that bearer token and
+//   not a Clerk session.
 // - /.well-known/oauth-* are the unauthenticated OAuth discovery endpoints the
 //   MCP client hits before a token exists. The config.matcher dot rule already
 //   excludes them, but listing them here is explicit and survives matcher changes.
