@@ -12,6 +12,7 @@ import type {
 import type {
   Area,
   Frame,
+  FrameOutcome,
   FramePointer,
   FrameReport,
   PointerKind,
@@ -1188,9 +1189,25 @@ type FrameFields = {
   problem: string
   appetite: string
   business_case: string
+  /** One line each. The writer mints the ids, so no caller invents one. */
+  outcomes: string[]
   areaId: string
   owner: string
   originFrameId: string
+}
+
+/**
+ * Turn the lines a caller sent into stored outcomes, dropping the blank ones so
+ * a trailing empty line never counts towards sharpness.
+ *
+ * ponytail: a write replaces the list and re-mints every id. Preserve ids by
+ * text once something marks a single outcome observed.
+ */
+function toOutcomes(lines: string[]): FrameOutcome[] {
+  return lines
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .map((text) => ({ id: nanoid(), text }))
 }
 
 /**
@@ -1248,6 +1265,7 @@ export async function upsertFrame(
         ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
         reports: [],
         pointers: [],
+        outcomes: toOutcomes(params.outcomes ?? []),
         // A frame is born awake. Its clock starts on the day it was captured.
         last_woken: getTeamToday(new Date()),
         resolved: false,
@@ -1268,6 +1286,8 @@ export async function upsertFrame(
     if (params.problem !== undefined) existing.set('problem', params.problem)
     if (params.appetite !== undefined) existing.set('appetite', params.appetite)
     if (params.business_case !== undefined) existing.set('business_case', params.business_case)
+    // A whole-list replace, the same as an area's outline: [] clears it.
+    if (params.outcomes !== undefined) existing.set('outcomes', toOutcomes(params.outcomes))
     // '' clears an optional pointer field; the key goes away rather than
     // sitting there as an empty string nobody can tell from "unset".
     setOrClear(existing, 'areaId', params.areaId)

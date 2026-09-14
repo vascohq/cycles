@@ -49,11 +49,15 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
     business_case: '',
     reports: [],
     pointers: [],
+    outcomes: [],
     last_woken: '2026-09-01',
     resolved: false,
     ...overrides,
   }
 }
+
+/** Enough of an outcome to sharpen a frame. */
+const OUTCOMES = [{ id: 'o1', text: 'A failed import tells the importer why' }]
 
 function makeReport(overrides: Partial<FrameReport> = {}): FrameReport {
   return {
@@ -396,8 +400,16 @@ describe("an area's generated shape", () => {
 })
 
 describe('sharp', () => {
-  it('is true only when the frame has both a problem and an appetite', () => {
-    expect(isSharp(makeFrame({ problem: 'Imports fail', appetite: '2 weeks' }))).toBe(true)
+  it('is false with no outcome, so nobody bets on a frame that never says what changes', () => {
+    expect(
+      isSharp(makeFrame({ problem: 'Imports fail', appetite: '2 weeks', outcomes: [] }))
+    ).toBe(false)
+  })
+
+  it('is true with a problem, an appetite and an outcome', () => {
+    expect(
+      isSharp(makeFrame({ problem: 'Imports fail', appetite: '2 weeks', outcomes: OUTCOMES }))
+    ).toBe(true)
   })
 
   it('is false for a problem with no appetite', () => {
@@ -415,7 +427,7 @@ describe('sharp', () => {
 
 describe('the candidate statement', () => {
   it('is built from the appetite, so nobody types it', () => {
-    expect(candidateStatement(makeFrame({ appetite: '6 weeks' }))).toBe(
+    expect(candidateStatement(makeFrame({ appetite: '6 weeks', outcomes: OUTCOMES }))).toBe(
       'If we can shape this into something doable in 6 weeks, that is meaningful to us.'
     )
   })
@@ -431,7 +443,7 @@ describe('frame state', () => {
   })
 
   it('reads candidate when sharp with no shape yet', () => {
-    expect(frameState(makeFrame({ appetite: '2 weeks' }), [])).toBe('candidate')
+    expect(frameState(makeFrame({ appetite: '2 weeks', outcomes: OUTCOMES }), [])).toBe('candidate')
   })
 
   it('reads in_flight while a linked shape is not done', () => {
@@ -473,7 +485,9 @@ describe('frame state', () => {
 describe('the rendered pin carries the derived frame fields', () => {
   it('marks a sharp frame sharp and hands over its candidate statement', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ appetite: '6 weeks', business_case: 'Two customers churned' })],
+      frames: [
+        makeFrame({ appetite: '6 weeks', business_case: 'Two customers churned', outcomes: OUTCOMES }),
+      ],
       today: '2026-09-02',
     })
     expect(model.pins[0].sharp).toBe(true)
@@ -481,6 +495,23 @@ describe('the rendered pin carries the derived frame fields', () => {
     expect(model.pins[0].candidateStatement).toContain('6 weeks')
     expect(model.pins[0].appetite).toBe('6 weeks')
     expect(model.pins[0].businessCase).toBe('Two customers churned')
+  })
+
+  it('hands over the stated outcomes, dropping the blank ones', () => {
+    const model = renderProductMap({
+      frames: [
+        makeFrame({
+          outcomes: [
+            { id: 'o1', text: 'A failed import tells the importer why' },
+            { id: 'o2', text: '   ' },
+          ],
+        }),
+      ],
+      today: '2026-09-02',
+    })
+    expect(model.pins[0].outcomes).toEqual([
+      { id: 'o1', text: 'A failed import tells the importer why' },
+    ])
   })
 
   it('marks a raw capture rough, so it never reads as agreed work', () => {
@@ -493,8 +524,8 @@ describe('the rendered pin carries the derived frame fields', () => {
   it('reads the shapes of that frame only, never a neighbour frame shapes', () => {
     const model = renderProductMap({
       frames: [
-        makeFrame({ id: 'f1', appetite: '2 weeks' }),
-        makeFrame({ id: 'f2', appetite: '2 weeks' }),
+        makeFrame({ id: 'f1', appetite: '2 weeks', outcomes: OUTCOMES }),
+        makeFrame({ id: 'f2', appetite: '2 weeks', outcomes: OUTCOMES }),
       ],
       shapes: [makeShape({ frameId: 'f1', stage: 'building' })],
       today: '2026-09-02',

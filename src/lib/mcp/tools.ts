@@ -729,6 +729,7 @@ export async function handleUpsertFrame(
     problem?: string
     appetite?: string
     business_case?: string
+    outcomes?: string[]
     area_id?: string
     owner?: string
     origin_frame_id?: string
@@ -756,6 +757,7 @@ export async function handleUpsertFrame(
       problem: params.problem,
       appetite: params.appetite,
       business_case: params.business_case,
+      outcomes: params.outcomes,
       areaId: params.area_id,
       owner: params.owner,
       originFrameId: params.origin_frame_id,
@@ -1923,6 +1925,12 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe('Free text: who is affected, what it is worth, why now.'),
+      outcomes: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'What must be true afterwards, one line each. Each outcome states a change in the world that a reader can check after the fact — "a failed import tells the importer why", never "the user can filter the table". Never invent a metric: if nothing is instrumented, write the observable change and stop. A frame needs at least one outcome to be sharp. Passing this REPLACES the whole list; omit it to leave the outcomes alone, and pass [] to clear them.'
+        ),
       area_id: z
         .string()
         .optional()
@@ -1952,6 +1960,7 @@ export function registerCyclesTools(server: any): void {
         kind?: string
         appetite?: string
         business_case?: string
+        outcomes?: string[]
         area_id?: string
         owner?: string
         origin_frame_id?: string
