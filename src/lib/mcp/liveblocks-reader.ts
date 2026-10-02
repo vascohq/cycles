@@ -1,4 +1,6 @@
+import { cache } from 'react'
 import { liveblocks } from '@/lib/liveblocks'
+import type { CycleSummary as CycleListItem } from '@/lib/cycle-list-engine'
 import { slugify } from '@/lib/slugify'
 import { readStage } from '@/lib/stage-engine'
 import type { CycleWindow } from '@/lib/product-map-engine'
@@ -48,6 +50,30 @@ export async function listCycleRooms(orgId: string): Promise<CycleSummary[]> {
     archived: room.metadata.archived === 'true',
   }))
 }
+
+/**
+ * The org's cycles from room metadata, newest first, without opening a room.
+ * The Cycles page, its sidebar and the command palette all read this, so the
+ * metadata mapping lives once. React's cache runs it once per server render,
+ * so a layout and its page share one getRooms call.
+ */
+export const readCycleSummaries = cache(async (orgPrefix: string): Promise<CycleListItem[]> => {
+  const { data: rooms } = await liveblocks.getRooms({
+    query: `roomId^"${orgPrefix}:cycle:"`,
+  })
+  return rooms
+    .map((room) => ({
+      slug: room.id.split(':').slice(2).join(':'),
+      title: String(room.metadata.title ?? 'Untitled cycle'),
+      type: room.metadata.type === 'cooldown' ? ('cooldown' as const) : ('build' as const),
+      start_date: room.metadata.start_date ? String(room.metadata.start_date) : '',
+      end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
+      archived: room.metadata.archived === 'true',
+      createdOn: room.metadata.createdOn ? String(room.metadata.createdOn) : '',
+    }))
+    .sort((a, b) => (a.createdOn > b.createdOn ? -1 : 1))
+    .map(({ createdOn: _createdOn, ...cycle }) => cycle)
+})
 
 export async function getCycleStorage(
   orgId: string,

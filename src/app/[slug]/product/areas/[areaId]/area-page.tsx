@@ -57,7 +57,9 @@ export function AreaPage({
         initialStorage={productMapInitialStorage()}
       >
         <ClientSideSuspense
-          fallback={areaId === UNMAPPED_AREA ? <UnmappedSkeleton /> : <WorkspaceSkeleton />}
+          fallback={
+            areaId === UNMAPPED_AREA ? <UnmappedSkeleton /> : <WorkspaceSkeleton withHeading />
+          }
         >
           {() => <AreaPageView areaId={areaId} cycles={cycles} shapes={shapes} />}
         </ClientSideSuspense>
@@ -123,26 +125,24 @@ export function AreaLayout({
   // An area with land is a map of its own, the same workspace as the Product Map.
   if (area) {
     return (
-      <>
-        <MapWorkspace
-          title={
-            <div className="flex min-w-0 items-center gap-1.5">
-              <Crumbs areas={areas} areaId={areaId} trailing={false} />
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50" />
-              <AreaCrumb areas={areas} areaId={areaId} current />
-            </div>
-          }
-          heading={
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h1 className="font-display text-2xl">{name}</h1>
-              <Stats pins={open} owner={area.owner} />
-            </div>
-          }
-          areas={[area]}
-          pins={pins}
-          onOpenFrame={openFrame}
-        />
-      </>
+      <MapWorkspace
+        title={
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Crumbs areas={areas} areaId={areaId} trailing={false} />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50" />
+            <AreaCrumb areas={areas} areaId={areaId} current />
+          </div>
+        }
+        heading={
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h1 className="font-display text-2xl">{name}</h1>
+            <Stats pins={open} owner={area.owner} />
+          </div>
+        }
+        areas={[area]}
+        pins={pins}
+        onOpenFrame={openFrame}
+      />
     )
   }
 
@@ -150,14 +150,17 @@ export function AreaLayout({
   return (
     <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8">
       <TopBar title={<Crumbs areas={areas} areaId="" />} />
-      <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
-        <h1 className="font-display text-3xl leading-tight">{name}</h1>
-        <Stats pins={open} owner={null} />
+      {/* The same title row as an area with land: the name, then its stats. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="font-display text-2xl">{name}</h1>
+          <Stats pins={open} owner={null} />
+        </div>
         <p className="max-w-2xl text-sm text-muted-foreground">
           The holding area for frames that belong to no area yet. Leaving one here is always valid.
           File a frame into an area from its row.
         </p>
-      </section>
+      </div>
       <FilteredFrames
         pins={pins}
         areas={[]}
@@ -198,16 +201,14 @@ function resolvedUnder(area: RenderedArea): RenderedPin[] {
   return [...area.resolved, ...area.children.flatMap(resolvedUnder)]
 }
 
-/** Unmapped has no land, so it loads as its list does: a card, filters, rows. */
+/** Unmapped has no land, so it loads as its list does: a title row, filters, rows. */
 function UnmappedSkeleton() {
   return (
     <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8" aria-busy="true">
-      <Skeleton className="h-4 w-28" />
-      <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
-        <Skeleton className="h-9 w-1/4" />
-        <Skeleton className="h-4 w-1/3" />
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-1/4" />
         <Skeleton className="h-4 w-1/2" />
-      </section>
+      </div>
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: 7 }).map((_, i) => (
           <Skeleton key={i} className="h-7 w-20 rounded-full" />

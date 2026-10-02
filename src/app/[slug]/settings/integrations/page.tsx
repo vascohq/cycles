@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
 import { TopBar } from '@/components/sidebar-layout'
+import { SectionCrumb } from '@/components/crumb-menu'
 import type { Metadata } from 'next'
 import { getRedactedIntegrationConfig } from '@/lib/calendar/org-integrations'
 import { IntegrationsForm } from './integrations-form'
@@ -25,7 +27,16 @@ export default async function IntegrationsSettingsPage({
 
   const header = (
     <>
-      <TopBar title={<h1 className="font-medium">Integrations</h1>} />
+      <TopBar
+        title={
+          <>
+            <SectionCrumb section="Settings" />
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
+            <span className="font-medium">Integrations</span>
+          </>
+        }
+      />
+      <h1 className="font-display text-2xl">Integrations</h1>
       <p className="max-w-prose text-sm text-muted-foreground">
         Connect calendar feeds to show <strong>Holidays</strong> and{' '}
         <strong>Time&nbsp;Off</strong> on the cycle window. Paste an{' '}

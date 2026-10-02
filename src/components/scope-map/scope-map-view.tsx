@@ -49,7 +49,7 @@ import { usePitchDocumentTitle } from './use-pitch-document-title'
 import { STAGES } from '@/lib/stage-engine'
 import { StageBadge } from '@/components/scope-map/stage-badge'
 import { TopBar } from '@/components/sidebar-layout'
-import { CycleCrumb } from '@/components/crumb-menu'
+import { CycleCrumb, SectionCrumb } from '@/components/crumb-menu'
 
 export { STAGES }
 
@@ -601,14 +601,9 @@ function AppBar({
   return (
     <nav className="flex items-center">
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link
-          href={`/${slug}/cycles`}
-          className="hover:text-foreground transition-colors"
-        >
-          Cycles
-        </Link>
+        <SectionCrumb section="Cycles" />
         <ChevronRight className="w-3 h-3" />
-        <CycleCrumb slug={slug} cycleSlug={cycleSlug} label={cycleTitle} />
+        <CycleCrumb cycleSlug={cycleSlug} label={cycleTitle} />
         <ChevronRight className="w-3 h-3" />
         {others.length > 0 ? (
           <DropdownMenu>

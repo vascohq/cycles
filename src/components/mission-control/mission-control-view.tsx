@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { ChevronRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TimeboxTape, CalendarOverlayRow } from '@/components/timebox'
@@ -20,7 +19,7 @@ import { sectionKey, filterSquadSections } from '@/lib/mission-control-helpers'
 import { cn } from '@/lib/utils'
 import { PitchTimeline, TIMELINE_GRID } from './pitch-timeline'
 import { TopBar } from '@/components/sidebar-layout'
-import { CycleCrumb } from '@/components/crumb-menu'
+import { CycleCrumb, SectionCrumb } from '@/components/crumb-menu'
 
 export type MissionControlViewProps = {
   slug: string
@@ -69,12 +68,9 @@ export function MissionControlView({
       <TopBar
         title={
           <>
-            <Link href={`/${slug}/cycles`} className="text-muted-foreground hover:text-foreground">
-              Cycles
-            </Link>
+            <SectionCrumb section="Cycles" />
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
             <CycleCrumb
-              slug={slug}
               cycleSlug={cycleSlug}
               current
               label={`${cycleType === 'cooldown' ? '🧊 ' : ''}${cycleTitle}`}

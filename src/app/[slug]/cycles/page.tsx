@@ -8,8 +8,7 @@ import {
   groupCycles,
   type CycleSummary,
 } from '@/lib/cycle-list-engine'
-import { liveblocks } from '@/lib/liveblocks'
-import { getCycleStorage } from '@/lib/mcp/liveblocks-reader'
+import { getCycleStorage, readCycleSummaries } from '@/lib/mcp/liveblocks-reader'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { auth } from '@clerk/nextjs/server'
@@ -17,6 +16,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { TopBar } from '@/components/sidebar-layout'
+import { SectionCrumb } from '@/components/crumb-menu'
 
 export const metadata: Metadata = {
   title: 'Cycles | Cycles',
@@ -50,19 +50,8 @@ export default async function CyclesPage({
   if (slug !== urlSlug) redirect(`/${urlSlug}/cycles`)
 
   const roomPrefix = orgId ?? userId
-  const { data: rooms } = await liveblocks.getRooms({
-    query: `roomId^"${roomPrefix}:cycle:"`,
-  })
-
   const today = getTeamToday(new Date())
-  const summaries: CycleSummary[] = rooms.map((room) => ({
-    slug: room.id.split(':').slice(2).join(':'),
-    title: String(room.metadata.title ?? 'Untitled cycle'),
-    type: room.metadata.type === 'cooldown' ? 'cooldown' : 'build',
-    start_date: room.metadata.start_date ? String(room.metadata.start_date) : '',
-    end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
-    archived: room.metadata.archived === 'true',
-  }))
+  const summaries = await readCycleSummaries(roomPrefix)
 
   const groups = groupCycles(summaries, today)
 
@@ -122,7 +111,7 @@ export default async function CyclesPage({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
-      <TopBar title={<span className="font-medium">Cycles</span>} />
+      <TopBar title={<SectionCrumb section="Cycles" current />} />
       {/* No create button here: "New cycle" sits in the sidebar. */}
       <h1 className="mb-6 font-display text-2xl">Cycles</h1>
 

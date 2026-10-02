@@ -2,68 +2,83 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { ChevronRight, PanelLeft } from 'lucide-react'
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
+import { ChevronRight, Menu, PanelLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { useSections } from '@/components/app-sidebar'
+import { useUiPref } from '@/components/ui-prefs'
 
-// The collapsed flag is a per-viewer convenience, so it lives in localStorage.
-// useSyncExternalStore renders expanded on the server, then the stored value
-// after hydration, with no setState-in-effect and no hydration warning.
-const KEY = 'sidebar-collapsed'
-const EVENT = 'sidebar-collapsed-change'
-const subscribe = (onChange: () => void) => {
-  window.addEventListener('storage', onChange)
-  window.addEventListener(EVENT, onChange)
-  return () => {
-    window.removeEventListener('storage', onChange)
-    window.removeEventListener(EVENT, onChange)
-  }
-}
-const read = () => {
-  try {
-    return localStorage.getItem(KEY) === '1'
-  } catch {
-    return false
-  }
-}
-const write = (collapsed: boolean) => {
-  try {
-    localStorage.setItem(KEY, collapsed ? '1' : '0')
-  } catch {}
-  window.dispatchEvent(new Event(EVENT))
-}
-
-// The top bar's DOM node, for a page to portal its title and buttons into.
-// undefined = no SidebarLayout above (e2e fixtures, unit tests), so the bar
-// renders in place; null = not mounted yet, so it renders nothing.
-type Slot = HTMLElement | null | undefined
-const TopBarSlot = createContext<Slot>(undefined)
+// True inside a SidebarLayout. Static, so the server knows it too: a TopBar
+// renders over the layout's header row on the first paint, with no portal.
+const InLayout = createContext(false)
 
 /**
- * A page's title and main buttons, shown in the section's top bar. A portal,
- * because the title often lives deep in client state (a Liveblocks room) that
- * the layout cannot reach. Until it mounts, the bar shows a skeleton.
+ * A page's breadcrumb and buttons, shown in the section's top bar. It sits in
+ * the page (the title often lives in a Liveblocks room the layout cannot read)
+ * and is positioned over the layout's header row. Its containing block is the
+ * layout's column, outside the page's scroll area, so it neither scrolls nor
+ * clips. Until a page's bar renders, the header shows a skeleton.
+ *
+ * Outside a SidebarLayout (e2e fixtures, tests) it renders in place.
  */
 export function TopBar({ title, actions }: { title: ReactNode; actions?: ReactNode }) {
-  const slot = useContext(TopBarSlot)
+  const inLayout = useContext(InLayout)
+  const [closed] = useUiPref('sidebarClosed')
   const bar = (
-    <div data-topbar className="flex min-w-0 flex-1 items-center gap-3">
+    <>
       <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">{title}</div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </>
+  )
+  if (!inLayout) return <div className="flex min-w-0 items-center gap-3">{bar}</div>
+  return (
+    <div
+      data-topbar
+      // pl-12 clears the phone menu button; md:pl-14 clears the open toggle
+      // when the sidebar is closed.
+      className={cn(
+        'absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-3 border-b bg-background pl-12 pr-4',
+        closed ? 'md:pl-14' : 'md:pl-4',
+      )}
+    >
+      {bar}
     </div>
   )
-  // In place, a wrapper keeps the bar's flex-1 from stretching a column layout.
-  if (slot === undefined) return <div className="flex">{bar}</div>
-  return slot && createPortal(bar, slot)
 }
+
+/** The full-width button at the top of a sidebar, such as New cycle or Capture. */
+export const SidebarButton = forwardRef<HTMLButtonElement, ComponentProps<'button'>>(
+  function SidebarButton({ className, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className={cn(
+          'flex h-9 w-full items-center gap-2 rounded-md border bg-background px-2.5 text-sm shadow-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-60',
+          className,
+        )}
+        {...props}
+      />
+    )
+  },
+)
 
 /**
  * A section of the app inside the white panel: a collapsible sidebar that holds
  * the section's own navigation, and the page beside it under a top bar. Closed,
  * the sidebar is gone and its toggle moves to the start of the top bar. One
- * flag for every section, so it stays closed as you move around.
+ * cookie for every section, so it stays closed as you move around, and the
+ * server renders it closed. Below md, a menu button opens the sections and the
+ * sidebar in a drawer.
  */
 export function SidebarLayout({
   title,
@@ -76,55 +91,96 @@ export function SidebarLayout({
   sidebar: ReactNode
   children: ReactNode
 }) {
-  const collapsed = useSyncExternalStore(subscribe, read, () => false)
-  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const [closed, setClosed] = useUiPref('sidebarClosed')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const nav = (
+    // shrink-0 on every child: a long list overflows this column, and flex
+    // would otherwise squash the buttons above it to fit.
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 [&>*]:shrink-0">
+      {action}
+      {sidebar}
+    </div>
+  )
 
   return (
-    <TopBarSlot.Provider value={slot}>
+    <InLayout.Provider value={true}>
       <div className="flex min-h-0 flex-1">
-        {!collapsed && (
+        {!closed && (
           <aside className="hidden w-64 shrink-0 flex-col border-r md:flex">
             <div className="flex h-12 shrink-0 items-center justify-between gap-2 pl-4 pr-3">
               <p className="truncate text-base font-semibold">{title}</p>
-              <Toggle collapsed={false} />
+              <Toggle label="Close sidebar" onClick={() => setClosed(true)} />
             </div>
-            {/* shrink-0 on every child: a long list overflows this column, and
-                flex would otherwise squash the buttons above it to fit. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 [&>*]:shrink-0">
-              {action}
-              {sidebar}
-            </div>
+            {nav}
           </aside>
         )}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* A page's TopBar portals in after the placeholder, which then hides.
-              A skeleton, not a generic title: while a live room loads, the bar
-              would otherwise show one title and then jump to another. */}
-          <header
-            ref={setSlot}
-            className="flex h-12 shrink-0 items-center gap-3 border-b px-4 [&:has(>[data-topbar])>[data-default]]:hidden"
-          >
-            {collapsed && <Toggle collapsed />}
+        <div className="relative flex min-w-0 flex-1 flex-col [&:has([data-topbar])_[data-default]]:hidden">
+          <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+            {/* z-20: above a page's TopBar, which covers this row. */}
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open menu"
+              className="relative z-20 -ml-1.5 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            >
+              <Menu className="size-4" />
+            </button>
+            {closed && (
+              <span className="relative z-20 hidden md:block">
+                <Toggle label="Open sidebar" onClick={() => setClosed(false)} />
+              </span>
+            )}
             <Skeleton data-default className="h-4 w-48" />
           </header>
           <div className="min-h-0 flex-1 overflow-auto">{children}</div>
         </div>
       </div>
-    </TopBarSlot.Provider>
+
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent
+          // Left drawer; the shared Sheet opens from the right by default.
+          className="left-0 right-auto w-72 max-w-[85vw] gap-0 border-l-0 border-r p-0 pt-12 data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+          // A link inside closes the drawer, so it never covers the new page.
+          onClick={(e) => (e.target as HTMLElement).closest('a') && setMenuOpen(false)}
+        >
+          <SheetTitle className="sr-only">Menu</SheetTitle>
+          <SectionLinks />
+          <p className="px-4 pb-2 pt-4 text-base font-semibold">{title}</p>
+          {nav}
+        </SheetContent>
+      </Sheet>
+    </InLayout.Provider>
   )
 }
 
-function Toggle({ collapsed }: { collapsed: boolean }) {
-  const label = collapsed ? 'Open sidebar' : 'Close sidebar'
+function SectionLinks() {
+  return (
+    <nav aria-label="Sections" className="flex gap-1 border-b px-3 pb-3">
+      {useSections().map(({ href, label, icon: Icon, active }) => (
+        <Link
+          key={href}
+          href={href}
+          className={cn(
+            'flex flex-1 flex-col items-center gap-1 rounded-md py-1.5 text-[11px] text-muted-foreground hover:bg-muted',
+            active && 'bg-muted font-medium text-foreground',
+          )}
+        >
+          <Icon className="size-4" />
+          {label}
+        </Link>
+      ))}
+    </nav>
+  )
+}
+
+function Toggle({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
-      onClick={() => write(!collapsed)}
+      onClick={onClick}
       aria-label={label}
-      aria-expanded={!collapsed}
       title={label}
-      // Hidden below md: there the sidebar never shows, so there is nothing to toggle.
-      className="hidden size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
+      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       <PanelLeft className="size-4" />
     </button>

@@ -1,25 +1,28 @@
 'use client'
 
-import { Suspense, useState, useSyncExternalStore } from 'react'
+import { Suspense, useSyncExternalStore } from 'react'
 import { PanelRight } from 'lucide-react'
 
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { keepFrames } from '@/lib/frame-list'
 import type { RenderedArea, RenderedPin } from '@/lib/product-map-engine'
 
 import { FilterBar, useFilteredFrames } from './frame-filters'
 import { FrameList } from './frame-list'
 import { TopBar } from '@/components/sidebar-layout'
+import { useUiPref } from '@/components/ui-prefs'
 
-/** The floating list's width, and the gap round it. The map fits beside both. */
+/** The width of the frame list beside the map. */
 const PANEL = 380
 
 /**
  * The map as the whole page: the breadcrumb in the top bar, the page's title,
- * the filters in a toolbar above the land, and the frame list in a right sidebar that closes.
- * One set of filters shapes the map and the list, so a pin on the land is
- * always a row in the list.
+ * the filters in a toolbar above the land, and the frame list in a right
+ * sidebar that closes (a cookie remembers it, see ui-prefs). One set of
+ * filters shapes the map and the list, so a pin on the land is always a row
+ * in the list.
  *
  * Below the md breakpoint it stacks: toolbar, map, then the list, because a
  * phone has no room beside the land.
@@ -29,8 +32,6 @@ export function MapWorkspace(props: {
   title: React.ReactNode
   /** The page's own title row, above the toolbar: a name, a count. */
   heading?: React.ReactNode
-  /** At the right of the title row. */
-  actions?: React.ReactNode
   /** The land to draw. */
   areas: RenderedArea[]
   /** Every frame the list and the map can show, before the filters. */
@@ -51,21 +52,21 @@ export function MapWorkspace(props: {
 function Workspace({
   title,
   heading,
-  actions,
   areas,
   pins,
   onOpenFrame,
   footer,
   withUnmapped = false,
 }: Parameters<typeof MapWorkspace>[0]) {
-  const [open, setOpen] = useState(true)
+  const [hidden, setHidden] = useUiPref('framesHidden')
+  const open = !hidden
   const wide = useWide()
   const { shown, keep } = useFilteredFrames(pins, areas)
   const showList = open || !wide
   const toggle = (
     <button
       type="button"
-      onClick={() => setOpen(!open)}
+      onClick={() => setHidden(open)}
       aria-label={open ? 'Hide the frame list' : 'Show the frame list'}
       aria-expanded={open}
       title={open ? 'Hide the frame list' : 'Show the frame list'}
@@ -80,15 +81,8 @@ function Workspace({
     // so the map and the list each fit and scroll on their own.
     <main className="flex w-full flex-col md:h-[100dvh] md:max-h-full md:flex-row md:overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* In the app this portals to the top bar; on a bare page (e2e) it
-            draws here, above the toolbar. */}
         <TopBar title={title} />
-        {(heading || actions) && (
-          <div className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-4">
-            <div className="min-w-0">{heading}</div>
-            {actions}
-          </div>
-        )}
+        {heading && <div className="shrink-0 px-4 pb-2 pt-4">{heading}</div>}
         <div className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <div className="min-w-0 flex-1">
             <FilterBar areas={areas} withUnmapped={withUnmapped} />
@@ -130,7 +124,7 @@ function Workspace({
   )
 }
 
-/** True at the md breakpoint and wider, where the panels float over the map. */
+/** True at the md breakpoint and wider, where the list sits beside the map. */
 function useWide(): boolean {
   return useSyncExternalStore(
     (onChange) => {
@@ -139,21 +133,28 @@ function useWide(): boolean {
       return () => query.removeEventListener('change', onChange)
     },
     () => window.matchMedia('(min-width: 768px)').matches,
-    () => true
+    () => true,
   )
 }
 
 /**
- * The workspace in grey while the room loads: the toolbar on top, the map
- * under it, and the list in the right sidebar.
+ * The workspace in grey while the room loads, in the same shape as the real
+ * one: the title row (when the page has one), the toolbar, the map, and the
+ * list unless the viewer hid it. So nothing pushes the map down when it loads.
  */
-export function WorkspaceSkeleton() {
+export function WorkspaceSkeleton({ withHeading = false }: { withHeading?: boolean }) {
+  const [hidden] = useUiPref('framesHidden')
   return (
     <main
       className="flex w-full flex-col md:h-[100dvh] md:max-h-full md:flex-row md:overflow-hidden"
       aria-busy="true"
     >
       <div className="flex min-w-0 flex-1 flex-col">
+        {withHeading && (
+          <div className="shrink-0 px-4 pb-2 pt-4">
+            <Skeleton className="h-8 w-56" />
+          </div>
+        )}
         <div className="flex min-h-12 flex-wrap items-center gap-2 border-b px-3 py-1.5">
           {['w-16', 'w-16', 'w-16', 'w-16', 'w-20', 'w-24', 'w-24', 'w-32'].map((w, i) => (
             <Skeleton key={i} className={`h-7 rounded-full ${w}`} />
@@ -162,7 +163,12 @@ export function WorkspaceSkeleton() {
         <div className="h-[55vh] animate-pulse bg-muted/30 md:h-auto md:flex-1" />
       </div>
       {/* md:w-[380px] is PANEL. A class, not a style, so a phone stacks it. */}
-      <div className="flex flex-col gap-2 border-t p-3 md:w-[380px] md:border-l md:border-t-0">
+      <div
+        className={cn(
+          'flex flex-col gap-2 border-t p-3 md:w-[380px] md:border-l md:border-t-0',
+          hidden && 'md:hidden',
+        )}
+      >
         <Skeleton className="h-4 w-16" />
         {Array.from({ length: 7 }).map((_, i) => (
           <div key={i} className="flex items-start gap-2.5 py-1.5">

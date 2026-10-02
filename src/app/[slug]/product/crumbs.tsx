@@ -3,11 +3,12 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
-import { CrumbMenu } from '@/components/crumb-menu'
+import { CrumbMenu, SectionCrumb } from '@/components/crumb-menu'
+import { cn } from '@/lib/utils'
 
-import type { Area } from '@/product-map-liveblocks.config'
+import type { Area, Frame } from '@/product-map-liveblocks.config'
 
-import { UNMAPPED_AREA, areaHref } from './links'
+import { UNMAPPED_AREA, areaHref, frameHref } from './links'
 
 /** The areas an area or a frame sits in, outermost first. */
 export function areaPath(areas: Area[], areaId: string): Area[] {
@@ -25,8 +26,10 @@ export function areaPath(areas: Area[], areaId: string): Area[] {
 }
 
 /**
- * One area in a breadcrumb. With siblings (areas under the same parent) it is a
- * menu that switches between them; alone, a plain link.
+ * One area in a breadcrumb. With siblings it is a menu that switches between
+ * them; alone, a plain link. A top-level area's siblings are the other
+ * top-level areas and Unmapped, because Unmapped is the other place a frame
+ * can sit at the top of the map.
  */
 export function AreaCrumb({
   areas,
@@ -39,57 +42,74 @@ export function AreaCrumb({
 }) {
   const { slug } = useParams<{ slug: string }>()
   const area = areas.find((a) => a.id === areaId)
-  if (!area) {
+  const parentId = area?.parentAreaId ?? ''
+  const items = [
+    ...areas
+      .filter((a) => (a.parentAreaId ?? '') === parentId)
+      .map((a) => ({ href: areaHref(slug, a.id), label: a.name, current: a.id === areaId })),
+    ...(parentId
+      ? []
+      : [
+          {
+            href: areaHref(slug, UNMAPPED_AREA),
+            label: 'Unmapped',
+            current: !area,
+          },
+        ]),
+  ]
+  const label = area?.name ?? 'Unmapped'
+  if (items.length < 2) {
     return (
       <Link
-        href={areaHref(slug, UNMAPPED_AREA)}
-        className={current ? 'font-medium text-foreground' : 'hover:text-foreground'}
+        href={areaHref(slug, areaId)}
+        className={cn(
+          'truncate',
+          current ? 'font-medium text-foreground' : 'hover:text-foreground',
+        )}
       >
-        Unmapped
+        {label}
       </Link>
     )
   }
-  const siblings = areas.filter((a) => (a.parentAreaId ?? '') === (area.parentAreaId ?? ''))
-  if (siblings.length < 2) {
-    return (
-      <Link
-        href={areaHref(slug, area.id)}
-        className={
-          current ? 'truncate font-medium text-foreground' : 'truncate hover:text-foreground'
-        }
-      >
-        {area.name}
-      </Link>
-    )
-  }
-  return (
-    <CrumbMenu
-      label={area.name}
-      current={current}
-      items={siblings.map((a) => ({
-        href: areaHref(slug, a.id),
-        label: a.name,
-        current: a.id === area.id,
-      }))}
-    />
-  )
+  return <CrumbMenu label={label} current={current} items={items} />
 }
 
 /**
- * Product Map › region › … › area. Every area part switches to its siblings.
- * On an area page the last part is the page itself, so `trailing={false}`
- * drops it.
+ * The frame part of a breadcrumb on a frame page: switches to another open
+ * frame in the same area.
+ */
+export function FrameCrumb({ frames, frameId }: { frames: Frame[]; frameId: string }) {
+  const { slug } = useParams<{ slug: string }>()
+  const frame = frames.find((f) => f.id === frameId)
+  const label = frame?.problem || 'Untitled frame'
+  const items = frames
+    .filter((f) => (f.areaId || '') === (frame?.areaId || '') && (!f.resolved || f.id === frameId))
+    .map((f) => ({
+      href: frameHref(slug, f.id),
+      label: f.problem || 'Untitled frame',
+      current: f.id === frameId,
+    }))
+  if (items.length < 2) return <span className="truncate font-medium text-foreground">{label}</span>
+  return <CrumbMenu label={label} current items={items} />
+}
+
+/**
+ * Product Map › region › … › area, then `children` (a frame page adds its
+ * frame). The section and every area part are menus. On an area page the
+ * last part is the page itself, so the page passes `trailing={false}` and
+ * adds it as the current part.
  */
 export function Crumbs({
   areas,
   areaId,
   trailing = true,
+  children,
 }: {
   areas: Area[]
   areaId: string
   trailing?: boolean
+  children?: React.ReactNode
 }) {
-  const { slug } = useParams<{ slug: string }>()
   const path = areaPath(areas, areaId)
   const ids = path.length ? path.map((a) => a.id) : [UNMAPPED_AREA]
   const shown = trailing ? ids : ids.slice(0, -1)
@@ -98,9 +118,7 @@ export function Crumbs({
       aria-label="Breadcrumb"
       className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground"
     >
-      <Link href={`/${slug}/product`} className="shrink-0 hover:text-foreground">
-        Product Map
-      </Link>
+      <SectionCrumb section="Product Map" current={!shown.length && !children} />
       {/* A chevron, not a slash: an area name can hold a slash ("Slack / Teams"). */}
       {shown.map((id) => (
         <span key={id} className="flex min-w-0 items-center gap-1.5">
@@ -108,6 +126,12 @@ export function Crumbs({
           <AreaCrumb areas={areas} areaId={id} />
         </span>
       ))}
+      {children && (
+        <span className="flex min-w-0 items-center gap-1.5">
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" />
+          {children}
+        </span>
+      )}
     </nav>
   )
 }

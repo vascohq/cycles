@@ -14,7 +14,7 @@ import {
 import { unionBounds, type Bounds, type Point } from '@/lib/product-map-geometry'
 import { listFrames } from '@/lib/frame-list'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Scan } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LocateFixed, Maximize, Minimize } from 'lucide-react'
 import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
 import { KIND_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import {
@@ -54,18 +54,11 @@ export function MapCanvas({
   areas,
   onOpenFrame,
   className,
-  inset,
 }: {
   areas: RenderedArea[]
   onOpenFrame: (frameId: string) => void
   /** Overrides the canvas height, for a page that lays the map out its own way. */
   className?: string
-  /**
-   * Pixels on each side that something floats over, such as the frame list or
-   * a toolbar. The fit centers the land in the part still visible, so nothing
-   * hides under them.
-   */
-  inset?: { top?: number; right?: number; bottom?: number }
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 960, height: 560 })
@@ -127,32 +120,23 @@ export function MapCanvas({
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
   }
 
-  const top = inset?.top ?? 0
-  const right = inset?.right ?? 0
-  const bottom = inset?.bottom ?? 0
-
   const fit = useCallback(
     (target: Bounds): View => {
       const padX = target.width * FIT_PAD + 8
       const padY = target.height * FIT_PAD + 8
       const w = Math.max(target.width + padX * 2, MIN_SPAN)
       const h = Math.max(target.height + padY * 2, MIN_SPAN)
-      // Fit into the part of the host nothing floats over, then grow the view
-      // under the overlays at the same scale, so the land centers where it shows.
-      const visibleW = Math.max(box.width - right, box.width * 0.4)
-      const visibleH = Math.max(box.height - top - bottom, box.height * 0.4)
-      // Match that part's aspect, so fitting never squashes the coastline.
-      const ratio = visibleW / Math.max(visibleH, 1)
+      // Match the host's aspect, so fitting never squashes the coastline.
+      const ratio = box.width / Math.max(box.height, 1)
       const span = w / h > ratio ? { w, h: w / ratio } : { w: h * ratio, h }
-      const unit = span.w / visibleW
       return {
         x: target.x + target.width / 2 - span.w / 2,
-        y: target.y + target.height / 2 - span.h / 2 - top * unit,
-        w: box.width * unit,
-        h: box.height * unit,
+        y: target.y + target.height / 2 - span.h / 2,
+        w: span.w,
+        h: span.h,
       }
     },
-    [box.width, box.height, top, right, bottom]
+    [box.width, box.height]
   )
 
   // No view of their own means fitted to the whole map, recomputed each render —
@@ -381,10 +365,10 @@ export function MapCanvas({
 
         <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-md border bg-background shadow-sm">
           <MapControl label="Fit the map" onClick={() => setView(null)}>
-            <Scan className="size-4" />
+            <LocateFixed className="size-4" />
           </MapControl>
           <MapControl label={expanded ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleExpanded}>
-            {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            {expanded ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
           </MapControl>
         </div>
       </div>

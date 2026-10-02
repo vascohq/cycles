@@ -2,6 +2,7 @@
 
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SidebarButton } from '@/components/sidebar-layout'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { PropsWithChildren } from 'react'
 
@@ -16,15 +17,12 @@ export function CreateCycleDialog({
     <Dialog>
       <DialogTrigger asChild>
         {variant === 'sidebar' ? (
-          <button
-            type="button"
-            className="flex h-9 w-full items-center gap-2 rounded-md border bg-background px-2.5 text-sm shadow-sm transition-colors hover:bg-muted"
-          >
+          <SidebarButton>
             <Plus className="size-4 text-muted-foreground" />
             New cycle
-          </button>
+          </SidebarButton>
         ) : (
-          <Button size="sm">Create cycle</Button>
+          <Button size="sm">New cycle</Button>
         )}
       </DialogTrigger>
       <DialogContent>{children}</DialogContent>

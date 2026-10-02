@@ -5,7 +5,7 @@
 // lexically — independent of the business-day math in timebox-engine, so an
 // undated cycle is caught explicitly rather than masquerading as "upcoming".
 // Archiving is a separate, orthogonal axis: an explicit `archived` override
-// (ADR 0019) that removes a cycle from grouping/landing/stepping regardless of
+// (ADR 0019) that removes a cycle from grouping/landing/the cycle menu regardless of
 // its date-derived phase.
 
 export type CyclePhase = 'upcoming' | 'current' | 'past' | 'undated'
@@ -18,7 +18,7 @@ export type CycleSummary = {
   start_date: string
   end_date: string
   /**
-   * Explicit, reversible removal from the list/landing/stepper — orthogonal to
+   * Explicit, reversible removal from the list/landing/cycle menu — orthogonal to
    * the date-derived phase (ADR 0019). Archived cycles are still fully real and
    * reachable by URL; they just drop out of every derived-navigation surface.
    */

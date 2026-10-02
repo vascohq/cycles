@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { useCycleList } from '@/components/command-palette/palette-context'
+import { useSections } from '@/components/app-sidebar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,16 +66,39 @@ export function CrumbMenu({
 }
 
 /**
+ * The section part of a breadcrumb ("Cycles", "Product Map", "Settings"):
+ * switches to another section of the app. The caller names its section, so
+ * the label is right even where the URL is not a section's (e2e fixtures).
+ */
+export function SectionCrumb({
+  section,
+  current = false,
+}: {
+  section: 'Cycles' | 'Product Map' | 'Settings'
+  current?: boolean
+}) {
+  return (
+    <CrumbMenu
+      label={section}
+      current={current}
+      items={useSections().map((s) => ({
+        href: s.href,
+        label: s.label,
+        current: s.label === section,
+      }))}
+    />
+  )
+}
+
+/**
  * The cycle part of a breadcrumb: switches to any other cycle that is not
  * archived. The list is the command palette's, fetched once and shared.
  */
 export function CycleCrumb({
-  slug,
   cycleSlug,
   label,
   current = false,
 }: {
-  slug: string
   cycleSlug: string
   label: ReactNode
   current?: boolean
@@ -89,7 +113,7 @@ export function CycleCrumb({
       : list.cycles
           .filter((c) => !c.archived || c.slug === cycleSlug)
           .map((c) => ({
-            href: `/${slug}/cycles/${c.slug}`,
+            href: `/${list.slug}/cycles/${c.slug}`,
             label: `${c.type === 'cooldown' ? '🧊 ' : ''}${c.title}`,
             current: c.slug === cycleSlug,
           }))

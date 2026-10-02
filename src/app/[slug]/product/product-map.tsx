@@ -37,14 +37,13 @@ import {
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
-import { MapCanvas } from '@/components/product-map/map-canvas'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
 import { ExternalLink, Plus, type LucideIcon } from 'lucide-react'
-import { useOpenFramePage } from './links'
+import { claudeChatHref, useOpenFramePage } from './links'
 import { FilteredFrames } from './frame-filters'
 import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
 import {
@@ -78,7 +77,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { TopBar } from '@/components/sidebar-layout'
+import { SidebarButton, TopBar } from '@/components/sidebar-layout'
+import { SectionCrumb } from '@/components/crumb-menu'
 
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
   internal: 'Internal',
@@ -167,34 +167,17 @@ export const OpenFrameContext = createContext<(frameId: string) => void>(() => {
 /** The cycles a frame can be bet into. Read once, at the page boundary. */
 export const CyclesContext = createContext<CycleWindow[]>([])
 
-/**
- * `full` is the Product Map's own page: the land, plus capture, plus every list
- * that reaches a frame the land does not show.
- *
- * `canvas` is the land and nothing else, for embedding somewhere the map is not
- * the subject — the cycles home page. Clicking a pin still opens its frame,
- * because a map you cannot read from is decoration.
- */
-export type ProductMapVariant = 'full' | 'canvas'
-
+/** The Product Map's own page: the land, plus every list that reaches a frame. */
 export function ProductMap({
   roomId,
   organizationUsers,
   cycles,
   shapes,
-  variant = 'full',
-  heading,
-  action,
 }: {
   roomId: string
   organizationUsers: OrganizationUser[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
-  variant?: ProductMapVariant
-  /** Left of the canvas's heading row. Only read by the `canvas` variant. */
-  heading?: React.ReactNode
-  /** Right of it, before Capture. Only read by the `canvas` variant. */
-  action?: React.ReactNode
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
@@ -203,37 +186,15 @@ export function ProductMap({
         initialPresence={{}}
         initialStorage={productMapInitialStorage()}
       >
-        <ClientSideSuspense
-          fallback={variant === 'canvas' ? <ProductMapSkeleton /> : <WorkspaceSkeleton />}
-        >
-          {() => (
-            <ProductMapView
-              cycles={cycles}
-              shapes={shapes}
-              variant={variant}
-              heading={heading}
-              action={action}
-            />
-          )}
+        <ClientSideSuspense fallback={<WorkspaceSkeleton withHeading />}>
+          {() => <ProductMapView cycles={cycles} shapes={shapes} />}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
   )
 }
 
-function ProductMapView({
-  cycles,
-  shapes,
-  variant,
-  heading,
-  action,
-}: {
-  cycles: CycleWindow[]
-  shapes: LinkedShape[]
-  variant: ProductMapVariant
-  heading?: React.ReactNode
-  action?: React.ReactNode
-}) {
+function ProductMapView({ cycles, shapes }: { cycles: CycleWindow[]; shapes: LinkedShape[] }) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
@@ -256,51 +217,16 @@ function ProductMapView({
   })
   const options = areaOptions(model.areas)
 
-  // The land only. No capture, and none of the lists that reach a frame the
-  // land does not show — those belong to the Product Map's own page, not to a
-  // page where the map is a view onto somewhere else.
-  if (variant === 'canvas') {
-    return (
-      <OpenFrameContext.Provider value={openFrame}>
-        <CyclesContext.Provider value={cycles}>
-          {/* The heading row lives in here, not on the host page: Capture needs
-              the room, and the room provider stops at this component. */}
-          <div className="flex items-baseline justify-between gap-3">
-            {heading}
-            <div className="flex items-center gap-3">
-              {action}
-              <CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />
-            </div>
-          </div>
-          {model.areas.length > 0 ? (
-            <MapCanvas areas={model.areas} onOpenFrame={openFrame} />
-          ) : (
-            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center">
-              <p className="text-sm font-medium">No land yet</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                The map is drawn by an agent. Describe your product to Claude
-                and it draws the land through the Cycles MCP server.
-              </p>
-              <div className="w-full max-w-lg text-left">
-                <AskClaude drawTheMap />
-              </div>
-            </div>
-          )}
-        </CyclesContext.Provider>
-      </OpenFrameContext.Provider>
-    )
-  }
-
   const pins = [...model.pins, ...model.resolved]
   const dormant = <DormantReview pins={model.dormantReview} options={options} />
 
-  // With land, the map is the page and everything else floats over it.
+  // With land, the map is the page: the toolbar above it, the list beside it.
   if (model.areas.length > 0) {
     return (
       <OpenFrameContext.Provider value={openFrame}>
         <CyclesContext.Provider value={cycles}>
           <MapWorkspace
-            title={<span className="font-medium">Product Map</span>}
+            title={<SectionCrumb section="Product Map" current />}
             heading={<h1 className="font-display text-2xl">Product Map</h1>}
             areas={model.areas}
             pins={pins}
@@ -341,51 +267,23 @@ function ProductMapView({
   )
 }
 
-/** Area id → the owner the area suggests for a new frame filed there. */
 /**
- * Capture, at the top of the Product Map sidebar. It lives in the section
- * layout, not in a page, so it stays put while you move between map pages.
- * Its own provider shares the room connection with the page's. While the room
- * first loads, a disabled copy holds its place, so nothing pops in.
+ * The button that opens Capture. Exported so the sidebar can show a disabled
+ * copy while the room first loads, and nothing pops in.
  */
-export function ProductCapture({ roomId }: { roomId: string }) {
-  return (
-    <ProductMapRoomProvider
-      id={roomId}
-      initialPresence={{}}
-      initialStorage={productMapInitialStorage()}
-    >
-      <ClientSideSuspense fallback={<CaptureTrigger disabled />}>
-        {() => <LiveCapture />}
-      </ClientSideSuspense>
-    </ProductMapRoomProvider>
-  )
-}
-
-function LiveCapture() {
-  const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
-  // Only the area tree is needed, for the Area picker and its owners.
-  const rendered = renderProductMap({ areas, frames: [], today: getTeamToday(new Date()) }).areas
-  return <CaptureMenu areas={areaOptions(rendered)} areaOwners={areaOwners(rendered)} />
-}
-
-const CaptureTrigger = forwardRef<HTMLButtonElement, ComponentProps<'button'>>(
+export const CaptureTrigger = forwardRef<HTMLButtonElement, ComponentProps<'button'>>(
   function CaptureTrigger(props, ref) {
     return (
-      <button
-        ref={ref}
-        type="button"
-        className="flex h-9 w-full items-center gap-2 rounded-md border bg-background px-2.5 text-sm shadow-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
-        {...props}
-      >
+      <SidebarButton ref={ref} {...props}>
         <Plus className="size-4 text-muted-foreground" />
         Capture
-      </button>
+      </SidebarButton>
     )
   }
 )
 
-function areaOwners(areas: RenderedArea[]): Record<string, string> {
+/** Area id → the owner the area suggests for a new frame filed there. */
+export function areaOwners(areas: RenderedArea[]): Record<string, string> {
   const owners: Record<string, string> = {}
   for (const area of areas) {
     if (area.owner) owners[area.areaId] = area.owner
@@ -1675,17 +1573,12 @@ function CaptureForm({
   )
 }
 
-/** The embedded land on the cycles page, while the room loads. */
-function ProductMapSkeleton() {
-  return <div className="h-[min(70vh,620px)] min-h-[360px] animate-pulse rounded-xl border bg-muted/30" />
-}
-
 /**
  * One CTA, two ways in. Capture with AI is the route that scales — an agent
  * interviews you and fills the frame — and manual capture is the 4pm-on-a-Friday
  * escape hatch, so noticing a problem never waits for an agent.
  */
-function CaptureMenu({
+export function CaptureMenu({
   areas,
   areaOwners,
 }: {
@@ -1721,7 +1614,7 @@ function CaptureMenu({
   )
 }
 
-const CAPTURE_WITH_CLAUDE_URL = `https://claude.ai/new?q=${encodeURIComponent('/paulo capture ')}`
+const CAPTURE_WITH_CLAUDE_URL = claudeChatHref('/paulo capture ')
 
 /** Example prompts, shown wherever somebody needs an agent to do the work. */
 function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
@@ -1756,7 +1649,7 @@ function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto w-full max-w-screen-xl px-6 py-8">
-      <TopBar title={<span className="font-medium">Product Map</span>} />
+      <TopBar title={<SectionCrumb section="Product Map" current />} />
       <h1 className="mb-3 font-display text-2xl">Product Map</h1>
       {children}
     </main>

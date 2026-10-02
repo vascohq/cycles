@@ -21,3 +21,12 @@ accepted
 - **Registration is keyed on a stringified item list** so the effect doesn't re-fire each render; callers pass a memoized array built from live storage, so the palette tracks pitch title/stage/zone edits in real time.
 - **`useRegisterPalettePitches` no-ops outside the provider**, so Mission Control and Scope Map remain renderable in isolation (tests, Storybook) without a palette context.
 - **Cross-cycle pitch search remains a clean future step:** swap the registry's per-room source for a server-fed index without changing the palette UI.
+
+## Update: the app shell redesign (2026-10-02)
+
+The app shell redesign changes one consequence above. Every page in a section no longer avoids a `getRooms` call.
+
+- The Cycles sidebar lists the cycles, so `src/app/[slug]/cycles/layout.tsx` reads the room metadata on each page in Cycles. It calls `readCycleSummaries`. React's `cache` runs that call once for each server render, so the layout and the page share it. The palette's `listCycles` action uses the same function.
+- The pitches of a current cycle in the sidebar come from the cycle's room in the browser (`LivePitches`), not from a server read. The palette registry above does not change.
+- The Product Map sidebar reads the Product Map room in the browser (`ProductSidebar`). The Product Map layout does no server read.
+- The breadcrumb cycle menu (`CycleCrumb`) reads the palette's cycle list. It starts the fetch with `ensureCycles` on its first open, so the menu and the palette share one fetch. The context lives in `palette-context.ts`, apart from the provider, so the menu does not bring the `listCycles` server action into Storybook bundles.
