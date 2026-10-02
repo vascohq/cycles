@@ -38,12 +38,18 @@ import {
 } from '@/components/organization-users-context'
 import { UserAvatar } from '@/components/scope-card/assignee-picker'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CyclesContext, FrameDetail, OpenFrameContext, areaOptions } from '../../product-map'
-import { useOpenFramePage } from '../../links'
+import {
+  CyclesContext,
+  FrameDetail,
+  OpenFrameContext,
+  areaOptions,
+} from '../../product-map'
+import { claudeChatHref, useOpenFramePage } from '../../links'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
-import { Crumbs } from '../../crumbs'
+import { Crumbs, FrameCrumb } from '../../crumbs'
 import { Missing } from '../../missing'
 import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
+import { TopBar } from '@/components/sidebar-layout'
 
 /**
  * The frame on a page of its own, so it has a URL somebody can share. It reads
@@ -121,15 +127,17 @@ export function FrameLayout({
     <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
         <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8">
-          <Breadcrumb
-            areas={areas}
-            areaId={pin.areaId}
-            onEdit={editable ? () => setEditing(true) : undefined}
+          <TopBar
+            title={
+              <Crumbs areas={areas} areaId={pin.areaId}>
+                <FrameCrumb frames={frames} frameId={frameId} />
+              </Crumbs>
+            }
           />
           {/* The same container and hero card as the Scope Map, so every page
               lines up under the header. */}
           <section className="flex flex-col gap-5 rounded-lg border bg-card p-6">
-            <Header pin={pin} />
+            <Header pin={pin} onEdit={editable ? () => setEditing(true) : undefined} />
             <Track pin={pin} />
             <Brief pin={pin} />
           </section>
@@ -148,53 +156,48 @@ export function FrameLayout({
   )
 }
 
-function Breadcrumb({
-  areas,
-  areaId,
-  onEdit,
-}: {
-  areas: Area[]
-  areaId: string
-  onEdit?: () => void
-}) {
+/** The frame's own buttons, beside its title (not in the top bar). */
+function FrameActions({ onEdit }: { onEdit?: () => void }) {
   const [copied, setCopied] = useState(false)
   return (
-    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-      <Crumbs areas={areas} areaId={areaId} />
-      <div className="flex shrink-0 items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard?.writeText(window.location.href)
+          setCopied(true)
+        }}
+        className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
+      >
+        <Link2 className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy link'}
+      </button>
+      {onEdit && (
         <button
           type="button"
-          onClick={() => {
-            void navigator.clipboard?.writeText(window.location.href)
-            setCopied(true)
-          }}
+          onClick={onEdit}
           className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
         >
-          <Link2 className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy link'}
+          <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </button>
-        )}
-      </div>
+      )}
     </div>
   )
 }
 
-function Header({ pin }: { pin: RenderedPin }) {
+function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
   const owner = useMember(pin.owner)
   // A frame can be attacked by more than one shape; the squads are the people on it now.
   const squads = [
     ...new Map(pin.shapes.filter((s) => s.squad).map((s) => [s.squad!.name, s.squad!])).values(),
   ]
   return (
-    <div className="max-w-3xl">
-      <h1 className="font-display text-3xl leading-tight">{pin.problem || 'Untitled frame'}</h1>
+    <div>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="max-w-3xl font-display text-3xl leading-tight">
+          {pin.problem || 'Untitled frame'}
+        </h1>
+        <FrameActions onEdit={onEdit} />
+      </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <KindIcon kind={pin.kind} label={KIND_LABELS[pin.kind]} className="h-4 w-4" />
@@ -270,7 +273,7 @@ function Track({ pin }: { pin: RenderedPin }) {
  */
 export function askPauloUrl(frameId: string, problem: string): string {
   const prompt = `/paulo where are we on frame ${frameId} (“${problem}”)? Read its reports, pointers and shapes, then leave a fresh brief on the frame with map_write_brief. If it has no release announcement yet, draft one with map_upsert_frame.`
-  return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`
+  return claudeChatHref(prompt)
 }
 
 function Brief({ pin }: { pin: RenderedPin }) {

@@ -13,8 +13,11 @@
       --popover: 0 0% 100%;
       --popover-foreground: 0 0% 7%;
 
-      --primary: 0 0% 7%;
+      /* Plane-style blue primary on a soft gray canvas. */
+      --primary: 201 100% 31%;
       --primary-foreground: 0 0% 100%;
+
+      --canvas: 220 14% 96.5%;
 
       --secondary: 0 0% 96.1%;
       --secondary-foreground: 0 0% 7%;
@@ -30,9 +33,9 @@
 
       --border: 220 13% 91%;
       --input: 220 13% 91%;
-      --ring: 0 0% 7%;
+      --ring: 201 100% 31%;
 
-      --radius: 0.75rem;
+      --radius: 0.5rem;
     }
 
     .dark {
@@ -45,8 +48,10 @@
       --popover: 0 0% 6%;
       --popover-foreground: 0 0% 98%;
 
-      --primary: 0 0% 98%;
-      --primary-foreground: 0 0% 9%;
+      --primary: 201 90% 48%;
+      --primary-foreground: 0 0% 100%;
+
+      --canvas: 0 0% 2%;
 
       --secondary: 0 0% 14.9%;
       --secondary-foreground: 0 0% 98%;
@@ -62,7 +67,7 @@
 
       --border: 0 0% 16%;
       --input: 0 0% 16%;
-      --ring: 0 0% 83.1%;
+      --ring: 201 90% 48%;
     }
   }
 

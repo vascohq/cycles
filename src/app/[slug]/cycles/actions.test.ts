@@ -12,6 +12,8 @@ vi.mock('@/lib/liveblocks', () => ({
   },
 }))
 
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+
 vi.mock('next/navigation', () => ({
   redirect: vi.fn(),
 }))

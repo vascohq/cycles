@@ -5,7 +5,7 @@
 // lexically — independent of the business-day math in timebox-engine, so an
 // undated cycle is caught explicitly rather than masquerading as "upcoming".
 // Archiving is a separate, orthogonal axis: an explicit `archived` override
-// (ADR 0019) that removes a cycle from grouping/landing/stepping regardless of
+// (ADR 0019) that removes a cycle from grouping/landing/the cycle menu regardless of
 // its date-derived phase.
 
 export type CyclePhase = 'upcoming' | 'current' | 'past' | 'undated'
@@ -18,7 +18,7 @@ export type CycleSummary = {
   start_date: string
   end_date: string
   /**
-   * Explicit, reversible removal from the list/landing/stepper — orthogonal to
+   * Explicit, reversible removal from the list/landing/cycle menu — orthogonal to
    * the date-derived phase (ADR 0019). Archived cycles are still fully real and
    * reachable by URL; they just drop out of every derived-navigation surface.
    */
@@ -38,29 +38,6 @@ export function cyclePhase(cycle: CycleSummary, today: string): CyclePhase {
   // current ON its end date — past only starts the day after.
   if (today > cycle.end_date) return 'past'
   return 'current'
-}
-
-export type CycleNeighbors = { prev: CycleSummary | null; next: CycleSummary | null }
-
-/**
- * The chronological neighbors of `slug`, ordered by start_date (earliest →
- * latest); undated cycles sink to the end. Used for the cycle stepper. Returns
- * nulls at the ends or for an unknown slug. Archived cycles are hidden from
- * stepping (ADR 0019), so the target itself must be non-archived to have
- * neighbors.
- */
-export function cycleNeighbors(cycles: CycleSummary[], slug: string): CycleNeighbors {
-  const ordered = [...cycles].filter((c) => !c.archived).sort((a, b) => {
-    if (!a.start_date) return 1
-    if (!b.start_date) return -1
-    return a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0
-  })
-  const i = ordered.findIndex((c) => c.slug === slug)
-  if (i === -1) return { prev: null, next: null }
-  return {
-    prev: i > 0 ? ordered[i - 1] : null,
-    next: i < ordered.length - 1 ? ordered[i + 1] : null,
-  }
 }
 
 export type LandingTarget = { kind: 'cycle'; slug: string } | { kind: 'list' }

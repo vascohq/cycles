@@ -8,19 +8,15 @@ import {
   groupCycles,
   type CycleSummary,
 } from '@/lib/cycle-list-engine'
-import { liveblocks } from '@/lib/liveblocks'
-import { getCycleStorage } from '@/lib/mcp/liveblocks-reader'
+import { getCycleStorage, readCycleSummaries } from '@/lib/mcp/liveblocks-reader'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { getTeamToday } from '@/lib/team-time'
-import { getOrganizationUsers } from '@/lib/users'
-import { readCycleWindows } from '@/lib/mcp/liveblocks-reader'
-import { productMapRoomId } from '@/product-map-liveblocks.config'
-import { ProductMap } from '@/app/[slug]/product/product-map'
-import { linkedShapes } from '@/app/[slug]/product/linked-shapes'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { TopBar } from '@/components/sidebar-layout'
+import { SectionCrumb } from '@/components/crumb-menu'
 
 export const metadata: Metadata = {
   title: 'Cycles | Cycles',
@@ -54,29 +50,10 @@ export default async function CyclesPage({
   if (slug !== urlSlug) redirect(`/${urlSlug}/cycles`)
 
   const roomPrefix = orgId ?? userId
-  const { data: rooms } = await liveblocks.getRooms({
-    query: `roomId^"${roomPrefix}:cycle:"`,
-  })
-
   const today = getTeamToday(new Date())
-  const summaries: CycleSummary[] = rooms.map((room) => ({
-    slug: room.id.split(':').slice(2).join(':'),
-    title: String(room.metadata.title ?? 'Untitled cycle'),
-    type: room.metadata.type === 'cooldown' ? 'cooldown' : 'build',
-    start_date: room.metadata.start_date ? String(room.metadata.start_date) : '',
-    end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
-    archived: room.metadata.archived === 'true',
-  }))
+  const summaries = await readCycleSummaries(roomPrefix)
 
   const groups = groupCycles(summaries, today)
-
-  // The land, above the list. The Product Map holds the problems and a cycle
-  // holds the bets, so this page shows both: where the product hurts, and what
-  // is being bet on now. The frame LISTS stay on the Product Map's own page —
-  // this is a view onto the map, not the map's home.
-  const organizationUsers = await getOrganizationUsers(orgId)
-  const mapCycles = await readCycleWindows(roomPrefix)
-  const shapes = await linkedShapes(roomPrefix, mapCycles)
 
   // Pitch counts only for the Current hero(s) — one storage read each. The other
   // groups stay metadata-only so the list is cheap regardless of cycle count.
@@ -134,33 +111,9 @@ export default async function CyclesPage({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
-      {/* A big gap under the map, a small one above CURRENT: the Cycles heading
-          and its button belong to the list below them, not to the map above. */}
-      <section className="mb-12 flex flex-col gap-2">
-        <ProductMap
-          variant="canvas"
-          roomId={productMapRoomId(roomPrefix)}
-          organizationUsers={organizationUsers}
-          cycles={mapCycles}
-          shapes={shapes}
-          heading={<p className="font-display text-2xl">Product Map</p>}
-          action={
-            <Link
-              href={`/${urlSlug}/product`}
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Open the Product Map
-            </Link>
-          }
-        />
-      </section>
-
-      <div className="mb-3 flex justify-between items-center">
-        <h1 className="text-2xl font-display">Cycles</h1>
-        <CreateCycleDialog>
-          <CreateCycleForm />
-        </CreateCycleDialog>
-      </div>
+      <TopBar title={<SectionCrumb section="Cycles" current />} />
+      {/* No create button here: "New cycle" sits in the sidebar. */}
+      <h1 className="mb-6 font-display text-2xl">Cycles</h1>
 
       {isEmpty ? (
         <div className="flex flex-col items-center justify-center gap-3 border border-dashed rounded-xl p-12 text-center">

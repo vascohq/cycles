@@ -12,21 +12,7 @@ import {
 import { listCycles } from '@/app/[slug]/cycles/actions'
 import { CommandPalette } from './command-palette'
 import type { PaletteCycleItem, PalettePitchItem } from './types'
-
-type CommandPaletteContextValue = {
-  open: boolean
-  setOpen: (open: boolean) => void
-  /** Org url slug, used to build cycle hrefs. */
-  slug: string
-  cycles: PaletteCycleItem[]
-  cyclesLoading: boolean
-  pitchItems: PalettePitchItem[]
-  setPitchItems: (items: PalettePitchItem[]) => void
-}
-
-const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(
-  null
-)
+import { CommandPaletteContext, type CommandPaletteContextValue } from './palette-context'
 
 /**
  * Owns the command palette's open state, the ⌘K/Ctrl+K listener, the lazily
@@ -92,8 +78,9 @@ export function CommandPaletteProvider({
       cyclesLoading,
       pitchItems,
       setPitchItems,
+      ensureCycles,
     }),
-    [open, setOpen, slug, cycles, cyclesLoading, pitchItems]
+    [open, setOpen, slug, cycles, cyclesLoading, pitchItems, ensureCycles]
   )
 
   return (

@@ -14,7 +14,7 @@ import {
 import { unionBounds, type Bounds, type Point } from '@/lib/product-map-geometry'
 import { listFrames } from '@/lib/frame-list'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LocateFixed, Maximize, Minimize } from 'lucide-react'
 import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
 import { KIND_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import {
@@ -54,18 +54,11 @@ export function MapCanvas({
   areas,
   onOpenFrame,
   className,
-  inset,
 }: {
   areas: RenderedArea[]
   onOpenFrame: (frameId: string) => void
   /** Overrides the canvas height, for a page that lays the map out its own way. */
   className?: string
-  /**
-   * Pixels on each side that something floats over, such as the frame list or
-   * a toolbar. The fit centers the land in the part still visible, so nothing
-   * hides under them.
-   */
-  inset?: { top?: number; right?: number; bottom?: number }
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 960, height: 560 })
@@ -107,9 +100,25 @@ export function MapCanvas({
     return () => observer.disconnect()
   }, [])
 
-  const top = inset?.top ?? 0
-  const right = inset?.right ?? 0
-  const bottom = inset?.bottom ?? 0
+  // Fullscreen covers the window with the map. It puts the whole document in
+  // browser fullscreen, not just this element, so tooltips and dialogs that
+  // portal to <body> still show. Esc leaves browser fullscreen; this follows.
+  const [expanded, setExpanded] = useState(false)
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setExpanded(false)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleExpanded = () => {
+    const next = !expanded
+    setExpanded(next)
+    setView(null) // fit the land to the new size
+    // ponytail: a browser that refuses fullscreen still gets the map over the window.
+    if (next) document.documentElement.requestFullscreen?.().catch(() => {})
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+  }
 
   const fit = useCallback(
     (target: Bounds): View => {
@@ -117,22 +126,17 @@ export function MapCanvas({
       const padY = target.height * FIT_PAD + 8
       const w = Math.max(target.width + padX * 2, MIN_SPAN)
       const h = Math.max(target.height + padY * 2, MIN_SPAN)
-      // Fit into the part of the host nothing floats over, then grow the view
-      // under the overlays at the same scale, so the land centers where it shows.
-      const visibleW = Math.max(box.width - right, box.width * 0.4)
-      const visibleH = Math.max(box.height - top - bottom, box.height * 0.4)
-      // Match that part's aspect, so fitting never squashes the coastline.
-      const ratio = visibleW / Math.max(visibleH, 1)
+      // Match the host's aspect, so fitting never squashes the coastline.
+      const ratio = box.width / Math.max(box.height, 1)
       const span = w / h > ratio ? { w, h: w / ratio } : { w: h * ratio, h }
-      const unit = span.w / visibleW
       return {
         x: target.x + target.width / 2 - span.w / 2,
-        y: target.y + target.height / 2 - span.h / 2 - top * unit,
-        w: box.width * unit,
-        h: box.height * unit,
+        y: target.y + target.height / 2 - span.h / 2,
+        w: span.w,
+        h: span.h,
       }
     },
-    [box.width, box.height, top, right, bottom]
+    [box.width, box.height]
   )
 
   // No view of their own means fitted to the whole map, recomputed each render —
@@ -275,7 +279,8 @@ export function MapCanvas({
         ref={hostRef}
         className={cn(
           'relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20',
-          className
+          className,
+          expanded && 'fixed inset-0 z-50 h-auto min-h-0 rounded-none border-0 bg-background'
         )}
       >
       {/*
@@ -357,8 +362,39 @@ export function MapCanvas({
           )
         )}
         </svg>
+
+        <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-md border bg-background shadow-sm">
+          <MapControl label="Fit the map" onClick={() => setView(null)}>
+            <LocateFixed className="size-4" />
+          </MapControl>
+          <MapControl label={expanded ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleExpanded}>
+            {expanded ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+          </MapControl>
+        </div>
       </div>
     </TooltipProvider>
+  )
+}
+
+function MapControl({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&+&]:border-t"
+    >
+      {children}
+    </button>
   )
 }
 

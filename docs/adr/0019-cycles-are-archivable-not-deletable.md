@@ -35,15 +35,18 @@ layer an explicit override on top and revisit this ADR." That need has arrived.
   LiveObject and the room metadata, via the existing `updateCycle` writer — the
   same two-places-kept-in-sync invariant as every other cycle field (ADR
   0015/0011). Metadata is string-valued, so archived is `'true'` / absent. The
-  list, landing, and stepper read metadata only (no room open); the in-cycle
+  list, landing, and cycle menu read metadata only (no room open); the in-cycle
   banner reads the storage object reactively.
 - **Archived cycles vanish from every derived-navigation surface:** excluded
   from `groupCycles`' phase buckets (checked before phase, into their own
-  `archived` bucket), from `resolveLanding`, and from `cycleNeighbors` (the
-  stepper). Their underlying `cyclePhase` is untouched.
+  `archived` bucket), from `resolveLanding`, and from the cycle menu in the
+  breadcrumb (`CycleCrumb`), which shows an archived cycle only when it is the
+  open one. Their underlying `cyclePhase` is untouched. (The prev/next
+  stepper and `cycleNeighbors` were removed in the app shell redesign; the
+  cycle menu replaced them.)
 - **Access is never blocked.** A direct URL to an archived cycle still opens
   normally; the page shows a banner ("This cycle is archived") with an inline
-  Unarchive action. Archive affects listing/landing/stepper, not reachability.
+  Unarchive action. Archive affects listing, landing and the cycle menu, not reachability.
 - **Surfaces:** archive from the cycle's "…" menu and from each Cycles-list
   row's "…" menu; unarchive from the collapsed **Archived** list section, from
   each archived row's "…" menu, and from the in-cycle banner. A light confirm

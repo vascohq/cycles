@@ -1090,7 +1090,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'unarchive_cycle',
-    'Unarchive a cycle, addressed by slug: restore a previously archived cycle to the Cycles list and to landing/stepper resolution. Its date-derived phase (upcoming/current/past) is unchanged — it simply reappears where its dates place it. See ADR 0019.',
+    'Unarchive a cycle, addressed by slug: restore a previously archived cycle to the Cycles list, the landing page and the cycle menu. Its date-derived phase (upcoming/current/past) is unchanged — it simply reappears where its dates place it. See ADR 0019.',
     { ...orgArg, ...slugPathArg },
     {
       title: 'Unarchive cycle',

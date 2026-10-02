@@ -2,6 +2,7 @@
 
 import { liveblocks } from '@/lib/liveblocks'
 import { updateCycle } from '@/lib/mcp/liveblocks-writer'
+import { readCycleSummaries } from '@/lib/mcp/liveblocks-reader'
 import type { PaletteCycleItem } from '@/components/command-palette/types'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
@@ -16,29 +17,7 @@ import { revalidatePath } from 'next/cache'
 export async function listCycles(): Promise<PaletteCycleItem[]> {
   const { userId, orgId } = await auth()
   if (!userId) return []
-
-  const roomPrefix = orgId ?? userId
-  const { data: rooms } = await liveblocks.getRooms({
-    query: `roomId^"${roomPrefix}:cycle:"`,
-  })
-
-  return rooms
-    .map((room) => ({
-      slug: room.id.split(':').slice(2).join(':'),
-      title: String(room.metadata.title ?? 'Untitled cycle'),
-      type:
-        room.metadata.type === 'cooldown'
-          ? ('cooldown' as const)
-          : ('build' as const),
-      start_date: room.metadata.start_date
-        ? String(room.metadata.start_date)
-        : '',
-      end_date: room.metadata.end_date ? String(room.metadata.end_date) : '',
-      archived: room.metadata.archived === 'true',
-      createdOn: room.metadata.createdOn ? String(room.metadata.createdOn) : '',
-    }))
-    .sort((a, b) => (a.createdOn > b.createdOn ? -1 : 1))
-    .map(({ createdOn: _createdOn, ...cycle }) => cycle)
+  return readCycleSummaries(orgId ?? userId)
 }
 
 async function roomExists(roomId: string) {
@@ -101,6 +80,8 @@ export async function createCycleRoom(formData: FormData) {
     })
   }
 
+  // 'layout' so the Cycles sidebar lists the new cycle.
+  revalidatePath(`/${orgSlug ?? 'me'}/cycles`, 'layout')
   redirect(`/${orgSlug ?? 'me'}/cycles/${slug}`)
 }
 
@@ -130,7 +111,7 @@ export async function updateCycleRoom(cycleSlug: string, formData: FormData) {
   // refresh them; in-page content tracks the live storage object reactively.
   const urlSlug = orgSlug ?? 'me'
   revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
-  revalidatePath(`/${urlSlug}/cycles`)
+  revalidatePath(`/${urlSlug}/cycles`, 'layout')
 }
 
 /**
@@ -147,5 +128,5 @@ export async function setCycleArchived(cycleSlug: string, archived: boolean) {
 
   const urlSlug = orgSlug ?? 'me'
   revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
-  revalidatePath(`/${urlSlug}/cycles`)
+  revalidatePath(`/${urlSlug}/cycles`, 'layout')
 }
