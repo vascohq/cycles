@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ClientSideSuspense } from '@liveblocks/react'
 import { LiveObject } from '@liveblocks/client'
@@ -43,6 +43,9 @@ import { MapCanvas } from '@/components/product-map/map-canvas'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
+import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from './labels'
+import { UNMAPPED_AREA, frameHref } from './links'
+import { AreaChip, FrameList } from './frame-list'
 import {
   OrganizationUsersProvider,
   useOrganizationUsers,
@@ -75,34 +78,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-// Labels are the only place these vocabularies get prose. The stored values
-// stay machine-readable, because MCP callers filter on them.
-export const KIND_LABELS: Record<FrameKind, string> = {
-  brand_burn: 'Brand burn',
-  pain_point: 'Pain point',
-  unlock_win: 'Win to unlock',
-}
-
-export const TYPE_LABELS: Record<FrameType, string> = {
-  bug: 'Bug',
-  idea: 'Idea',
-  request: 'Request',
-  security: 'Security',
-  irritant: 'Irritant',
-}
-
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
   internal: 'Internal',
   customer: 'Customer',
-}
-
-export const STATE_LABELS: Record<FrameState, string> = {
-  rough: 'Rough',
-  candidate: 'Candidate',
-  in_flight: 'In flight',
-  released: 'Released',
-  monitoring: 'Monitoring',
-  resolved: 'Resolved',
 }
 
 /**
@@ -174,10 +152,6 @@ export const OpenFrameContext = createContext<(frameId: string) => void>(() => {
 /** The cycles a frame can be bet into. Read once, at the page boundary. */
 export const CyclesContext = createContext<CycleWindow[]>([])
 
-/** Where a frame lives. Every way into a frame opens its page, which has a URL. */
-export function frameHref(slug: string, frameId: string): string {
-  return `/${slug}/product-map/frames/${frameId}`
-}
 
 export function useOpenFramePage(): (frameId: string) => void {
   const router = useRouter()
@@ -255,11 +229,6 @@ function ProductMapView({
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
   const openFrame = useOpenFramePage()
-  // A breadcrumb on a frame page links to an area's section here. The browser
-  // looks for the anchor before the room has loaded, so look again once it has.
-  useEffect(() => {
-    if (window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView()
-  }, [])
   // No control on the page for this. The engine still computes every lens, and
   // MCP callers still filter by one, so the switch can come back without a
   // change to the model.
@@ -329,17 +298,26 @@ function ProductMapView({
               </div>
             </div>
           )}
-          {model.areas.length > 0 && (
-            <>
-              <MapCanvas areas={model.areas} onOpenFrame={openFrame} />
-              <AreaList areas={model.areas} />
-            </>
+          {model.areas.length > 0 && <MapCanvas areas={model.areas} onOpenFrame={openFrame} />}
+          {(model.areas.length > 0 || model.unmapped.length > 0) && (
+            <div className="mt-4 flex flex-wrap gap-2" aria-label="Areas">
+              {model.areas.map((area) => (
+                <AreaChip key={area.areaId} areaId={area.areaId} name={area.name} count={descendantPins(area).length} />
+              ))}
+              {/* Unmapped is the one area nobody draws: a holding area, so its
+                  chip is dashed. Its page is where a frame gets filed. */}
+              <AreaChip areaId={UNMAPPED_AREA} name="Unmapped" count={model.unmapped.length} special />
+            </div>
           )}
-          <UnmappedGroup
-            pins={model.unmapped}
-            resolved={model.unmappedResolved}
-            options={options}
-          />
+          {/* The keyboard and screen-reader way into every frame. Chrome does
+              not expose an SVG group to the accessibility tree, so the land
+              alone would leave a mapped frame unreachable. */}
+          {model.pins.length + model.resolved.length > 0 && (
+            <div className="mt-8">
+              <h2 className="mb-3 font-display text-lg">Frames</h2>
+              <FrameList pins={[...model.pins, ...model.resolved]} areas={model.areas} />
+            </div>
+          )}
           <DormantReview pins={model.dormantReview} options={options} />
         </Shell>
       </CyclesContext.Provider>
@@ -365,202 +343,6 @@ export function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
     { id: area.areaId, label: `${'— '.repeat(depth)}${area.name}` },
     ...areaOptions(area.children, depth + 1),
   ])
-}
-
-/**
- * Every area as real DOM: its frames, and what its team resolved.
- *
- * This is the keyboard and screen-reader surface for the land. A pin on the
- * canvas is focusable, but Chrome does not expose an SVG group to the
- * accessibility tree at all, so the map alone would leave a mapped frame
- * unreachable — and it is also where each area's resolved frames live, off the
- * land, because a resolved pin would lie about where the product stands.
- */
-/** The anchor of an area's section, so a frame page's breadcrumb can land on it. */
-export function areaAnchor(areaId: string): string {
-  return `area-${areaId}`
-}
-
-export const UNMAPPED_ANCHOR = 'unmapped'
-
-/**
- * Every frame on the map, grouped by where it sits. A top-level region is a
- * section, each sub-area a card under it, and each has an anchor. A part of the
- * breadcrumb on a frame page links to it. An area with nothing under it is left
- * out, because an empty card says nothing.
- */
-export function AreaList({ areas }: { areas: RenderedArea[] }) {
-  const regions = areas.filter(hasFrames)
-  if (regions.length === 0) return null
-
-  return (
-    <div className="mt-8 flex flex-col gap-8">
-      <h2 className="font-display text-lg">Frames by area</h2>
-      {regions.map((region) => (
-        <section
-          key={region.areaId}
-          id={areaAnchor(region.areaId)}
-          aria-label={region.name}
-          className="scroll-mt-6 rounded-xl target:ring-2 target:ring-fuchsia-500 target:ring-offset-4"
-        >
-          <AreaHeading area={region} level="h3" />
-          <AreaBody area={region} />
-        </section>
-      ))}
-    </div>
-  )
-}
-
-function AreaBody({ area }: { area: RenderedArea }) {
-  const leaves = area.children.filter((c) => hasFrames(c) && !c.children.some(hasFrames))
-  const groups = area.children.filter((c) => c.children.some(hasFrames))
-  return (
-    <div className="flex flex-col gap-5">
-      {(area.pins.length > 0 || area.resolved.length > 0 || leaves.length > 0) && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(area.pins.length > 0 || area.resolved.length > 0) && (
-            <AreaCard area={area} title={`In ${area.name}`} anchor={false} />
-          )}
-          {leaves.map((leaf) => (
-            <AreaCard key={leaf.areaId} area={leaf} title={leaf.name} />
-          ))}
-        </div>
-      )}
-      {groups.map((group) => (
-        <div
-          key={group.areaId}
-          id={areaAnchor(group.areaId)}
-          className="scroll-mt-6 rounded-lg border-l-2 pl-4 target:border-fuchsia-500"
-        >
-          <AreaHeading area={group} level="h4" />
-          <AreaBody area={group} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function AreaHeading({ area, level }: { area: RenderedArea; level: 'h3' | 'h4' }) {
-  const Heading = level
-  const count = descendantPins(area).length
-  return (
-    <Heading className={`mb-3 flex items-baseline gap-2 font-display ${level === 'h3' ? 'text-base' : 'text-sm'}`}>
-      {area.name}
-      <span className="text-xs font-normal text-muted-foreground">
-        {count} {count === 1 ? 'frame' : 'frames'}
-      </span>
-    </Heading>
-  )
-}
-
-function AreaCard({
-  area,
-  title,
-  anchor = true,
-}: {
-  area: RenderedArea
-  title: string
-  anchor?: boolean
-}) {
-  const openFrame = useContext(OpenFrameContext)
-  return (
-    <div
-      id={anchor ? areaAnchor(area.areaId) : undefined}
-      className="scroll-mt-6 rounded-lg border bg-background p-3 target:ring-2 target:ring-fuchsia-500"
-    >
-      <p className="mb-2 flex items-baseline justify-between gap-2 text-sm font-medium">
-        <span className="truncate">{title}</span>
-        <span className="shrink-0 text-xs font-normal text-muted-foreground">{area.pins.length}</span>
-      </p>
-      <ul className="flex flex-col gap-1">
-        {area.pins.map((pin) => (
-          <li key={pin.frameId} style={{ opacity: pin.opacity }}>
-            <button
-              type="button"
-              onClick={() => openFrame(pin.frameId)}
-              className="flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left text-sm hover:bg-muted"
-            >
-              {/* The same color and fill as the pin: Kind, and hollow when rough. */}
-              <span
-                aria-hidden
-                className="mt-1.5 h-2 w-2 shrink-0 rounded-full border"
-                style={{ borderColor: pin.color, backgroundColor: pin.sharp ? pin.color : 'transparent' }}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="line-clamp-2">{pin.problem}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {TYPE_LABELS[pin.type]} · {STATE_LABELS[pin.state]}
-                  {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
-                  {pin.worked && ' · ✳'}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <ResolvedList pins={area.resolved} />
-    </div>
-  )
-}
-
-function hasFrames(area: RenderedArea): boolean {
-  return area.pins.length > 0 || area.resolved.length > 0 || area.children.some(hasFrames)
-}
-
-/**
- * The frames this area's team resolved, with the shapes that resolved them. Off
- * the Product Map and still on record: the Product Map must never lie about what we know.
- */
-function ResolvedList({ pins }: { pins: RenderedPin[] }) {
-  if (pins.length === 0) return null
-  return (
-    <details className="mt-2">
-      <summary className="cursor-pointer text-xs text-muted-foreground">
-        Resolved ({pins.length})
-      </summary>
-      <ul className="mt-1.5 flex flex-col gap-1.5">
-        {pins.map((pin) => (
-          <li key={pin.frameId} className="text-xs">
-            <span className="line-through">{pin.problem}</span>
-            {pin.shapes.length > 0 && (
-              <span className="text-muted-foreground">
-                {' '}
-                — {pin.shapes.map((s) => `${s.title} (${s.cycleTitle})`).join(', ')}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </details>
-  )
-}
-
-function UnmappedGroup({
-  pins,
-  resolved,
-  options,
-}: {
-  pins: RenderedPin[]
-  resolved: RenderedPin[]
-  options: AreaOption[]
-}) {
-  if (pins.length === 0 && resolved.length === 0) return null
-  return (
-    <section id={UNMAPPED_ANCHOR} aria-label="Unmapped" className="mt-6 scroll-mt-6">
-      <h2 className="mb-2 font-display text-sm">
-        Unmapped <span className="text-muted-foreground">({pins.length})</span>
-      </h2>
-      <p className="mb-3 text-sm text-muted-foreground">
-        These frames belong to no area yet. Leaving one here is always valid.
-      </p>
-      <ul className="flex flex-col gap-1.5">
-        {pins.map((pin) => (
-          <PinDot key={pin.frameId} pin={pin} options={options} />
-        ))}
-      </ul>
-      <ResolvedList pins={resolved} />
-    </section>
-  )
 }
 
 /**
@@ -595,19 +377,6 @@ function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOp
 function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
   const openFrame = useContext(OpenFrameContext)
   const wake = useWakeFrame()
-  // Filing a frame is the one edit a pin carries. Moving it out is the same
-  // write with the area cleared, so nothing needs a second control.
-  const fileFrame = useProductMapMutation(
-    ({ storage }, frameId: string, areaId: string) => {
-      const frame = storage
-        .get('frames')
-        .find((f) => f.get('id') === frameId)
-      if (!frame) return
-      if (areaId) frame.set('areaId', areaId)
-      else frame.delete('areaId')
-    },
-    []
-  )
 
   return (
     <li
@@ -654,25 +423,52 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
         {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
       </span>
       <StillHurtsButton onWake={() => wake(pin.frameId)} />
-      {options.length > 0 && (
-        <Select
-          value={pin.areaId || UNMAPPED}
-          onValueChange={(v) => fileFrame(pin.frameId, v === UNMAPPED ? '' : v)}
-        >
-          <SelectTrigger className="ml-auto h-7 w-36 shrink-0" aria-label="Area">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
-            {options.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+      <FileInto pin={pin} options={options} className="ml-auto" />
     </li>
+  )
+}
+
+/**
+ * Files a frame into an area, or back to Unmapped. Filing is the one edit a
+ * row carries. Moving a frame out is the same write with the area cleared, so
+ * nothing needs a second control.
+ */
+export function FileInto({
+  pin,
+  options,
+  className = '',
+}: {
+  pin: RenderedPin
+  options: AreaOption[]
+  className?: string
+}) {
+  const fileFrame = useProductMapMutation(
+    ({ storage }, frameId: string, areaId: string) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      if (areaId) frame.set('areaId', areaId)
+      else frame.delete('areaId')
+    },
+    []
+  )
+  if (options.length === 0) return null
+  return (
+    <Select
+      value={pin.areaId || UNMAPPED}
+      onValueChange={(v) => fileFrame(pin.frameId, v === UNMAPPED ? '' : v)}
+    >
+      <SelectTrigger className={`h-7 w-36 shrink-0 ${className}`} aria-label="File in area">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o.id} value={o.id}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ClientSideSuspense } from '@liveblocks/react'
-import { ArrowLeft, Check, ChevronRight, ExternalLink, Link2, Megaphone, Pencil, Sparkles, TriangleAlert } from 'lucide-react'
+import { Check, ExternalLink, Link2, Megaphone, Pencil, Sparkles, TriangleAlert } from 'lucide-react'
 import {
   ProductMapRoomProvider,
   productMapInitialStorage,
@@ -31,15 +31,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   CyclesContext,
   FrameDetail,
-  KIND_LABELS,
   OpenFrameContext,
-  STATE_LABELS,
-  TYPE_LABELS,
-  UNMAPPED_ANCHOR,
-  areaAnchor,
   areaOptions,
   useOpenFramePage,
 } from '../../product-map'
+import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '../../labels'
+import { Crumbs } from '../../areas/[areaId]/area-page'
 
 /** A frame's life, left to right. The page shows where it stands on this track. */
 const TRACK: FrameState[] = ['rough', 'candidate', 'in_flight', 'released', 'monitoring', 'resolved']
@@ -115,19 +112,17 @@ export function FrameLayout({
   return (
     <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
-        <main className="flex w-full flex-col pb-16">
-          <div className="border-b bg-muted/30">
-            <div className="mx-auto flex max-w-6xl flex-col gap-5 px-6 py-6">
-              <Breadcrumb areaPath={areaPath(areas, pin.areaId)} onEdit={editable ? () => setEditing(true) : undefined} />
-              <Header pin={pin} />
-              <Track pin={pin} />
-              <Brief pin={pin} />
-            </div>
-          </div>
-          <div className="mx-auto w-full max-w-6xl px-6 pt-6">
-            <Announcement pin={pin} onWrite={editable ? () => setEditing(true) : undefined} />
-          </div>
-          <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 pt-6 md:grid-cols-3">
+        <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-6">
+          <Breadcrumb areas={areas} areaId={pin.areaId} onEdit={editable ? () => setEditing(true) : undefined} />
+          {/* The same container and hero card as the Scope Map, so every page
+              lines up under the header. */}
+          <section className="flex flex-col gap-5 rounded-lg border bg-card p-6">
+            <Header pin={pin} />
+            <Track pin={pin} />
+            <Brief pin={pin} />
+          </section>
+          <Announcement pin={pin} onWrite={editable ? () => setEditing(true) : undefined} />
+          <div className="grid gap-6 md:grid-cols-3">
             <Framing pin={pin} />
             <Lane title={`Evidence · ${pin.reports.length}`} hint="Every time it happened">
               <Timeline pin={pin} cycles={cycles} />
@@ -141,47 +136,16 @@ export function FrameLayout({
   )
 }
 
-type Crumb = { name: string; anchor: string }
-
-/** The areas the frame sits in, outermost first. Each links to its section on the map. */
-function areaPath(areas: Area[], areaId: string): Crumb[] {
-  const path: Crumb[] = []
-  const seen = new Set<string>()
-  let area = areas.find((a) => a.id === areaId)
-  // `seen` guards a parent loop an agent could write; the map draws one too.
-  while (area && !seen.has(area.id)) {
-    seen.add(area.id)
-    path.unshift({ name: area.name, anchor: areaAnchor(area.id) })
-    const parentId = area.parentAreaId
-    area = areas.find((a) => a.id === parentId)
-  }
-  return path.length ? path : [{ name: 'Unmapped', anchor: UNMAPPED_ANCHOR }]
-}
-
 function useMember(id: string | null | undefined) {
   const users = useOrganizationUsers()
   return id ? users.find((u) => u.userId === id) : undefined
 }
 
-function Breadcrumb({ areaPath, onEdit }: { areaPath: Crumb[]; onEdit?: () => void }) {
-  const { slug } = useParams<{ slug: string }>()
+function Breadcrumb({ areas, areaId, onEdit }: { areas: Area[]; areaId: string; onEdit?: () => void }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <Link href={`/${slug}/product-map`} className="flex shrink-0 items-center gap-1 hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" /> Product Map
-        </Link>
-        {/* A chevron, not a slash: an area name can hold a slash ("Slack / Teams"). */}
-        {areaPath.map((crumb) => (
-          <span key={crumb.anchor} className="flex min-w-0 items-center gap-1.5">
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" />
-            <Link href={`/${slug}/product-map#${crumb.anchor}`} className="truncate hover:text-foreground">
-              {crumb.name}
-            </Link>
-          </span>
-        ))}
-      </div>
+      <Crumbs areas={areas} areaId={areaId} />
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
@@ -525,7 +489,7 @@ function NoFrame() {
     <main className="mx-auto flex max-w-xl flex-col items-center gap-3 px-6 py-24 text-center">
       <p className="font-display text-xl">No frame here</p>
       <p className="text-sm text-muted-foreground">It was deleted, or the link is wrong.</p>
-      <Link href={`/${slug}/product-map`} className="text-sm underline">
+      <Link href={`/${slug}/product`} className="text-sm underline">
         Back to the Product Map
       </Link>
     </main>
@@ -535,55 +499,51 @@ function NoFrame() {
 /** The page's own layout in grey, so nothing jumps when the room arrives. */
 function FramePageSkeleton() {
   return (
-    <main className="flex w-full flex-col pb-16" aria-busy="true">
-      <div className="border-b bg-muted/30">
-        <div className="mx-auto flex max-w-6xl flex-col gap-5 px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-            <div className="flex gap-2">
-              <Skeleton className="h-6 w-20" />
-              <Skeleton className="h-6 w-14" />
-            </div>
-          </div>
-          <div className="flex max-w-3xl flex-col gap-3">
-            <Skeleton className="h-9 w-4/5" />
-            <div className="flex flex-wrap gap-3">
-              {['w-24', 'w-12', 'w-32', 'w-36', 'w-28'].map((w, i) => (
-                <Skeleton key={i} className={`h-4 ${w}`} />
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-6 gap-1">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-1.5">
-                <Skeleton className="h-1.5 rounded-full" />
-                <Skeleton className="h-3 w-16" />
-              </div>
+    <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-6" aria-busy="true">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="h-6 w-14" />
+        </div>
+      </div>
+      <section className="flex flex-col gap-5 rounded-lg border bg-card p-6">
+        <div className="flex max-w-3xl flex-col gap-3">
+          <Skeleton className="h-9 w-4/5" />
+          <div className="flex flex-wrap gap-3">
+            {['w-24', 'w-12', 'w-32', 'w-36', 'w-28'].map((w, i) => (
+              <Skeleton key={i} className={`h-4 ${w}`} />
             ))}
           </div>
-          <div className="flex gap-3 rounded-xl bg-background p-4 ring-1 ring-border">
-            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-            <div className="flex flex-1 flex-col gap-2">
-              <Skeleton className="h-3 w-40" />
-              <Skeleton className="h-5 w-2/3" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="grid grid-cols-6 gap-1">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <Skeleton className="h-1.5 rounded-full" />
+              <Skeleton className="h-3 w-16" />
             </div>
-            <Skeleton className="h-6 w-28 shrink-0" />
+          ))}
+        </div>
+        <div className="flex gap-3 rounded-xl bg-background p-4 ring-1 ring-border">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-1/2" />
           </div>
+          <Skeleton className="h-6 w-28 shrink-0" />
         </div>
+      </section>
+      <div className="flex flex-col gap-2 rounded-xl border p-5">
+        <Skeleton className="h-3 w-36" />
+        <Skeleton className="h-5 w-3/4" />
       </div>
-      <div className="mx-auto w-full max-w-6xl px-6 pt-6">
-        <div className="flex flex-col gap-2 rounded-xl border p-5">
-          <Skeleton className="h-3 w-36" />
-          <Skeleton className="h-5 w-3/4" />
-        </div>
-      </div>
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 pt-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         {Array.from({ length: 3 }).map((_, lane) => (
           <div key={lane} className="flex flex-col gap-2">
             <Skeleton className="h-4 w-28" />

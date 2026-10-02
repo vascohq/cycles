@@ -3,16 +3,11 @@
 import { useParams } from 'next/navigation'
 
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
-import { FrameLayout } from '@/app/[slug]/product-map/frames/[frameId]/frame-page'
-import type { OrganizationUser } from '@/lib/users'
+import { FrameLayout } from '@/app/[slug]/product/frames/[frameId]/frame-page'
 import type { Frame } from '@/product-map-liveblocks.config'
 
-import { AREAS, CYCLES, FRAMES, SHAPES } from '../../fixture'
+import { AREAS, CYCLES, FRAMES, SHAPES, USERS } from '../../fixture'
 
-const USERS: OrganizationUser[] = [
-  { userId: 'user_1', name: 'Sam Rivers', email: 'sam@example.test', initials: 'SR', hasImage: false, imageUrl: '' },
-  { userId: 'user_2', name: 'Alex Moreau', email: 'alex@example.test', initials: 'AM', hasImage: false, imageUrl: '' },
-]
 
 // One frame with a full record, so the page has every section to draw. Kept
 // here, not in the shared fixture, because the map spec reads that one.

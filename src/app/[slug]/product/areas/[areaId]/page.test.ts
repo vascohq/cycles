@@ -12,8 +12,8 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
-vi.mock('./frame-page', () => ({
-  FramePage: () => null,
+vi.mock('./area-page', () => ({
+  AreaPage: () => null,
 }))
 
 vi.mock('@/lib/users', () => ({
@@ -25,15 +25,15 @@ vi.mock('@/lib/mcp/liveblocks-reader', () => ({
   getCycleStorage: vi.fn(async () => ({ pitches: [] })),
 }))
 
-import FrameRoute from './page'
+import AreaRoute from './page'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 
 const mockAuth = vi.mocked(auth)
 const mockRedirect = vi.mocked(redirect)
 
-function params(slug: string, frameId: string) {
-  return { params: Promise.resolve({ slug, frameId }) }
+function params(slug: string, areaId: string) {
+  return { params: Promise.resolve({ slug, areaId }) }
 }
 
 beforeEach(() => {
@@ -45,25 +45,25 @@ beforeEach(() => {
   } as any)
 })
 
-describe('FrameRoute', () => {
-  it('opens the frame in the org-scoped Product Map room', async () => {
-    const element: any = await FrameRoute(params('my-org', 'f1'))
+describe('AreaRoute', () => {
+  it('opens the area in the org-scoped Product Map room', async () => {
+    const element: any = await AreaRoute(params('my-org', 'f1'))
 
     expect(element.props.roomId).toBe('org_456:product-map')
-    expect(element.props.frameId).toBe('f1')
+    expect(element.props.areaId).toBe('f1')
   })
 
-  // A shared link from another workspace lands on the same frame id in yours.
-  it('redirects to the active workspace and keeps the frame', async () => {
-    await FrameRoute(params('stale-org', 'f1'))
+  // A shared link from another workspace lands on the same area id in yours.
+  it('redirects to the active workspace and keeps the area', async () => {
+    await AreaRoute(params('stale-org', 'f1'))
 
-    expect(mockRedirect).toHaveBeenCalledWith('/my-org/product-map/frames/f1')
+    expect(mockRedirect).toHaveBeenCalledWith('/my-org/product/areas/f1')
   })
 
   // The id goes into a redirect, so it must never carry a path of its own.
-  it('refuses a frame id with slashes, dots or encoded characters', async () => {
+  it('refuses an area id with slashes, dots or encoded characters', async () => {
     for (const bad of ['..', 'a/b', '%2F', 'x.y']) {
-      await expect(FrameRoute(params('stale-org', bad))).rejects.toThrow('NEXT_NOT_FOUND')
+      await expect(AreaRoute(params('stale-org', bad))).rejects.toThrow('NEXT_NOT_FOUND')
     }
     expect(mockRedirect).not.toHaveBeenCalled()
   })

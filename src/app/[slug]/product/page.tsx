@@ -22,7 +22,7 @@ export default async function ProductMapPage({
   if (!userId) return authResult.redirectToSignIn()
 
   const urlSlug = orgSlug ?? 'me'
-  if (slug !== urlSlug) redirect(`/${urlSlug}/product-map`)
+  if (slug !== urlSlug) redirect(`/${urlSlug}/product`)
 
   // Members are read here so the frame detail can name a Frame owner instead of
   // showing a raw Clerk id. A personal workspace has no org and no member list.

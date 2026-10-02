@@ -31,14 +31,35 @@ test.describe('Frame page', () => {
     await expect(note).toContainText('Draft')
   })
 
-  // Each part of the breadcrumb lands on that area's section of the map.
-  test('links every part of the breadcrumb to its area section on the map', async ({ page }) => {
+  // Each part of the breadcrumb opens that area's own page.
+  test('links every part of the breadcrumb to its area page', async ({ page }) => {
     await page.goto('/e2e/product-map/frames/f1')
 
-    const crumbs = page.locator('a[href*="/product-map#area-"]')
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' }).locator('a[href*="/product/areas/"]')
     await expect(crumbs).toHaveCount(3)
+    await expect(crumbs.first()).toHaveAttribute('href', /\/product\/areas\/front-office$/)
     await expect(crumbs.last()).toHaveText('Slack / Teams')
-    await expect(crumbs.last()).toHaveAttribute('href', /#area-slack$/)
+    await expect(crumbs.last()).toHaveAttribute('href', /\/product\/areas\/slack$/)
+  })
+
+  test('opens an area page with its sub-areas and only its own frames', async ({ page }) => {
+    await page.goto('/e2e/product-map/areas/front-office')
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Front office')
+    await expect(page.getByRole('link', { name: /External to Vasco/ })).toBeVisible()
+    const rows = page.getByRole('region', { name: 'Frames' }).locator('li')
+    await expect(rows).toHaveCount(6)
+    await expect(page.getByRole('region', { name: 'Frames' })).not.toContainText('Batch writes drop the assignee')
+  })
+
+  // Unmapped is a special area: the holding area for frames with no home.
+  test('opens Unmapped as an area page with the frames that have no area', async ({ page }) => {
+    await page.goto('/e2e/product-map/areas/unmapped')
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Unmapped')
+    const list = page.getByRole('region', { name: 'Frames' })
+    await expect(list.locator('li')).toHaveCount(1)
+    await expect(list).toContainText('Somebody should own the glossary')
   })
 
   test('says so when nobody has left a brief or an announcement yet', async ({ page }) => {

@@ -135,10 +135,24 @@ test.describe('Product Map canvas', () => {
     expect(focusable).toBe(true)
   })
 
-  // The breadcrumb on a frame page lands here, so every level needs an anchor.
-  test('lists the frames by area, with an anchor for each level', async ({ page }) => {
-    await expect(page.locator('#area-front-office')).toContainText('Front office')
-    await expect(page.locator('#area-external')).toContainText('External to Vasco')
-    await expect(page.locator('#area-slack')).toContainText('Capture from Slack loses the thread link')
+  // The filters live in the URL, so a filtered list is a link somebody can share.
+  test('lists every open frame, and filters it from the URL', async ({ page }) => {
+    const list = page.getByRole('region', { name: 'Frames' })
+    await expect(list.locator('li')).toHaveCount(20)
+
+    await page.goto('/e2e/product-map?type=security')
+    await expect(list.locator('li')).toHaveCount(1)
+    await expect(list).toContainText('Agent can read another org’s context')
+
+    await page.goto('/e2e/product-map?area=back-office')
+    await expect(list.locator('li')).toHaveCount(8)
+  })
+
+  // Freshness comes from the last mention. A frame nobody woke for two cycles
+  // is dormant, and there is no browsable list of dormant frames (ADR 0024).
+  test('marks how top of mind each frame is, and leaves dormant ones out', async ({ page }) => {
+    const list = page.getByRole('region', { name: 'Frames' })
+    await expect(list.locator('li').first()).toContainText('Top of mind')
+    await expect(list).not.toContainText('Contract dates parse in the wrong locale')
   })
 })

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 
-import { AreaList, OpenFrameContext } from '@/app/[slug]/product-map/product-map'
+import { FrameList } from '@/app/[slug]/product/frame-list'
+import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import {
   DEFAULT_LENS,
@@ -11,7 +12,7 @@ import {
   type HeatLens,
 } from '@/lib/product-map-engine'
 
-import { AREAS, CYCLES, FRAMES, SHAPES, TODAY } from './fixture'
+import { AREAS, CYCLES, FRAMES, SHAPES, TODAY, USERS } from './fixture'
 
 const LENS_LABELS: Record<HeatLens, string> = {
   all: 'Everyone',
@@ -70,9 +71,9 @@ export default function ProductMapE2EPage() {
         {model.unmapped.length} unmapped · {model.resolved.length} resolved
       </p>
 
-      <OpenFrameContext.Provider value={setOpened}>
-        <AreaList areas={model.areas} />
-      </OpenFrameContext.Provider>
+      <OrganizationUsersProvider organizationUsers={USERS}>
+        <FrameList pins={[...model.pins, ...model.resolved]} areas={model.areas} />
+      </OrganizationUsersProvider>
     </main>
   )
 }

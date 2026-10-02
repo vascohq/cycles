@@ -174,12 +174,20 @@ _Avoid_: Filter (too general), segment
 To reset a frame's freshness clock. Three things wake a frame: a new **Report**, a mention in a transcript sent through `map_wake_frame`, and an explicit "still hurts" click. Opening a frame does not wake it. Work on a linked **Shape** does not wake it either (see [ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)).
 _Avoid_: Bump, touch, refresh, revive
 
+**Freshness**:
+How much people still talk about a frame, read from the time since its last **Wake**. The pin shows it as opacity. The **Frame list** shows it as one of three levels. **Top of mind** is a mention in about the last two or three weeks. **Cooling** is a mention within one cycle. **Fading** is anything older, until the frame goes **Dormant**. The levels are cut points on the pin opacity, so the map and the list always agree.
+_Avoid_: Priority, score, hotness
+
+**Frame list**:
+The list of open frames under the Product Map and on each area page. It has filters for area, kind, type, state, owner, report source and freshness. The filters live in the URL, so a filtered list is a link that people can share. The default order is top of mind first, then the most reported. The list never shows a **Dormant** frame ([ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)).
+_Avoid_: Backlog, queue, board
+
 **Dormant**:
 A frame that nobody has woken for two cycles. A dormant frame leaves the Product Map view. It is not deleted and it keeps every field and every report. A mention wakes it back onto the map. Reaching a dormant frame needs a filtered query. There is no browsable list of them, by design.
 _Avoid_: Archived (reserved for cycles), fog (reserved by the wayfinder skill), stale, closed, backlog
 
 **Unmapped**:
-The holding area for a frame that belongs to no **Area**. Capture is cheap, so a frame can arrive with no home. The same idea as an **Unscoped task** ([ADR 0018](docs/adr/0018-kanban-is-a-view-not-an-entity.md)).
+The holding area for a frame that belongs to no **Area**. Capture is cheap, so a frame can arrive with no home. The same idea as an **Unscoped task** ([ADR 0018](docs/adr/0018-kanban-is-a-view-not-an-entity.md)). Unmapped is a special area. Nobody draws it on the land, but it has an area page like the others. A person files a frame into an area from that page ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
 _Avoid_: Inbox, triage, uncategorized
 
 **Resolve**:

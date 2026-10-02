@@ -1,6 +1,7 @@
 import { generateRing } from '@/lib/product-map-geometry'
 import type { CycleWindow, LinkedShape } from '@/lib/product-map-engine'
 import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { OrganizationUser } from '@/lib/users'
 
 /**
  * Vasco's own product, drawn as land. Three top-level regions, so every rendered
@@ -203,3 +204,9 @@ export const SHAPES: LinkedShape[] = [
 ]
 
 export const TODAY = '2026-09-03'
+
+/** The members the fixture frames name. */
+export const USERS: OrganizationUser[] = [
+  { userId: 'user_1', name: 'Sam Rivers', email: 'sam@example.test', initials: 'SR', hasImage: false, imageUrl: '' },
+  { userId: 'user_2', name: 'Alex Moreau', email: 'alex@example.test', initials: 'AM', hasImage: false, imageUrl: '' },
+]
