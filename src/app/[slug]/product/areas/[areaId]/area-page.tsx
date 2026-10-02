@@ -26,9 +26,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { FileInto, areaOptions } from '../../product-map'
 import { FilteredFrames } from '../../frame-filters'
 import { MapWorkspace, WorkspaceSkeleton } from '../../map-workspace'
-import { Crumbs } from '../../crumbs'
+import { AreaCrumb, Crumbs } from '../../crumbs'
+import { ChevronRight } from 'lucide-react'
 import { Missing } from '../../missing'
 import { UNMAPPED_AREA, useOpenFramePage } from '../../links'
+import { TopBar } from '@/components/sidebar-layout'
 
 /**
  * One area on a page of its own: its land, its sub-areas and every frame under
@@ -121,27 +123,33 @@ export function AreaLayout({
   // An area with land is a map of its own, the same workspace as the Product Map.
   if (area) {
     return (
-      <MapWorkspace
-        title={
-          <div className="flex flex-col gap-0.5">
-            <Crumbs areas={areas} areaId={areaId} trailing={false} />
+      <>
+        <MapWorkspace
+          title={
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Crumbs areas={areas} areaId={areaId} trailing={false} />
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50" />
+              <AreaCrumb areas={areas} areaId={areaId} current />
+            </div>
+          }
+          heading={
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h1 className="font-display text-xl">{name}</h1>
+              <h1 className="font-display text-2xl">{name}</h1>
               <Stats pins={open} owner={area.owner} />
             </div>
-          </div>
-        }
-        areas={[area]}
-        pins={pins}
-        onOpenFrame={openFrame}
-      />
+          }
+          areas={[area]}
+          pins={pins}
+          onOpenFrame={openFrame}
+        />
+      </>
     )
   }
 
   // Unmapped has no land, so its page is the list, with filing on every row.
   return (
     <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8">
-      <Crumbs areas={areas} areaId="" trailing={false} />
+      <TopBar title={<Crumbs areas={areas} areaId="" />} />
       <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
         <h1 className="font-display text-3xl leading-tight">{name}</h1>
         <Stats pins={open} owner={null} />
@@ -162,7 +170,7 @@ export function AreaLayout({
 function Stats({ pins, owner }: { pins: RenderedPin[]; owner: string | null }) {
   const member = useMember(owner)
   const customers = new Set(
-    pins.flatMap((p) => p.reports.filter((r) => r.customer).map((r) => r.customer))
+    pins.flatMap((p) => p.reports.filter((r) => r.customer).map((r) => r.customer)),
   )
   const hot = pins.filter((p) => freshnessOf(p.opacity) === 'top_of_mind').length
   return (

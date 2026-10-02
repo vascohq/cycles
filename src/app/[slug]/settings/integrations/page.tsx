@@ -1,7 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { TopBar } from '@/components/sidebar-layout'
 import type { Metadata } from 'next'
 import { getRedactedIntegrationConfig } from '@/lib/calendar/org-integrations'
 import { IntegrationsForm } from './integrations-form'
@@ -25,22 +24,15 @@ export default async function IntegrationsSettingsPage({
   if (slug !== urlSlug) redirect(`/${urlSlug}/settings/integrations`)
 
   const header = (
-    <header className="flex flex-col gap-4">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href={`/${slug}/cycles`} className="transition-colors hover:text-foreground">
-          Cycles
-        </Link>
-        <ChevronRight className="h-3 w-3" />
-        <span className="font-medium text-foreground">Integrations</span>
-      </nav>
-      <h1 className="font-display text-3xl">Integrations</h1>
+    <>
+      <TopBar title={<h1 className="font-medium">Integrations</h1>} />
       <p className="max-w-prose text-sm text-muted-foreground">
         Connect calendar feeds to show <strong>Holidays</strong> and{' '}
         <strong>Time&nbsp;Off</strong> on the cycle window. Paste an{' '}
         <code>.ics</code> or <code>webcal://</code> URL. Feed URLs are stored
         privately and never shown to people viewing a cycle.
       </p>
-    </header>
+    </>
   )
 
   // Personal workspaces have no org to configure.

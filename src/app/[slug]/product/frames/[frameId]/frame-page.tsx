@@ -38,12 +38,18 @@ import {
 } from '@/components/organization-users-context'
 import { UserAvatar } from '@/components/scope-card/assignee-picker'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CyclesContext, FrameDetail, OpenFrameContext, areaOptions } from '../../product-map'
+import {
+  CyclesContext,
+  FrameDetail,
+  OpenFrameContext,
+  areaOptions,
+} from '../../product-map'
 import { useOpenFramePage } from '../../links'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { Crumbs } from '../../crumbs'
 import { Missing } from '../../missing'
 import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
+import { TopBar } from '@/components/sidebar-layout'
 
 /**
  * The frame on a page of its own, so it has a URL somebody can share. It reads
@@ -121,10 +127,14 @@ export function FrameLayout({
     <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
         <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8">
-          <Breadcrumb
-            areas={areas}
-            areaId={pin.areaId}
-            onEdit={editable ? () => setEditing(true) : undefined}
+          <TopBar
+            title={
+              <Breadcrumb
+                areas={areas}
+                areaId={pin.areaId}
+                onEdit={editable ? () => setEditing(true) : undefined}
+              />
+            }
           />
           {/* The same container and hero card as the Scope Map, so every page
               lines up under the header. */}
@@ -159,7 +169,7 @@ function Breadcrumb({
 }) {
   const [copied, setCopied] = useState(false)
   return (
-    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+    <div className="flex min-w-0 flex-1 items-center justify-between gap-3 text-sm text-muted-foreground">
       <Crumbs areas={areas} areaId={areaId} />
       <div className="flex shrink-0 items-center gap-2">
         <button

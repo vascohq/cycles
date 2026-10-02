@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronRight, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { TimeboxTape, CalendarOverlayRow } from '@/components/timebox'
 import { computeTimebox } from '@/lib/timebox-engine'
 import { positionBands, observeHolidays } from '@/lib/calendar/overlay-positioning'
@@ -17,6 +19,8 @@ import type { SquadSection } from '@/lib/mission-control-helpers'
 import { sectionKey, filterSquadSections } from '@/lib/mission-control-helpers'
 import { cn } from '@/lib/utils'
 import { PitchTimeline, TIMELINE_GRID } from './pitch-timeline'
+import { TopBar } from '@/components/sidebar-layout'
+import { CycleCrumb } from '@/components/crumb-menu'
 
 export type MissionControlViewProps = {
   slug: string
@@ -34,8 +38,6 @@ export type MissionControlViewProps = {
   cycleBands?: OverlayBand[]
   /** Optional controls rendered in the header (e.g. Edit cycle). */
   headerActions?: React.ReactNode
-  /** Controls rendered on the breadcrumb row (e.g. the cycle stepper). */
-  cycleNav?: React.ReactNode
   /** Optional banner rendered above the header (e.g. the archived notice). */
   banner?: React.ReactNode
 }
@@ -52,7 +54,6 @@ export function MissionControlView({
   cycleEnd,
   cycleBands,
   headerActions,
-  cycleNav,
   banner,
 }: MissionControlViewProps) {
   const [createOpen, setCreateOpen] = useState(false)
@@ -65,15 +66,38 @@ export function MissionControlView({
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
       {banner}
+      <TopBar
+        title={
+          <>
+            <Link href={`/${slug}/cycles`} className="text-muted-foreground hover:text-foreground">
+              Cycles
+            </Link>
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
+            <CycleCrumb
+              slug={slug}
+              cycleSlug={cycleSlug}
+              current
+              label={`${cycleType === 'cooldown' ? '🧊 ' : ''}${cycleTitle}`}
+            />
+          </>
+        }
+      />
       <header className="flex flex-col gap-4">
-        <div className="flex items-end justify-between gap-3">
-          <h1 className="flex min-w-0 items-center gap-2 truncate text-3xl font-display">
+        {/* The breadcrumb says where you are; this title and its buttons are
+            what you act on. */}
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="flex min-w-0 items-center gap-2 truncate text-2xl font-display">
             {cycleType === 'cooldown' && <span aria-hidden>🧊</span>}
             {cycleTitle}
           </h1>
-          <div className="flex items-center gap-3">
-            {cycleNav}
+          <div className="flex shrink-0 items-center gap-2">
             {headerActions}
+            {onCreatePitch && (
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-1 size-4" />
+                Add pitch
+              </Button>
+            )}
           </div>
         </div>
         {cycleStart && cycleEnd && (
@@ -86,24 +110,9 @@ export function MissionControlView({
         )}
       </header>
 
-      {(showFilter || onCreatePitch) && (
+      {showFilter && (
         <div className="-my-4 flex flex-wrap items-center gap-3">
-          {showFilter && (
-            <SquadFilterBar
-              sections={sections}
-              active={activeFilter}
-              onChange={setActiveFilter}
-            />
-          )}
-          {onCreatePitch && (
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="ml-auto flex items-center gap-1 text-xs px-3 py-1 rounded-lg border hover:bg-muted transition-colors"
-            >
-              <Plus className="w-3 h-3" />
-              Add pitch
-            </button>
-          )}
+          <SquadFilterBar sections={sections} active={activeFilter} onChange={setActiveFilter} />
         </div>
       )}
 

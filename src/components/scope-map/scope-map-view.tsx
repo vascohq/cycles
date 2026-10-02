@@ -48,6 +48,8 @@ import type { SquadLike } from '@/lib/squad-engine'
 import { usePitchDocumentTitle } from './use-pitch-document-title'
 import { STAGES } from '@/lib/stage-engine'
 import { StageBadge } from '@/components/scope-map/stage-badge'
+import { TopBar } from '@/components/sidebar-layout'
+import { CycleCrumb } from '@/components/crumb-menu'
 
 export { STAGES }
 
@@ -259,12 +261,16 @@ export function ScopeMapView({
 
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 py-6 flex flex-col gap-5">
-      <AppBar
-        slug={slug}
-        cycleSlug={cycleSlug}
-        cycleTitle={cycleTitle}
-        pitchTitle={pitch.title}
-        cyclePitches={cyclePitches}
+      <TopBar
+        title={
+          <AppBar
+            slug={slug}
+            cycleSlug={cycleSlug}
+            cycleTitle={cycleTitle}
+            pitchTitle={pitch.title}
+            cyclePitches={cyclePitches}
+          />
+        }
       />
 
       <HeroCard
@@ -602,12 +608,7 @@ function AppBar({
           Cycles
         </Link>
         <ChevronRight className="w-3 h-3" />
-        <Link
-          href={`/${slug}/cycles/${cycleSlug}`}
-          className="hover:text-foreground transition-colors"
-        >
-          {cycleTitle}
-        </Link>
+        <CycleCrumb slug={slug} cycleSlug={cycleSlug} label={cycleTitle} />
         <ChevronRight className="w-3 h-3" />
         {others.length > 0 ? (
           <DropdownMenu>

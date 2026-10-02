@@ -21,12 +21,12 @@ export function CommandSearchButton() {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="flex h-8 items-center gap-2 rounded-lg border bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+      className="flex h-8 w-full items-center gap-2 rounded-md border bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:border-foreground/20"
       aria-label="Search cycles and pitches"
     >
       <Search className="size-4" />
-      <span className="hidden sm:inline">Search…</span>
-      <kbd className="hidden items-center gap-0.5 rounded border bg-muted px-1.5 font-sans text-[10px] sm:inline-flex">
+      <span className="hidden flex-1 text-left sm:inline">Search…</span>
+      <kbd className="hidden items-center gap-0.5 rounded px-1.5 font-sans text-[10px] sm:inline-flex">
         {isMac ? '⌘' : 'Ctrl'}K
       </kbd>
     </button>

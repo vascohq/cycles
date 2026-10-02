@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState } from 'react'
+import { createContext, forwardRef, useContext, useState, type ComponentProps } from 'react'
 import { ClientSideSuspense } from '@liveblocks/react'
 import { LiveObject } from '@liveblocks/client'
 import { useAuth } from '@clerk/nextjs'
@@ -43,7 +43,7 @@ import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
-import type { LucideIcon } from 'lucide-react'
+import { ExternalLink, Plus, type LucideIcon } from 'lucide-react'
 import { useOpenFramePage } from './links'
 import { FilteredFrames } from './frame-filters'
 import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
@@ -78,6 +78,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { TopBar } from '@/components/sidebar-layout'
 
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
   internal: 'Internal',
@@ -290,7 +291,6 @@ function ProductMapView({
     )
   }
 
-  const capture = <CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />
   const pins = [...model.pins, ...model.resolved]
   const dormant = <DormantReview pins={model.dormantReview} options={options} />
 
@@ -300,8 +300,8 @@ function ProductMapView({
       <OpenFrameContext.Provider value={openFrame}>
         <CyclesContext.Provider value={cycles}>
           <MapWorkspace
-            title={<h1 className="font-display text-xl">Product Map</h1>}
-            actions={capture}
+            title={<span className="font-medium">Product Map</span>}
+            heading={<h1 className="font-display text-2xl">Product Map</h1>}
             areas={model.areas}
             pins={pins}
             onOpenFrame={openFrame}
@@ -316,7 +316,7 @@ function ProductMapView({
   return (
     <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
-        <Shell action={capture}>
+        <Shell>
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
             <p className="font-display text-lg">No land yet</p>
             <p className="max-w-md text-sm text-muted-foreground">
@@ -342,6 +342,49 @@ function ProductMapView({
 }
 
 /** Area id → the owner the area suggests for a new frame filed there. */
+/**
+ * Capture, at the top of the Product Map sidebar. It lives in the section
+ * layout, not in a page, so it stays put while you move between map pages.
+ * Its own provider shares the room connection with the page's. While the room
+ * first loads, a disabled copy holds its place, so nothing pops in.
+ */
+export function ProductCapture({ roomId }: { roomId: string }) {
+  return (
+    <ProductMapRoomProvider
+      id={roomId}
+      initialPresence={{}}
+      initialStorage={productMapInitialStorage()}
+    >
+      <ClientSideSuspense fallback={<CaptureTrigger disabled />}>
+        {() => <LiveCapture />}
+      </ClientSideSuspense>
+    </ProductMapRoomProvider>
+  )
+}
+
+function LiveCapture() {
+  const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
+  // Only the area tree is needed, for the Area picker and its owners.
+  const rendered = renderProductMap({ areas, frames: [], today: getTeamToday(new Date()) }).areas
+  return <CaptureMenu areas={areaOptions(rendered)} areaOwners={areaOwners(rendered)} />
+}
+
+const CaptureTrigger = forwardRef<HTMLButtonElement, ComponentProps<'button'>>(
+  function CaptureTrigger(props, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className="flex h-9 w-full items-center gap-2 rounded-md border bg-background px-2.5 text-sm shadow-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
+        {...props}
+      >
+        <Plus className="size-4 text-muted-foreground" />
+        Capture
+      </button>
+    )
+  }
+)
+
 function areaOwners(areas: RenderedArea[]): Record<string, string> {
   const owners: Record<string, string> = {}
   for (const area of areas) {
@@ -1650,17 +1693,22 @@ function CaptureMenu({
   areaOwners: Record<string, string>
 }) {
   const [manual, setManual] = useState(false)
-  const [withAi, setWithAi] = useState(false)
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button>Capture</Button>
+          <CaptureTrigger />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setWithAi(true)}>
-            Capture with AI
+        <DropdownMenuContent align="start">
+          {/* The same way in as Ask Paulo on a frame page: a new Claude chat
+              with the command typed. Paulo asks for the problem and writes
+              the frame through the Cycles MCP server. */}
+          <DropdownMenuItem asChild>
+            <a href={CAPTURE_WITH_CLAUDE_URL} target="_blank" rel="noreferrer">
+              Capture with Claude
+              <ExternalLink className="ml-auto h-3 w-3 opacity-60" />
+            </a>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setManual(true)}>
             Capture manually
@@ -1669,42 +1717,11 @@ function CaptureMenu({
       </DropdownMenu>
 
       <CaptureForm areas={areas} areaOwners={areaOwners} open={manual} onOpenChange={setManual} />
-      <AiCaptureDialog open={withAi} onOpenChange={setWithAi} />
     </>
   )
 }
 
-/**
- * There is nothing to fill in here. Capture through an agent happens in the
- * conversation, so this says what to say and gets out of the way.
- */
-function AiCaptureDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl gap-3 p-5">
-        <DialogTitle className="font-display text-lg">Capture with AI</DialogTitle>
-        <p className="text-sm text-muted-foreground">
-          Tell Claude what hurts, or what value is sitting unclaimed, and it
-          fills the frame in: the problem, the
-          area it belongs to, the Kind, the Type, and the customers who raised
-          it. It writes to this map through the Cycles MCP server, so nothing
-          gets pasted anywhere.
-        </p>
-        <AskClaude />
-        <p className="text-xs text-muted-foreground">
-          Claude will ask about anything it needs. If you would rather not be
-          interviewed, capture manually instead.
-        </p>
-      </DialogContent>
-    </Dialog>
-  )
-}
+const CAPTURE_WITH_CLAUDE_URL = `https://claude.ai/new?q=${encodeURIComponent('/paulo capture ')}`
 
 /** Example prompts, shown wherever somebody needs an agent to do the work. */
 function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
@@ -1736,19 +1753,11 @@ function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
   )
 }
 
-function Shell({
-  children,
-  action,
-}: {
-  children: React.ReactNode
-  action?: React.ReactNode
-}) {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto w-full max-w-screen-xl px-6 py-8">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl">Product Map</h1>
-        {action}
-      </div>
+      <TopBar title={<span className="font-medium">Product Map</span>} />
+      <h1 className="mb-3 font-display text-2xl">Product Map</h1>
       {children}
     </main>
   )

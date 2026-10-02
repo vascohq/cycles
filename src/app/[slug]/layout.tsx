@@ -10,6 +10,7 @@ import Image from 'next/image'
 import { UserMenu } from '@/components/user-menu'
 import { CommandPaletteProvider } from '@/components/command-palette/command-palette-context'
 import { CommandSearchButton } from '@/components/command-palette/command-search-button'
+import { AppSidebar } from '@/components/app-sidebar'
 
 export default async function OrgLayout({
   children,
@@ -21,28 +22,30 @@ export default async function OrgLayout({
   const { slug } = await params
   return (
     <CommandPaletteProvider slug={slug}>
-      <header className="sticky top-0 z-40 h-16 border-b bg-background">
-        <div className="mx-auto flex h-full max-w-screen-xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+      {/* Plane-style shell: a gray canvas holds the top bar and the sidebar;
+          the page itself sits on a white, bordered panel. */}
+      <div className="flex h-[100dvh] flex-col bg-canvas">
+        <header className="grid h-12 shrink-0 grid-cols-[1fr_minmax(0,32rem)_1fr] items-center gap-3 px-3">
+          <div className="flex items-center gap-2">
             <Link
               href={`/${slug}/cycles`}
-              className="flex items-center gap-2 font-display text-lg transition-colors hover:text-foreground/70"
+              className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm font-semibold transition-colors hover:bg-foreground/5"
             >
               {/* Theme-aware logo: dark-on-light in light mode, light-on-dark in
                   dark mode. Swapped via the `dark` class (no flash). */}
               <Image
                 src="/web-app-manifest-512x512.png"
                 alt=""
-                width={24}
-                height={24}
-                className="size-6 dark:hidden"
+                width={20}
+                height={20}
+                className="size-5 dark:hidden"
               />
               <Image
                 src="/web-app-manifest-512x512-light.png"
                 alt=""
-                width={24}
-                height={24}
-                className="hidden size-6 dark:block"
+                width={20}
+                height={20}
+                className="hidden size-5 dark:block"
               />
               Cycles
             </Link>
@@ -66,7 +69,12 @@ export default async function OrgLayout({
               </div>
             </SignedIn>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex justify-center">
+            <SignedIn>
+              <CommandSearchButton />
+            </SignedIn>
+          </div>
+          <div className="flex items-center justify-end gap-3">
             <SignedOut>
               <SignInButton>
                 <Button variant="ghost" size="sm">
@@ -75,14 +83,22 @@ export default async function OrgLayout({
               </SignInButton>
             </SignedOut>
             <SignedIn>
-              <CommandSearchButton />
               <UserMenu slug={slug} />
             </SignedIn>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {children}
+        <div className="flex min-h-0 flex-1">
+          <SignedIn>
+            <AppSidebar slug={slug} />
+          </SignedIn>
+          {/* Each section's layout fills this panel with its own sidebar and
+              a scrolling page (see SidebarLayout). */}
+          <div className="mb-2 mr-2 flex min-w-0 flex-1 overflow-hidden rounded-lg border bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] max-md:ml-2">
+            {children}
+          </div>
+        </div>
+      </div>
     </CommandPaletteProvider>
   )
 }

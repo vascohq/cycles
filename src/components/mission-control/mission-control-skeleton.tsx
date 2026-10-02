@@ -2,23 +2,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * Loading state for Mission Control. Hand-built to mirror the real layout (see
- * mission-control-view.tsx / pitch-timeline.tsx): the title row (cycle name +
- * cycle stepper, then actions), the aligned Cycle window strip, then squad
+ * mission-control-view.tsx / pitch-timeline.tsx): the title row (cycle name,
+ * then actions), the aligned Cycle window strip, then squad
  * groups of two-line pitch-timeline rows (header + timebox bar).
  */
 export function MissionControlSkeleton() {
   return (
     <main className="w-full max-w-screen-xl mx-auto px-6 pt-5 pb-8 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        {/* cycle name, then cycle stepper + actions */}
-        <div className="flex items-end justify-between gap-3">
-          <Skeleton className="h-9 w-52" />
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Skeleton className="h-7 w-7 rounded-lg" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
-            </div>
+        {/* cycle name, then the edit menu and Add pitch */}
+        <div className="flex items-center justify-between gap-3">
+          <Skeleton className="h-8 w-52" />
+          <div className="flex items-center gap-2">
             <Skeleton className="h-7 w-7 rounded" />
+            <Skeleton className="h-8 w-24 rounded-md" />
           </div>
         </div>
 

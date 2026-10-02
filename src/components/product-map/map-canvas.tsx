@@ -14,7 +14,7 @@ import {
 import { unionBounds, type Bounds, type Point } from '@/lib/product-map-geometry'
 import { listFrames } from '@/lib/frame-list'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Scan } from 'lucide-react'
 import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
 import { KIND_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import {
@@ -106,6 +106,26 @@ export function MapCanvas({
     observer.observe(host)
     return () => observer.disconnect()
   }, [])
+
+  // Fullscreen covers the window with the map. It puts the whole document in
+  // browser fullscreen, not just this element, so tooltips and dialogs that
+  // portal to <body> still show. Esc leaves browser fullscreen; this follows.
+  const [expanded, setExpanded] = useState(false)
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setExpanded(false)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleExpanded = () => {
+    const next = !expanded
+    setExpanded(next)
+    setView(null) // fit the land to the new size
+    // ponytail: a browser that refuses fullscreen still gets the map over the window.
+    if (next) document.documentElement.requestFullscreen?.().catch(() => {})
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+  }
 
   const top = inset?.top ?? 0
   const right = inset?.right ?? 0
@@ -275,7 +295,8 @@ export function MapCanvas({
         ref={hostRef}
         className={cn(
           'relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20',
-          className
+          className,
+          expanded && 'fixed inset-0 z-50 h-auto min-h-0 rounded-none border-0 bg-background'
         )}
       >
       {/*
@@ -357,8 +378,39 @@ export function MapCanvas({
           )
         )}
         </svg>
+
+        <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-md border bg-background shadow-sm">
+          <MapControl label="Fit the map" onClick={() => setView(null)}>
+            <Scan className="size-4" />
+          </MapControl>
+          <MapControl label={expanded ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleExpanded}>
+            {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </MapControl>
+        </div>
       </div>
     </TooltipProvider>
+  )
+}
+
+function MapControl({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&+&]:border-t"
+    >
+      {children}
+    </button>
   )
 }
 

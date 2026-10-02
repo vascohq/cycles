@@ -101,6 +101,8 @@ export async function createCycleRoom(formData: FormData) {
     })
   }
 
+  // 'layout' so the Cycles sidebar lists the new cycle.
+  revalidatePath(`/${orgSlug ?? 'me'}/cycles`, 'layout')
   redirect(`/${orgSlug ?? 'me'}/cycles/${slug}`)
 }
 
@@ -130,7 +132,7 @@ export async function updateCycleRoom(cycleSlug: string, formData: FormData) {
   // refresh them; in-page content tracks the live storage object reactively.
   const urlSlug = orgSlug ?? 'me'
   revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
-  revalidatePath(`/${urlSlug}/cycles`)
+  revalidatePath(`/${urlSlug}/cycles`, 'layout')
 }
 
 /**
@@ -147,5 +149,5 @@ export async function setCycleArchived(cycleSlug: string, archived: boolean) {
 
   const urlSlug = orgSlug ?? 'me'
   revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
-  revalidatePath(`/${urlSlug}/cycles`)
+  revalidatePath(`/${urlSlug}/cycles`, 'layout')
 }
