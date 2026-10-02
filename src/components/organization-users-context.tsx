@@ -11,6 +11,12 @@ export function useOrganizationUsers() {
   return users
 }
 
+/** One member by Clerk user id, or undefined when the id names nobody here. */
+export function useMember(userId: string | null | undefined): OrganizationUser | undefined {
+  const users = useOrganizationUsers()
+  return userId ? users.find((u) => u.userId === userId) : undefined
+}
+
 export function OrganizationUsersProvider({
   organizationUsers,
   children,

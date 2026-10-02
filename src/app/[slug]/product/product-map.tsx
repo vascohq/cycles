@@ -41,6 +41,12 @@ import { MapCanvas } from '@/components/product-map/map-canvas'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
+import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
+import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
+import type { LucideIcon } from 'lucide-react'
+import { useOpenFramePage } from './links'
+import { FilteredFrames } from './frame-filters'
+import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
 import {
   OrganizationUsersProvider,
   useOrganizationUsers,
@@ -73,34 +79,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-// Labels are the only place these vocabularies get prose. The stored values
-// stay machine-readable, because MCP callers filter on them.
-const KIND_LABELS: Record<FrameKind, string> = {
-  brand_burn: 'Brand burn',
-  pain_point: 'Pain point',
-  unlock_win: 'Win to unlock',
-}
-
-const TYPE_LABELS: Record<FrameType, string> = {
-  bug: 'Bug',
-  idea: 'Idea',
-  request: 'Request',
-  security: 'Security',
-  irritant: 'Irritant',
-}
-
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
   internal: 'Internal',
   customer: 'Customer',
-}
-
-const STATE_LABELS: Record<FrameState, string> = {
-  rough: 'Rough',
-  candidate: 'Candidate',
-  in_flight: 'In flight',
-  released: 'Released',
-  monitoring: 'Monitoring',
-  resolved: 'Resolved',
 }
 
 /**
@@ -120,26 +101,30 @@ function PillSelect({
   onChange,
   label,
   options,
-  dot,
 }: {
   value: string
   onChange: (value: string) => void
   label: string
-  options: { value: string; label: string }[]
-  dot?: string
+  options: { value: string; label: string; icon?: LucideIcon; color?: string }[]
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className={PILL} aria-label={label}>
-        {dot && (
-          <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: dot }} />
-        )}
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value}>
-            {o.label}
+            <span className="flex items-center gap-1.5">
+              {o.icon && (
+                <o.icon
+                  aria-hidden
+                  className={`h-3.5 w-3.5 ${o.color ? '' : 'text-muted-foreground'}`}
+                  style={o.color ? { color: o.color } : undefined}
+                />
+              )}
+              {o.label}
+            </span>
           </SelectItem>
         ))}
       </SelectContent>
@@ -150,8 +135,17 @@ function PillSelect({
 /** One wording, so the field reads the same whether a frame is being made or read. */
 const WHY_LABEL = 'Why does this matter to Vasco?'
 
-const KIND_OPTIONS = FRAME_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))
-const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))
+const KIND_OPTIONS = FRAME_KINDS.map((k) => ({
+  value: k,
+  label: KIND_LABELS[k],
+  icon: KIND_ICONS[k],
+  color: KIND_COLORS[k],
+}))
+const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({
+  value: t,
+  label: TYPE_LABELS[t],
+  icon: TYPE_ICONS[t],
+}))
 
 /** A borderless title that reads as a heading, not an input. */
 const TITLE_INPUT =
@@ -167,10 +161,10 @@ const NOBODY = '__nobody__'
  * none of that land's business — so the opener travels by context instead of
  * threading through every region (the repo rule on cross-cutting concerns).
  */
-const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
+export const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
 
 /** The cycles a frame can be bet into. Read once, at the page boundary. */
-const CyclesContext = createContext<CycleWindow[]>([])
+export const CyclesContext = createContext<CycleWindow[]>([])
 
 /**
  * `full` is the Product Map's own page: the land, plus capture, plus every list
@@ -208,7 +202,9 @@ export function ProductMap({
         initialPresence={{}}
         initialStorage={productMapInitialStorage()}
       >
-        <ClientSideSuspense fallback={<ProductMapSkeleton />}>
+        <ClientSideSuspense
+          fallback={variant === 'canvas' ? <ProductMapSkeleton /> : <WorkspaceSkeleton />}
+        >
           {() => (
             <ProductMapView
               cycles={cycles}
@@ -241,7 +237,7 @@ function ProductMapView({
   // root predates either list must still render, not throw.
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
-  const [openFrameId, setOpenFrameId] = useState<string | null>(null)
+  const openFrame = useOpenFramePage()
   // No control on the page for this. The engine still computes every lens, and
   // MCP callers still filter by one, so the switch can come back without a
   // change to the model.
@@ -258,20 +254,13 @@ function ProductMapView({
     today: getTeamToday(new Date()),
   })
   const options = areaOptions(model.areas)
-  // Opening a frame reads it and nothing more. It never wakes it (ADR 0024).
-  // Searched across every rendered frame, not only the ones on the Product Map: an
-  // origin link can point at a frame that is asleep or already resolved.
-  const open =
-    [...model.pins, ...model.dormantReview, ...model.resolved].find(
-      (pin) => pin.frameId === openFrameId
-    ) ?? null
 
   // The land only. No capture, and none of the lists that reach a frame the
   // land does not show — those belong to the Product Map's own page, not to a
   // page where the map is a view onto somewhere else.
   if (variant === 'canvas') {
     return (
-      <OpenFrameContext.Provider value={setOpenFrameId}>
+      <OpenFrameContext.Provider value={openFrame}>
         <CyclesContext.Provider value={cycles}>
           {/* The heading row lives in here, not on the host page: Capture needs
               the room, and the room provider stops at this component. */}
@@ -283,7 +272,7 @@ function ProductMapView({
             </div>
           </div>
           {model.areas.length > 0 ? (
-            <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
+            <MapCanvas areas={model.areas} onOpenFrame={openFrame} />
           ) : (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center">
               <p className="text-sm font-medium">No land yet</p>
@@ -296,10 +285,28 @@ function ProductMapView({
               </div>
             </div>
           )}
-          <FrameDetail
-            pin={open}
-            onClose={() => setOpenFrameId(null)}
-            areas={options}
+        </CyclesContext.Provider>
+      </OpenFrameContext.Provider>
+    )
+  }
+
+  const capture = <CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />
+  const pins = [...model.pins, ...model.resolved]
+  const dormant = <DormantReview pins={model.dormantReview} options={options} />
+
+  // With land, the map is the page and everything else floats over it.
+  if (model.areas.length > 0) {
+    return (
+      <OpenFrameContext.Provider value={openFrame}>
+        <CyclesContext.Provider value={cycles}>
+          <MapWorkspace
+            title={<h1 className="font-display text-xl">Product Map</h1>}
+            actions={capture}
+            areas={model.areas}
+            pins={pins}
+            onOpenFrame={openFrame}
+            footer={dormant}
+            withUnmapped
           />
         </CyclesContext.Provider>
       </OpenFrameContext.Provider>
@@ -307,35 +314,27 @@ function ProductMapView({
   }
 
   return (
-    <OpenFrameContext.Provider value={setOpenFrameId}>
+    <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
-        <Shell action={<CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />}>
-          {model.pins.length === 0 && model.areas.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
-              <p className="font-display text-lg">No land yet</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                The map is drawn by an agent. Describe your product to Claude
-                and it draws the land through the Cycles MCP server: the areas,
-                the islands they sit in, and the coastline round them.
-              </p>
-              <div className="mt-1 w-full max-w-lg text-left">
-                <AskClaude drawTheMap />
-              </div>
+        <Shell action={capture}>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
+            <p className="font-display text-lg">No land yet</p>
+            <p className="max-w-md text-sm text-muted-foreground">
+              The map is drawn by an agent. Describe your product to Claude
+              and it draws the land through the Cycles MCP server: the areas,
+              the islands they sit in, and the coastline round them.
+            </p>
+            <div className="mt-1 w-full max-w-lg text-left">
+              <AskClaude drawTheMap />
+            </div>
+          </div>
+          {/* Frames can arrive before the land does. They are still reachable. */}
+          {pins.length > 0 && (
+            <div className="mt-8">
+              <FilteredFrames pins={pins} areas={model.areas} />
             </div>
           )}
-          {model.areas.length > 0 && (
-            <>
-              <MapCanvas areas={model.areas} onOpenFrame={setOpenFrameId} />
-              <AreaList areas={model.areas} options={options} />
-            </>
-          )}
-          <UnmappedGroup
-            pins={model.unmapped}
-            resolved={model.unmappedResolved}
-            options={options}
-          />
-          <DormantReview pins={model.dormantReview} options={options} />
-          <FrameDetail pin={open} onClose={() => setOpenFrameId(null)} areas={options} />
+          {dormant}
         </Shell>
       </CyclesContext.Provider>
     </OpenFrameContext.Provider>
@@ -353,118 +352,13 @@ function areaOwners(areas: RenderedArea[]): Record<string, string> {
 }
 
 /** One flat, indented list of every area, for the "file this frame" pickers. */
-type AreaOption = { id: string; label: string }
+export type AreaOption = { id: string; label: string }
 
-function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
+export function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
   return areas.flatMap((area) => [
     { id: area.areaId, label: `${'— '.repeat(depth)}${area.name}` },
     ...areaOptions(area.children, depth + 1),
   ])
-}
-
-/**
- * Every area as real DOM: its frames, and what its team resolved.
- *
- * This is the keyboard and screen-reader surface for the land. A pin on the
- * canvas is focusable, but Chrome does not expose an SVG group to the
- * accessibility tree at all, so the map alone would leave a mapped frame
- * unreachable — and it is also where each area's resolved frames live, off the
- * land, because a resolved pin would lie about where the product stands.
- */
-function AreaList({ areas, options }: { areas: RenderedArea[]; options: AreaOption[] }) {
-  const flat = flattenAreas(areas).filter(
-    ({ area }) => area.pins.length > 0 || area.resolved.length > 0
-  )
-  if (flat.length === 0) return null
-
-  return (
-    <details className="mt-4">
-      <summary className="cursor-pointer text-sm text-muted-foreground">
-        All frames by area
-      </summary>
-      <div className="mt-3 flex flex-col gap-4">
-        {flat.map(({ area, depth }) => (
-          <section key={area.areaId} aria-label={area.name} style={{ marginLeft: depth * 16 }}>
-            <h2 className="mb-1.5 font-display text-sm">{area.name}</h2>
-            {area.pins.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {area.pins.map((pin) => (
-                  <PinDot key={pin.frameId} pin={pin} options={options} />
-                ))}
-              </ul>
-            )}
-            <ResolvedList pins={area.resolved} />
-          </section>
-        ))}
-      </div>
-    </details>
-  )
-}
-
-function flattenAreas(
-  areas: RenderedArea[],
-  depth = 0
-): { area: RenderedArea; depth: number }[] {
-  return areas.flatMap((area) => [
-    { area, depth },
-    ...flattenAreas(area.children, depth + 1),
-  ])
-}
-
-/**
- * The frames this area's team resolved, with the shapes that resolved them. Off
- * the Product Map and still on record: the Product Map must never lie about what we know.
- */
-function ResolvedList({ pins }: { pins: RenderedPin[] }) {
-  if (pins.length === 0) return null
-  return (
-    <details className="mt-2">
-      <summary className="cursor-pointer text-xs text-muted-foreground">
-        Resolved ({pins.length})
-      </summary>
-      <ul className="mt-1.5 flex flex-col gap-1.5">
-        {pins.map((pin) => (
-          <li key={pin.frameId} className="text-xs">
-            <span className="line-through">{pin.problem}</span>
-            {pin.shapes.length > 0 && (
-              <span className="text-muted-foreground">
-                {' '}
-                — {pin.shapes.map((s) => `${s.title} (${s.cycleTitle})`).join(', ')}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </details>
-  )
-}
-
-function UnmappedGroup({
-  pins,
-  resolved,
-  options,
-}: {
-  pins: RenderedPin[]
-  resolved: RenderedPin[]
-  options: AreaOption[]
-}) {
-  if (pins.length === 0 && resolved.length === 0) return null
-  return (
-    <section aria-label="Unmapped" className="mt-6">
-      <h2 className="mb-2 font-display text-sm">
-        Unmapped <span className="text-muted-foreground">({pins.length})</span>
-      </h2>
-      <p className="mb-3 text-sm text-muted-foreground">
-        These frames belong to no area yet. Leaving one here is always valid.
-      </p>
-      <ul className="flex flex-col gap-1.5">
-        {pins.map((pin) => (
-          <PinDot key={pin.frameId} pin={pin} options={options} />
-        ))}
-      </ul>
-      <ResolvedList pins={resolved} />
-    </section>
-  )
 }
 
 /**
@@ -499,19 +393,6 @@ function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOp
 function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
   const openFrame = useContext(OpenFrameContext)
   const wake = useWakeFrame()
-  // Filing a frame is the one edit a pin carries. Moving it out is the same
-  // write with the area cleared, so nothing needs a second control.
-  const fileFrame = useProductMapMutation(
-    ({ storage }, frameId: string, areaId: string) => {
-      const frame = storage
-        .get('frames')
-        .find((f) => f.get('id') === frameId)
-      if (!frame) return
-      if (areaId) frame.set('areaId', areaId)
-      else frame.delete('areaId')
-    },
-    []
-  )
 
   return (
     <li
@@ -558,25 +439,52 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
         {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
       </span>
       <StillHurtsButton onWake={() => wake(pin.frameId)} />
-      {options.length > 0 && (
-        <Select
-          value={pin.areaId || UNMAPPED}
-          onValueChange={(v) => fileFrame(pin.frameId, v === UNMAPPED ? '' : v)}
-        >
-          <SelectTrigger className="ml-auto h-7 w-36 shrink-0" aria-label="Area">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
-            {options.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+      <FileInto pin={pin} options={options} className="ml-auto" />
     </li>
+  )
+}
+
+/**
+ * Files a frame into an area, or back to Unmapped. Filing is the one edit a
+ * row carries. Moving a frame out is the same write with the area cleared, so
+ * nothing needs a second control.
+ */
+export function FileInto({
+  pin,
+  options,
+  className = '',
+}: {
+  pin: RenderedPin
+  options: AreaOption[]
+  className?: string
+}) {
+  const fileFrame = useProductMapMutation(
+    ({ storage }, frameId: string, areaId: string) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      if (!frame) return
+      if (areaId) frame.set('areaId', areaId)
+      else frame.delete('areaId')
+    },
+    []
+  )
+  if (options.length === 0) return null
+  return (
+    <Select
+      value={pin.areaId || UNMAPPED}
+      onValueChange={(v) => fileFrame(pin.frameId, v === UNMAPPED ? '' : v)}
+    >
+      <SelectTrigger className={`h-7 w-36 shrink-0 ${className}`} aria-label="File in area">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={UNMAPPED}>Unmapped</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o.id} value={o.id}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -626,7 +534,7 @@ function StillHurtsButton({ onWake }: { onWake: () => void }) {
  * the internal lens with the customer lens is how a team finds pain it is
  * ignoring.
  */
-function FrameDetail({
+export function FrameDetail({
   pin,
   onClose,
   areas,
@@ -644,7 +552,8 @@ function FrameDetail({
       // '' clears an optional field: the key goes away rather than sitting there
       // as an empty string nobody can tell from "unset". A frame with no areaId
       // is Unmapped, which is always a valid answer.
-      if ((field === 'owner' || field === 'areaId') && value === '') frame.delete(field)
+      if ((field === 'owner' || field === 'areaId' || field === 'announcement') && value === '')
+        frame.delete(field)
       else frame.set(field, value as never)
     },
     []
@@ -681,7 +590,6 @@ function FrameDetail({
             onChange={set('kind')}
             label="Kind"
             options={KIND_OPTIONS}
-            dot={pin.color}
           />
           <PillSelect
             value={pin.type}
@@ -750,6 +658,13 @@ function FrameDetail({
 
             <Outcomes pin={pin} />
 
+            <Field
+              label="Release announcement"
+              hint="What customers would read once it is solved. A draft until it ships."
+            >
+              <DraftTextarea value={pin.announcement} rows={4} onCommit={set('announcement')} />
+            </Field>
+
             {pin.candidateStatement && (
               <p className="rounded-lg border bg-muted/40 p-3 text-sm italic">
                 {pin.candidateStatement}
@@ -784,6 +699,7 @@ type EditableField =
   | 'problem'
   | 'appetite'
   | 'business_case'
+  | 'announcement'
   | 'kind'
   | 'type'
   | 'owner'
@@ -1622,7 +1538,6 @@ function CaptureForm({
             onChange={(v) => setKind(v as FrameKind)}
             label="Kind"
             options={KIND_OPTIONS}
-            dot={KIND_COLORS[kind]}
           />
           <PillSelect
             value={type}
@@ -1717,12 +1632,9 @@ function CaptureForm({
   )
 }
 
+/** The embedded land on the cycles page, while the room loads. */
 function ProductMapSkeleton() {
-  return (
-    <Shell>
-      <div className="h-48 animate-pulse rounded-xl border border-dashed bg-muted/40" />
-    </Shell>
-  )
+  return <div className="h-[min(70vh,620px)] min-h-[360px] animate-pulse rounded-xl border bg-muted/30" />
 }
 
 /**

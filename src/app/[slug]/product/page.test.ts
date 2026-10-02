@@ -119,6 +119,6 @@ describe('ProductMapPage', () => {
 
   it('redirects when the url slug is not the active workspace', async () => {
     await ProductMapPage(params('stale-org'))
-    expect(mockRedirect).toHaveBeenCalledWith('/my-org/product-map')
+    expect(mockRedirect).toHaveBeenCalledWith('/my-org/product')
   })
 })

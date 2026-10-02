@@ -15,8 +15,8 @@ import { getTeamToday } from '@/lib/team-time'
 import { getOrganizationUsers } from '@/lib/users'
 import { readCycleWindows } from '@/lib/mcp/liveblocks-reader'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
-import { ProductMap } from '@/app/[slug]/product-map/product-map'
-import { linkedShapes } from '@/app/[slug]/product-map/linked-shapes'
+import { ProductMap } from '@/app/[slug]/product/product-map'
+import { linkedShapes } from '@/app/[slug]/product/linked-shapes'
 import { auth } from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -146,7 +146,7 @@ export default async function CyclesPage({
           heading={<p className="font-display text-2xl">Product Map</p>}
           action={
             <Link
-              href={`/${urlSlug}/product-map`}
+              href={`/${urlSlug}/product`}
               className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               Open the Product Map

@@ -28,6 +28,7 @@ import {
   isFrameKind,
   isFrameType,
   isSharp,
+  renderFrame,
   renderProductMap,
   type CycleWindow,
   type LinkedShape,
@@ -914,6 +915,28 @@ describe('reading the shapes out of the cycle rooms', () => {
     expect(shapes[0].frameId).toBe('f1')
   })
 
+  // The frame page names who is on it and links the pitch. Both live on the
+  // shape in its cycle room, never on the frame.
+  it('carries the squad and the Notion pitch, and drops a squad that is gone', () => {
+    const shapes = linkedShapesFrom(
+      [
+        {
+          cycle,
+          squads: [{ id: 'q1', name: 'Capture', color: '#8e4ec6' }],
+          shapes: [
+            { id: 's1', title: 'a', stage: 'building', frame_id: 'f1', squadId: 'q1', notion_url: 'https://notion.so/p' },
+            { id: 's2', title: 'b', stage: 'building', frame_id: 'f1', squadId: 'gone', notion_url: '' },
+          ],
+        },
+      ],
+      '2026-03-01'
+    )
+    expect(shapes[0].squad).toEqual({ name: 'Capture', color: '#8e4ec6' })
+    expect(shapes[0].notionUrl).toBe('https://notion.so/p')
+    expect(shapes[1].squad).toBeUndefined()
+    expect(shapes[1].notionUrl).toBeUndefined()
+  })
+
   it('names the cycle, so the frame detail reads a title and not a slug', () => {
     const [shape] = linkedShapesFrom(
       [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', frame_id: 'f1' }] }],
@@ -1522,5 +1545,42 @@ describe('the heat lens on the land', () => {
     const internal = clusterForViewport(mapWith('internal').areas, 0.1)
     // One frame left, so it draws as a pin rather than a bubble reading "1".
     expect(internal.map((n) => n.kind)).toEqual(['area'])
+  })
+})
+
+describe('renderFrame', () => {
+  const cycles: CycleWindow[] = [
+    { slug: 'c1', title: 'One', type: 'build', start_date: '2026-01-05', end_date: '2026-02-13' },
+    { slug: 'c2', title: 'Two', type: 'build', start_date: '2026-02-23', end_date: '2026-04-03' },
+    { slug: 'c3', title: 'Three', type: 'build', start_date: '2026-04-13', end_date: '2026-05-22' },
+  ]
+
+  // A frame page has a URL, so it must open a frame the map no longer shows.
+  it('renders a dormant frame that the map leaves out', () => {
+    const frames = [makeFrame({ last_woken: '2025-12-01' })]
+    const input = { frames, cycles, today: '2026-05-01' }
+
+    expect(renderProductMap(input).pins).toHaveLength(0)
+    const pin = renderFrame(input, 'f1')
+    expect(pin?.dormant).toBe(true)
+    expect(pin?.problem).toBe('Imports fail silently')
+  })
+
+  it('carries the brief, and null before anybody wrote one', () => {
+    const brief = {
+      headline: 'h',
+      where_we_are: 'w',
+      next_step: 'n',
+      written_by: 'paulo',
+      written_on: '2026-04-01',
+    }
+    const frames = [makeFrame(), makeFrame({ id: 'f2', brief })]
+
+    expect(renderFrame({ frames, today: '2026-05-01' }, 'f1')?.brief).toBeNull()
+    expect(renderFrame({ frames, today: '2026-05-01' }, 'f2')?.brief).toEqual(brief)
+  })
+
+  it('returns null for an unknown frame', () => {
+    expect(renderFrame({ frames: [makeFrame()], today: '2026-05-01' }, 'nope')).toBeNull()
   })
 })

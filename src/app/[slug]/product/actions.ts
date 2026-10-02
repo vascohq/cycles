@@ -45,6 +45,6 @@ export async function betOnFrame(input: {
     frame_id: frame.id,
   })
 
-  revalidatePath(`/${orgSlug ?? 'me'}/product-map`)
+  revalidatePath(`/${orgSlug ?? 'me'}/product`)
   return { shapeId: result.id }
 }

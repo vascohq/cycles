@@ -96,6 +96,18 @@ test.describe('Product Map canvas', () => {
     await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f1')
   })
 
+  // The tooltip of one pin opens the frame too, the same as a bubble's list.
+  test('clicking the tooltip of a pin opens its frame', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 })
+    await page
+      .locator('svg [role="button"][aria-label="Capture from Slack loses the thread link"]')
+      .hover()
+
+    await page.locator('[data-radix-popper-content-wrapper] button').click()
+
+    await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f1')
+  })
+
   test('browsing the map never zooms out past the whole map', async ({ page }) => {
     const fitted = await viewBox(page)
     const host = page.locator('svg[aria-label="Product Map"]').locator('..')
@@ -133,5 +145,41 @@ test.describe('Product Map canvas', () => {
       nodes.every((n) => n.getAttribute('tabindex') === '0')
     )
     expect(focusable).toBe(true)
+  })
+
+  // The filters live in the URL, so a filtered list is a link somebody can share.
+  test('lists every open frame, and filters it from the URL', async ({ page }) => {
+    const list = page.getByRole('region', { name: 'Frames' })
+    await expect(list.locator('li')).toHaveCount(20)
+
+    await page.goto('/e2e/product-map?type=security')
+    await expect(list.locator('li')).toHaveCount(1)
+    await expect(list).toContainText('Agent can read another org’s context')
+
+    await page.goto('/e2e/product-map?area=back-office')
+    await expect(list.locator('li')).toHaveCount(8)
+  })
+
+  // Freshness comes from the last mention. A frame nobody woke for two cycles
+  // is dormant, and there is no browsable list of dormant frames (ADR 0024).
+  test('marks how top of mind each frame is, and leaves dormant ones out', async ({ page }) => {
+    const list = page.getByRole('region', { name: 'Frames' })
+    await expect(list.locator('li').first()).toContainText('Top of mind')
+    await expect(list).not.toContainText('Contract dates parse in the wrong locale')
+  })
+
+  // A bubble's tooltip lists its frames, five at a time, so a person can open
+  // one without zooming in.
+  test('pages through the frames of a bubble and opens one', async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 700 })
+    await page.goto('/e2e/product-map')
+    await page.getByRole('button', { name: 'Back office, 8 frames. Zoom in.' }).hover()
+
+    await expect(page.getByText('1–5 of 8')).toBeVisible()
+    await page.getByRole('button', { name: 'Next frames' }).click()
+    await expect(page.getByText('6–8 of 8')).toBeVisible()
+    await page.getByRole('button', { name: /Reconciliation hides which source won/ }).click()
+
+    await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f14')
   })
 })

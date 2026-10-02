@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 
+import { FilteredFrames } from '@/app/[slug]/product/frame-filters'
+import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import {
   DEFAULT_LENS,
@@ -10,7 +12,7 @@ import {
   type HeatLens,
 } from '@/lib/product-map-engine'
 
-import { AREAS, CYCLES, FRAMES, SHAPES, TODAY } from './fixture'
+import { AREAS, CYCLES, FRAMES, SHAPES, TODAY, USERS } from './fixture'
 
 const LENS_LABELS: Record<HeatLens, string> = {
   all: 'Everyone',
@@ -58,8 +60,6 @@ export default function ProductMapE2EPage() {
         ))}
       </div>
 
-      <MapCanvas areas={model.areas} onOpenFrame={setOpened} />
-
       <p data-testid="opened-frame" className="text-sm text-muted-foreground">
         {opened ? `Opened: ${opened}` : 'No frame open'}
       </p>
@@ -68,6 +68,11 @@ export default function ProductMapE2EPage() {
         {model.pins.filter((p) => p.passesLens).length} on the map ·{' '}
         {model.unmapped.length} unmapped · {model.resolved.length} resolved
       </p>
+
+      <OrganizationUsersProvider organizationUsers={USERS}>
+        <MapCanvas areas={model.areas} onOpenFrame={setOpened} />
+        <FilteredFrames pins={[...model.pins, ...model.resolved]} areas={model.areas} />
+      </OrganizationUsersProvider>
     </main>
   )
 }

@@ -12,6 +12,7 @@ import type {
 import type {
   Area,
   Frame,
+  FrameBrief,
   FrameOutcome,
   FramePointer,
   FrameReport,
@@ -1189,6 +1190,7 @@ type FrameFields = {
   problem: string
   appetite: string
   business_case: string
+  announcement: string
   /** One line each. The writer mints the ids, so no caller invents one. */
   outcomes: string[]
   areaId: string
@@ -1260,6 +1262,7 @@ export async function upsertFrame(
         problem: params.problem ?? '',
         appetite: params.appetite ?? '',
         business_case: params.business_case ?? '',
+        ...(params.announcement?.trim() ? { announcement: params.announcement } : {}),
         ...(params.areaId ? { areaId: params.areaId } : {}),
         ...(owner ? { owner } : {}),
         ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
@@ -1293,6 +1296,7 @@ export async function upsertFrame(
     setOrClear(existing, 'areaId', params.areaId)
     setOrClear(existing, 'owner', params.owner)
     setOrClear(existing, 'originFrameId', params.originFrameId)
+    setOrClear(existing, 'announcement', params.announcement)
   })
 
   if (notFound) throw new Error(`Frame not found: "${id}"`)
@@ -1444,6 +1448,55 @@ export async function wakeFrame(
 
   if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
   return { frameId: params.frameId, wokenOn }
+}
+
+/**
+ * Leave a brief on a frame: where it stands and the next step (ADR 0029).
+ *
+ * This writes ONE field and replaces the whole brief, so an old "watch" line
+ * never survives under a new headline. It does not wake the frame: a brief
+ * restates the record and is not a mention of the problem (ADR 0024).
+ */
+export async function writeBrief(
+  roomId: string,
+  params: {
+    frameId: string
+    headline: string
+    whereWeAre: string
+    nextStep: string
+    nextStepOwner?: string
+    watch?: string
+    writtenBy: string
+  }
+): Promise<{ frameId: string; writtenOn: string }> {
+  const headline = params.headline.trim()
+  const nextStep = params.nextStep.trim()
+  if (!headline) throw new Error('A brief needs a headline.')
+  if (!nextStep) throw new Error('A brief needs a next step.')
+
+  const writtenOn = getTeamToday(new Date())
+  const brief: FrameBrief = {
+    headline,
+    where_we_are: params.whereWeAre.trim(),
+    next_step: nextStep,
+    ...(params.nextStepOwner?.trim() ? { next_step_owner: params.nextStepOwner.trim() } : {}),
+    ...(params.watch?.trim() ? { watch: params.watch.trim() } : {}),
+    written_by: params.writtenBy,
+    written_on: writtenOn,
+  }
+  let notFound = false
+
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    if (!existing) {
+      notFound = true
+      return
+    }
+    existing.set('brief', brief)
+  })
+
+  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
+  return { frameId: params.frameId, writtenOn }
 }
 
 /**

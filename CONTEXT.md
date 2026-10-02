@@ -127,11 +127,19 @@ _Avoid_: Checklist, requirement, blocker
 
 **Frame**’s text fields — **Problem**, **Appetite**, **Business case**:
 **Problem** says what hurts, or what value sits unclaimed. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. The frame also holds its **Outcomes**.
-_Avoid_: Brief, requirements, spec, PRD, estimate (for appetite)
+_Avoid_: Requirements, spec, PRD, estimate (for appetite)
 
 **Outcome**:
 One observable change the frame says must be true afterwards. Each outcome is **one item** on the frame, because a shape is checked against them one at a time. An outcome states a change in the world, never delivered functionality: "a failed import tells the importer why" is an outcome, "the user can filter the table" is a mechanism. Never invent a number. If no metric exists, write the observable change and stop. Framing decides the outcomes, not shaping, so two shapes that attack one frame chase the same win.
 _Avoid_: Goal, success metric, KPI, acceptance criteria, requirement
+
+**Brief**:
+A short written answer to "where is this frame, and what comes next?". An agent such as Paulo writes it through `map_write_brief`. A brief holds a headline, a paragraph on where the frame stands, one next step, an optional owner for that step, an optional warning, the writer, and the date. The frame page shows the last brief with its date. Nobody asks for a brief live from the page. To get a new one, a person starts a Claude chat with `/paulo` and the frame id. Each write replaces the whole brief. Writing a brief does not **wake** the frame ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
+_Avoid_: Summary, status, digest
+
+**Release announcement**:
+The note that customers would read after the problem is solved. The team writes it as a draft when it frames the problem, long before anything ships. The draft says in the customer's words what changes for them, never how it was built. The frame page marks it as a draft until the frame is **released**. It is free text on the frame, written in the frame dialog or through `map_upsert_frame`.
+_Avoid_: Changelog, release note (that is the Notion record of a shipped release), press release
 
 **Sharp**:
 A frame with a problem, an **Appetite** and at least one **Outcome**. A frame that has fewer is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp frame can be bet on**, so nobody bets on a frame that never says what would change.
@@ -166,12 +174,20 @@ _Avoid_: Filter (too general), segment
 To reset a frame's freshness clock. Three things wake a frame: a new **Report**, a mention in a transcript sent through `map_wake_frame`, and an explicit "still hurts" click. Opening a frame does not wake it. Work on a linked **Shape** does not wake it either (see [ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)).
 _Avoid_: Bump, touch, refresh, revive
 
+**Freshness**:
+How much people still talk about a frame, read from the time since its last **Wake**. The pin shows it as opacity. The **Frame list** shows it as one of three levels. **Top of mind** is a mention in about the last two or three weeks. **Cooling** is a mention within one cycle. **Fading** is anything older, until the frame goes **Dormant**. The levels are cut points on the pin opacity, so the map and the list always agree.
+_Avoid_: Priority, score, hotness
+
+**Frame list**:
+The list of open frames that floats over the Product Map and over each area page. It has filters for area, kind, type, state, owner, report source and freshness. The same filters shape the map, so a pin is always a row. The filters live in the URL, so a filtered view is a link that people can share. The default order is top of mind first, then the most reported. The list never shows a **Dormant** frame ([ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)). In cooldown, the capped review queue of that ADR shows under the list, in the same panel, as its own section.
+_Avoid_: Backlog, queue, board
+
 **Dormant**:
 A frame that nobody has woken for two cycles. A dormant frame leaves the Product Map view. It is not deleted and it keeps every field and every report. A mention wakes it back onto the map. Reaching a dormant frame needs a filtered query. There is no browsable list of them, by design.
 _Avoid_: Archived (reserved for cycles), fog (reserved by the wayfinder skill), stale, closed, backlog
 
 **Unmapped**:
-The holding area for a frame that belongs to no **Area**. Capture is cheap, so a frame can arrive with no home. The same idea as an **Unscoped task** ([ADR 0018](docs/adr/0018-kanban-is-a-view-not-an-entity.md)).
+The holding area for a frame that belongs to no **Area**. Capture is cheap, so a frame can arrive with no home. The same idea as an **Unscoped task** ([ADR 0018](docs/adr/0018-kanban-is-a-view-not-an-entity.md)). Unmapped is a special area. Nobody draws it on the land, but it has an area page like the others. A person files a frame into an area from that page ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
 _Avoid_: Inbox, triage, uncategorized
 
 **Resolve**:
@@ -209,7 +225,7 @@ _Avoid_: Status (ambiguous — see Flagged ambiguities), framing (a **Frame stat
 
 **Frame as bet**:
 The copy of a **Frame**'s problem text, taken at the moment the bet was made and stored on the **Shape** as `frame_problem`. The frame on the map keeps changing. This copy does not, so a past cycle always shows what the team committed to (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)). A shape also points home through `frame_id`.
-_Avoid_: Frame (unqualified — that is the living frame on the map), brief, requirements, spec, PRD
+_Avoid_: Frame (unqualified — that is the living frame on the map), requirements, spec, PRD
 
 **Outcome**:
 What success looks like for a **Shape**, stored as `frame_outcome`. Outcome is a product of shaping, so a **Frame** never holds one. "Frame Go" means the shape has both a **Frame as bet** and an outcome.

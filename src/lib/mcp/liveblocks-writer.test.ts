@@ -35,6 +35,7 @@ import {
   attachReport,
   linkPointer,
   wakeFrame,
+  writeBrief,
   resolveFrame,
   deleteFrame,
   deleteArea,
@@ -1787,6 +1788,23 @@ describe('upsertFrame', () => {
     expect(frame.get('owner')).toBe('user_9')
   })
 
+  // The announcement is a partial field like the others (ADR 0011): omitted
+  // leaves it alone, "" clears it.
+  it('writes the release announcement, keeps it when omitted, and clears it on ""', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const frame = () => storage.frames.find(() => true)!
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', announcement: 'Imports now tell you why they failed.' })
+    expect(frame().get('announcement')).toBe('Imports now tell you why they failed.')
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '3 weeks' })
+    expect(frame().get('announcement')).toBe('Imports now tell you why they failed.')
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', announcement: '' })
+    expect(frame().get('announcement')).toBeUndefined()
+  })
+
   it('throws when the frame id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     setupStorage({ frames: [makeFrameItem()] })
@@ -2126,6 +2144,86 @@ describe('wakeFrame', () => {
 
     expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
     expect(result.wokenOn).toBe('2026-09-02')
+  })
+})
+
+describe('writeBrief', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const BRIEF = {
+    frameId: 'f1',
+    headline: 'Building this cycle',
+    whereWeAre: 'The shape is over the hill.',
+    nextStep: 'Link the pull request.',
+    nextStepOwner: 'user_9',
+    watch: 'Thread replies have no outcome.',
+    writtenBy: 'paulo',
+  }
+
+  it('leaves the brief on the frame, dated today', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    const result = await writeBrief(MAP_ROOM, BRIEF)
+
+    expect(storage.frames.find(() => true)!.get('brief')).toEqual({
+      headline: 'Building this cycle',
+      where_we_are: 'The shape is over the hill.',
+      next_step: 'Link the pull request.',
+      next_step_owner: 'user_9',
+      watch: 'Thread replies have no outcome.',
+      written_by: 'paulo',
+      written_on: result.writtenOn,
+    })
+    expect(result.writtenOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  // Replaced whole, so an old warning never sits under a new headline.
+  it('replaces the previous brief, and drops the lines the new one omits', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      frames: [makeFrameItem({ brief: { headline: 'old', watch: 'old warning' } })],
+    })
+
+    await writeBrief(MAP_ROOM, { ...BRIEF, watch: undefined, nextStepOwner: '' })
+
+    const brief = storage.frames.find(() => true)!.get('brief') as Record<string, unknown>
+    expect(brief.headline).toBe('Building this cycle')
+    expect(brief).not.toHaveProperty('watch')
+    expect(brief).not.toHaveProperty('next_step_owner')
+  })
+
+  // A brief is not a mention of the problem (ADR 0024), and it must
+  // never erase the frame it describes.
+  it('does not wake the frame, and leaves every other field alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await writeBrief(MAP_ROOM, BRIEF)
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+    expect(frame.get('problem')).toBe('Imports fail silently')
+    expect(frame.get('owner')).toBe('user_9')
+    expect(frame.get('reports')).toHaveLength(1)
+    expect(frame.get('pointers')).toHaveLength(1)
+  })
+
+  it('refuses a brief with no headline or no next step', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(writeBrief(MAP_ROOM, { ...BRIEF, headline: ' ' })).rejects.toThrow('headline')
+    await expect(writeBrief(MAP_ROOM, { ...BRIEF, nextStep: '' })).rejects.toThrow('next step')
+  })
+
+  it('throws when the frame id is unknown', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(writeBrief(MAP_ROOM, { ...BRIEF, frameId: 'nope' })).rejects.toThrow(
+      'Frame not found: "nope"'
+    )
   })
 })
 

@@ -53,6 +53,7 @@ import {
   attachReport,
   linkPointer,
   wakeFrame,
+  writeBrief,
   resolveFrame,
   deleteFrame,
   deleteArea,
@@ -720,6 +721,37 @@ export async function handleWakeFrame(
   }
 }
 
+export async function handleWriteBrief(
+  orgId: string,
+  params: {
+    frame_id?: string
+    headline?: string
+    where_we_are?: string
+    next_step?: string
+    next_step_owner?: string
+    watch?: string
+    written_by: string
+  }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  try {
+    const result = await writeBrief(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      headline: params.headline ?? '',
+      whereWeAre: params.where_we_are ?? '',
+      nextStep: params.next_step ?? '',
+      nextStepOwner: params.next_step_owner,
+      watch: params.watch,
+      writtenBy: params.written_by,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
 export async function handleUpsertFrame(
   orgId: string,
   params: {
@@ -729,6 +761,7 @@ export async function handleUpsertFrame(
     problem?: string
     appetite?: string
     business_case?: string
+    announcement?: string
     outcomes?: string[]
     area_id?: string
     owner?: string
@@ -757,6 +790,7 @@ export async function handleUpsertFrame(
       problem: params.problem,
       appetite: params.appetite,
       business_case: params.business_case,
+      announcement: params.announcement,
       outcomes: params.outcomes,
       areaId: params.area_id,
       owner: params.owner,
@@ -1925,6 +1959,12 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe('Free text: who is affected, what it is worth, why now.'),
+      announcement: z
+        .string()
+        .optional()
+        .describe(
+          'The release announcement customers would read once the problem is solved, written as a draft before anything is built. Say what changes for the customer, in their words, never how it was built. Pass "" to clear.'
+        ),
       outcomes: z
         .array(z.string())
         .optional()
@@ -1960,6 +2000,7 @@ export function registerCyclesTools(server: any): void {
         kind?: string
         appetite?: string
         business_case?: string
+        announcement?: string
         outcomes?: string[]
         area_id?: string
         owner?: string
@@ -2110,6 +2151,65 @@ export function registerCyclesTools(server: any): void {
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
       return handleWakeFrame(resolved.org.id, params)
+    }
+  )
+
+  defineTool(
+    server,
+    'map_write_brief',
+    'Leave a brief on a frame: one headline saying where it stands, a short "where we are", and the ONE next step that moves it to its next state. The frame page shows the last brief with its date, and nobody can ask for one live, so write it from what is on record: read the frame with map_list_frames, its shapes with get_pitch, and its reports and pointers. State numbers you read and never invent one. This REPLACES the whole brief, so pass every line you want kept. It writes one field and does not wake the frame.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame this brief describes.'),
+      headline: z.string().describe('One line: where the frame stands, in plain words.'),
+      where_we_are: z
+        .string()
+        .optional()
+        .describe('Two or three sentences: the shape and its cycle, the evidence, what changed lately.'),
+      next_step: z.string().describe('The one move that gets the frame to its next state.'),
+      next_step_owner: z
+        .string()
+        .optional()
+        .describe('Clerk user id of the person who takes the next step. list_members names them.'),
+      watch: z
+        .string()
+        .optional()
+        .describe('Something nobody asked about that somebody should know. Omit when there is nothing.'),
+      written_by: z
+        .string()
+        .optional()
+        .describe('Your own agent name, e.g. "paulo". Defaults to the calling user.'),
+    },
+    {
+      title: 'Leave a brief on a frame',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        ...params
+      }: {
+        org?: string
+        frame_id?: string
+        headline?: string
+        where_we_are?: string
+        next_step?: string
+        next_step_owner?: string
+        watch?: string
+        written_by?: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleWriteBrief(resolved.org.id, {
+        ...params,
+        written_by: params.written_by?.trim() || getUserId(extra),
+      })
     }
   )
 

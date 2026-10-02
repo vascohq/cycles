@@ -6,6 +6,7 @@
 import type {
   Area,
   Frame,
+  FrameBrief,
   FrameKind,
   FrameOutcome,
   FramePointer,
@@ -69,6 +70,16 @@ export type FrameState =
   | 'monitoring'
   | 'resolved'
 
+/** Every Frame state, in the order a frame lives through them. */
+export const FRAME_STATES: readonly FrameState[] = [
+  'rough',
+  'candidate',
+  'in_flight',
+  'released',
+  'monitoring',
+  'resolved',
+]
+
 /** A Shape's lifecycle phase. Mirrors the cycle model's Stage (ADR 0023). */
 export type ShapeStage = 'shaping' | 'building' | 'done'
 
@@ -86,6 +97,10 @@ export type LinkedShape = {
   cycleTitle: string
   /** True when this shape sits in the cycle that is current today. */
   currentCycle: boolean
+  /** The squad on it this cycle. Absent when unassigned, or the squad is gone. */
+  squad?: { name: string; color: string }
+  /** The pitch's Notion doc. Absent when nobody linked one. */
+  notionUrl?: string
 }
 
 /** One link in a frame's origin chain: the frame whose monitoring surfaced it. */
@@ -142,11 +157,19 @@ export function pinOutline(shapes: LinkedShape[]): PinOutline {
 export function linkedShapesFrom(
   rooms: {
     cycle: CycleWindow
-    shapes: { id: string; title: string; stage: string; frame_id?: string }[]
+    shapes: {
+      id: string
+      title: string
+      stage: string
+      frame_id?: string
+      squadId?: string
+      notion_url?: string
+    }[]
+    squads?: SquadSummary[]
   }[],
   today: string
 ): LinkedShape[] {
-  return rooms.flatMap(({ cycle, shapes }) => {
+  return rooms.flatMap(({ cycle, shapes, squads = [] }) => {
     const currentCycle =
       !!cycle.start_date &&
       !!cycle.end_date &&
@@ -164,8 +187,18 @@ export function linkedShapesFrom(
         cycleSlug: cycle.slug,
         cycleTitle: cycle.title || cycle.slug,
         currentCycle,
+        ...squadOf(squads, shape.squadId),
+        ...(shape.notion_url ? { notionUrl: shape.notion_url } : {}),
       }))
   })
+}
+
+/** What the Product Map needs of a squad from a cycle room. */
+type SquadSummary = { id: string; name: string; color: string }
+
+function squadOf(squads: SquadSummary[], id?: string) {
+  const squad = id ? squads.find((s) => s.id === id) : undefined
+  return squad ? { squad: { name: squad.name, color: squad.color } } : {}
 }
 
 function isShapeStage(value: unknown): value is ShapeStage {
@@ -467,6 +500,10 @@ export type RenderedPin = {
   problem: string
   appetite: string
   businessCase: string
+  /** The draft release announcement, or '' when nobody wrote one. */
+  announcement: string
+  /** The last brief somebody left on the frame, or null before the first. */
+  brief: FrameBrief | null
   /** What must be true afterwards. Blank lines never reach here. */
   outcomes: FrameOutcome[]
   /** Clerk user id of the frame owner, or null when nobody holds it. */
@@ -662,6 +699,28 @@ export function renderProductMap(input: {
     resolved,
     dormantReview,
   }
+}
+
+/**
+ * One frame, whatever its state. The frame page has a URL, so it must open a
+ * frame the map no longer shows — dormant or resolved — and opening it never
+ * wakes it (ADR 0024). null when no frame has that id.
+ */
+export function renderFrame(
+  input: Parameters<typeof renderProductMap>[0],
+  frameId: string
+): RenderedPin | null {
+  const frame = input.frames.find((f) => f.id === frameId)
+  if (!frame) return null
+  return renderPin(
+    frame,
+    input.today,
+    (input.shapes ?? []).filter((s) => s.frameId === frameId),
+    input.lens ?? DEFAULT_LENS,
+    input.cycles ?? [],
+    { ...DEFAULT_FRESHNESS, ...input.freshness },
+    input.frames
+  )
 }
 
 function groupBy(
@@ -875,6 +934,14 @@ function bubbleFor(area: RenderedArea): CanvasNode {
 }
 
 /** Every awake pin under an area, its children included. */
+/** Every area in the tree, parents before children, with how deep each sits. */
+export function flattenAreas(
+  areas: RenderedArea[],
+  depth = 0
+): { area: RenderedArea; depth: number }[] {
+  return areas.flatMap((area) => [{ area, depth }, ...flattenAreas(area.children, depth + 1)])
+}
+
 export function descendantPins(area: RenderedArea): RenderedPin[] {
   return [...area.pins, ...area.children.flatMap(descendantPins)]
 }
@@ -911,6 +978,8 @@ function renderPin(
     problem: frame.problem,
     appetite: frame.appetite ?? '',
     businessCase: frame.business_case ?? '',
+    announcement: frame.announcement ?? '',
+    brief: frame.brief ?? null,
     outcomes: statedOutcomes(frame),
     owner: frame.owner ?? null,
     color: KIND_COLORS[kind],

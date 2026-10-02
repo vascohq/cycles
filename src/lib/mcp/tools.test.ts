@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleWakeFrame, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleWakeFrame, handleWriteBrief, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -34,6 +34,7 @@ vi.mock('./liveblocks-writer', () => ({
   attachReport: vi.fn(),
   linkPointer: vi.fn(),
   wakeFrame: vi.fn(),
+  writeBrief: vi.fn(),
   resolveFrame: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
@@ -60,7 +61,7 @@ import {
   resolvePitch,
   getProductMapStorage,
 } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame, resolveFrame } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame, writeBrief, resolveFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -1387,6 +1388,7 @@ describe('map_upsert_frame schema', () => {
     expect(parsed.area_id).toBeUndefined()
     expect(parsed.owner).toBeUndefined()
     expect(parsed.origin_frame_id).toBeUndefined()
+    expect(parsed.announcement).toBeUndefined()
   })
 
   it('refuses a Kind or a Type outside the vocabulary', () => {
@@ -1729,6 +1731,51 @@ describe('handleWakeFrame', () => {
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toBe('Frame not found: "nope"')
+  })
+})
+
+describe('handleWriteBrief', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const mockWriteBrief = vi.mocked(writeBrief)
+
+  it('leaves a brief on the frame, naming who wrote it', async () => {
+    mockWriteBrief.mockResolvedValue({ frameId: 'f1', writtenOn: '2026-09-03' })
+
+    const result = await handleWriteBrief(ORG_ID, {
+      frame_id: 'f1',
+      headline: 'Building this cycle',
+      where_we_are: 'Over the hill.',
+      next_step: 'Link the pull request.',
+      written_by: 'paulo',
+    })
+
+    expect(mockWriteBrief).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      frameId: 'f1',
+      headline: 'Building this cycle',
+      whereWeAre: 'Over the hill.',
+      nextStep: 'Link the pull request.',
+      nextStepOwner: undefined,
+      watch: undefined,
+      writtenBy: 'paulo',
+    })
+    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', writtenOn: '2026-09-03' })
+  })
+
+  it('rejects a brief with no frame, and writes nothing', async () => {
+    const result = await handleWriteBrief(ORG_ID, { headline: 'x', next_step: 'y', written_by: 'paulo' })
+
+    expect(result.isError).toBe(true)
+    expect(mockWriteBrief).not.toHaveBeenCalled()
+  })
+
+  it('reports a writer failure as an error, not a success', async () => {
+    mockWriteBrief.mockRejectedValue(new Error('A brief needs a headline.'))
+
+    const result = await handleWriteBrief(ORG_ID, { frame_id: 'f1', written_by: 'paulo' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('A brief needs a headline.')
   })
 })
 
