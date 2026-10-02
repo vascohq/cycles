@@ -11,7 +11,7 @@ const nextConfig = {
     return [
       {
         // Not /e2e: the fixture routes keep their own path.
-        source: '/:slug((?!e2e)[^/]+)/product-map/:path*',
+        source: '/:slug((?!e2e/)[^/]+)/product-map/:path*',
         destination: '/:slug/product/:path*',
         permanent: true,
       },

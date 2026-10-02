@@ -4,12 +4,17 @@ test.describe('Frame page', () => {
   test('shows the brief Paulo left, and where the frame stands', async ({ page }) => {
     await page.goto('/e2e/product-map/frames/f1')
 
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Capture from Slack loses the thread link')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'Capture from Slack loses the thread link'
+    )
     await expect(page.getByText('Paulo left this on 2 Sept 2026')).toBeVisible()
     await expect(page.getByText('The fix is being built this cycle.')).toBeVisible()
     await expect(page.locator('[aria-current="step"]')).toContainText('In flight · Cycle 3')
     await expect(page.getByText('Capture squad').first()).toBeVisible()
-    await expect(page.getByRole('link', { name: /Open in Notion/ })).toHaveAttribute('href', 'https://notion.test/pitch')
+    await expect(page.getByRole('link', { name: /Open in Notion/ })).toHaveAttribute(
+      'href',
+      'https://notion.test/pitch'
+    )
   })
 
   // Nobody asks Paulo live: the button opens a new Claude chat with the frame typed in.
@@ -35,21 +40,27 @@ test.describe('Frame page', () => {
   test('links every part of the breadcrumb to its area page', async ({ page }) => {
     await page.goto('/e2e/product-map/frames/f1')
 
-    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' }).locator('a[href*="/product/areas/"]')
+    const crumbs = page
+      .getByRole('navigation', { name: 'Breadcrumb' })
+      .locator('a[href*="/product/areas/"]')
     await expect(crumbs).toHaveCount(3)
     await expect(crumbs.first()).toHaveAttribute('href', /\/product\/areas\/front-office$/)
     await expect(crumbs.last()).toHaveText('Slack / Teams')
     await expect(crumbs.last()).toHaveAttribute('href', /\/product\/areas\/slack$/)
   })
 
-  test('opens an area page with its sub-areas and only its own frames', async ({ page }) => {
+  test('opens an area page with its own frames, and the Area filter for its sub-areas', async ({
+    page,
+  }) => {
     await page.goto('/e2e/product-map/areas/front-office')
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Front office')
-    await expect(page.getByRole('link', { name: /External to Vasco/ })).toBeVisible()
+    await expect(page.getByRole('group', { name: 'Filters' })).toContainText('Area')
     const rows = page.getByRole('region', { name: 'Frames' }).locator('li')
     await expect(rows).toHaveCount(6)
-    await expect(page.getByRole('region', { name: 'Frames' })).not.toContainText('Batch writes drop the assignee')
+    await expect(page.getByRole('region', { name: 'Frames' })).not.toContainText(
+      'Batch writes drop the assignee'
+    )
   })
 
   // Unmapped is a special area: the holding area for frames with no home.
@@ -77,5 +88,29 @@ test.describe('Frame page', () => {
     const items = page.locator('ol.border-l li')
     await expect(items.first()).toContainText('24 Aug 2026')
     await expect(items.last()).toContainText('Cycle 3 started')
+  })
+
+  // One set of filters shapes the map and the list, so a pin is always a row.
+  test('filters the map and the list together', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 })
+    await page.goto('/e2e/product-map/workspace?type=security')
+
+    const list = page.getByRole('region', { name: 'Frames' })
+    await expect(list.locator('li')).toHaveCount(1)
+    const pins = page.locator(
+      'svg[aria-label="Product Map"] [role="button"]:not([aria-label$="Zoom in."])'
+    )
+    await expect(pins).toHaveCount(1)
+    await expect(pins.first()).toHaveAttribute('aria-label', 'Agent can read another org’s context')
+  })
+
+  test('hides the list to give the map the whole page, and brings it back', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 })
+    await page.goto('/e2e/product-map/workspace')
+
+    await page.getByRole('button', { name: 'Hide the list' }).click()
+    await expect(page.getByRole('region', { name: 'Frames' })).toHaveCount(0)
+    await page.getByRole('button', { name: /Frames · 20/ }).click()
+    await expect(page.getByRole('region', { name: 'Frames' }).locator('li')).toHaveCount(20)
   })
 })

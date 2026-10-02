@@ -1454,8 +1454,8 @@ export async function wakeFrame(
  * Leave a brief on a frame: where it stands and the next step (ADR 0029).
  *
  * This writes ONE field and replaces the whole brief, so an old "watch" line
- * never survives under a new headline. It does not wake the frame: a summary
- * is not a mention of the problem (ADR 0024).
+ * never survives under a new headline. It does not wake the frame: a brief
+ * restates the record and is not a mention of the problem (ADR 0024).
  */
 export async function writeBrief(
   roomId: string,

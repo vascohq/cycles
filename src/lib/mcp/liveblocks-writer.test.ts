@@ -2193,7 +2193,7 @@ describe('writeBrief', () => {
     expect(brief).not.toHaveProperty('next_step_owner')
   })
 
-  // A summary is not a mention of the problem (ADR 0024), and a brief must
+  // A brief is not a mention of the problem (ADR 0024), and it must
   // never erase the frame it describes.
   it('does not wake the frame, and leaves every other field alone', async () => {
     mockGetRoom.mockResolvedValue({} as never)

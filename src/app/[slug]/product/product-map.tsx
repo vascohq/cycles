@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useContext, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
 import { ClientSideSuspense } from '@liveblocks/react'
 import { LiveObject } from '@liveblocks/client'
 import { useAuth } from '@clerk/nextjs'
@@ -27,7 +26,6 @@ import {
   KIND_COLORS,
   DEFAULT_LENS,
   FRAME_KINDS,
-  descendantPins,
   FRAME_TYPES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
@@ -43,9 +41,12 @@ import { MapCanvas } from '@/components/product-map/map-canvas'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
-import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from './labels'
-import { UNMAPPED_AREA, frameHref } from './links'
-import { AreaChip, FrameList } from './frame-list'
+import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
+import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
+import type { LucideIcon } from 'lucide-react'
+import { useOpenFramePage } from './links'
+import { FilteredFrames } from './frame-filters'
+import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
 import {
   OrganizationUsersProvider,
   useOrganizationUsers,
@@ -100,26 +101,30 @@ function PillSelect({
   onChange,
   label,
   options,
-  dot,
 }: {
   value: string
   onChange: (value: string) => void
   label: string
-  options: { value: string; label: string }[]
-  dot?: string
+  options: { value: string; label: string; icon?: LucideIcon; color?: string }[]
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className={PILL} aria-label={label}>
-        {dot && (
-          <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: dot }} />
-        )}
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value}>
-            {o.label}
+            <span className="flex items-center gap-1.5">
+              {o.icon && (
+                <o.icon
+                  aria-hidden
+                  className={`h-3.5 w-3.5 ${o.color ? '' : 'text-muted-foreground'}`}
+                  style={o.color ? { color: o.color } : undefined}
+                />
+              )}
+              {o.label}
+            </span>
           </SelectItem>
         ))}
       </SelectContent>
@@ -130,8 +135,17 @@ function PillSelect({
 /** One wording, so the field reads the same whether a frame is being made or read. */
 const WHY_LABEL = 'Why does this matter to Vasco?'
 
-const KIND_OPTIONS = FRAME_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))
-const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))
+const KIND_OPTIONS = FRAME_KINDS.map((k) => ({
+  value: k,
+  label: KIND_LABELS[k],
+  icon: KIND_ICONS[k],
+  color: KIND_COLORS[k],
+}))
+const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({
+  value: t,
+  label: TYPE_LABELS[t],
+  icon: TYPE_ICONS[t],
+}))
 
 /** A borderless title that reads as a heading, not an input. */
 const TITLE_INPUT =
@@ -151,13 +165,6 @@ export const OpenFrameContext = createContext<(frameId: string) => void>(() => {
 
 /** The cycles a frame can be bet into. Read once, at the page boundary. */
 export const CyclesContext = createContext<CycleWindow[]>([])
-
-
-export function useOpenFramePage(): (frameId: string) => void {
-  const router = useRouter()
-  const { slug } = useParams<{ slug: string }>()
-  return (frameId) => router.push(frameHref(slug, frameId))
-}
 
 /**
  * `full` is the Product Map's own page: the land, plus capture, plus every list
@@ -195,7 +202,9 @@ export function ProductMap({
         initialPresence={{}}
         initialStorage={productMapInitialStorage()}
       >
-        <ClientSideSuspense fallback={<ProductMapSkeleton />}>
+        <ClientSideSuspense
+          fallback={variant === 'canvas' ? <ProductMapSkeleton /> : <WorkspaceSkeleton />}
+        >
           {() => (
             <ProductMapView
               cycles={cycles}
@@ -281,44 +290,51 @@ function ProductMapView({
     )
   }
 
+  const capture = <CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />
+  const pins = [...model.pins, ...model.resolved]
+  const dormant = <DormantReview pins={model.dormantReview} options={options} />
+
+  // With land, the map is the page and everything else floats over it.
+  if (model.areas.length > 0) {
+    return (
+      <OpenFrameContext.Provider value={openFrame}>
+        <CyclesContext.Provider value={cycles}>
+          <MapWorkspace
+            title={<h1 className="font-display text-xl">Product Map</h1>}
+            actions={capture}
+            areas={model.areas}
+            pins={pins}
+            onOpenFrame={openFrame}
+            footer={dormant}
+            withUnmapped
+          />
+        </CyclesContext.Provider>
+      </OpenFrameContext.Provider>
+    )
+  }
+
   return (
     <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
-        <Shell action={<CaptureMenu areas={options} areaOwners={areaOwners(model.areas)} />}>
-          {model.pins.length === 0 && model.areas.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
-              <p className="font-display text-lg">No land yet</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                The map is drawn by an agent. Describe your product to Claude
-                and it draws the land through the Cycles MCP server: the areas,
-                the islands they sit in, and the coastline round them.
-              </p>
-              <div className="mt-1 w-full max-w-lg text-left">
-                <AskClaude drawTheMap />
-              </div>
+        <Shell action={capture}>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
+            <p className="font-display text-lg">No land yet</p>
+            <p className="max-w-md text-sm text-muted-foreground">
+              The map is drawn by an agent. Describe your product to Claude
+              and it draws the land through the Cycles MCP server: the areas,
+              the islands they sit in, and the coastline round them.
+            </p>
+            <div className="mt-1 w-full max-w-lg text-left">
+              <AskClaude drawTheMap />
             </div>
-          )}
-          {model.areas.length > 0 && <MapCanvas areas={model.areas} onOpenFrame={openFrame} />}
-          {(model.areas.length > 0 || model.unmapped.length > 0) && (
-            <div className="mt-4 flex flex-wrap gap-2" aria-label="Areas">
-              {model.areas.map((area) => (
-                <AreaChip key={area.areaId} areaId={area.areaId} name={area.name} count={descendantPins(area).length} />
-              ))}
-              {/* Unmapped is the one area nobody draws: a holding area, so its
-                  chip is dashed. Its page is where a frame gets filed. */}
-              <AreaChip areaId={UNMAPPED_AREA} name="Unmapped" count={model.unmapped.length} special />
-            </div>
-          )}
-          {/* The keyboard and screen-reader way into every frame. Chrome does
-              not expose an SVG group to the accessibility tree, so the land
-              alone would leave a mapped frame unreachable. */}
-          {model.pins.length + model.resolved.length > 0 && (
+          </div>
+          {/* Frames can arrive before the land does. They are still reachable. */}
+          {pins.length > 0 && (
             <div className="mt-8">
-              <h2 className="mb-3 font-display text-lg">Frames</h2>
-              <FrameList pins={[...model.pins, ...model.resolved]} areas={model.areas} />
+              <FilteredFrames pins={pins} areas={model.areas} />
             </div>
           )}
-          <DormantReview pins={model.dormantReview} options={options} />
+          {dormant}
         </Shell>
       </CyclesContext.Provider>
     </OpenFrameContext.Provider>
@@ -574,7 +590,6 @@ export function FrameDetail({
             onChange={set('kind')}
             label="Kind"
             options={KIND_OPTIONS}
-            dot={pin.color}
           />
           <PillSelect
             value={pin.type}
@@ -1523,7 +1538,6 @@ function CaptureForm({
             onChange={(v) => setKind(v as FrameKind)}
             label="Kind"
             options={KIND_OPTIONS}
-            dot={KIND_COLORS[kind]}
           />
           <PillSelect
             value={type}
@@ -1618,12 +1632,9 @@ function CaptureForm({
   )
 }
 
+/** The embedded land on the cycles page, while the room loads. */
 function ProductMapSkeleton() {
-  return (
-    <Shell>
-      <div className="h-48 animate-pulse rounded-xl border border-dashed bg-muted/40" />
-    </Shell>
-  )
+  return <div className="h-[min(70vh,620px)] min-h-[360px] animate-pulse rounded-xl border bg-muted/30" />
 }
 
 /**

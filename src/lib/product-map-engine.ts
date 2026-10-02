@@ -70,6 +70,16 @@ export type FrameState =
   | 'monitoring'
   | 'resolved'
 
+/** Every Frame state, in the order a frame lives through them. */
+export const FRAME_STATES: readonly FrameState[] = [
+  'rough',
+  'candidate',
+  'in_flight',
+  'released',
+  'monitoring',
+  'resolved',
+]
+
 /** A Shape's lifecycle phase. Mirrors the cycle model's Stage (ADR 0023). */
 export type ShapeStage = 'shaping' | 'building' | 'done'
 
@@ -155,7 +165,7 @@ export function linkedShapesFrom(
       squadId?: string
       notion_url?: string
     }[]
-    squads?: { id: string; name: string; color: string }[]
+    squads?: SquadSummary[]
   }[],
   today: string
 ): LinkedShape[] {
@@ -183,7 +193,10 @@ export function linkedShapesFrom(
   })
 }
 
-function squadOf(squads: { id: string; name: string; color: string }[], id?: string) {
+/** What the Product Map needs of a squad from a cycle room. */
+type SquadSummary = { id: string; name: string; color: string }
+
+function squadOf(squads: SquadSummary[], id?: string) {
   const squad = id ? squads.find((s) => s.id === id) : undefined
   return squad ? { squad: { name: squad.name, color: squad.color } } : {}
 }
@@ -921,6 +934,14 @@ function bubbleFor(area: RenderedArea): CanvasNode {
 }
 
 /** Every awake pin under an area, its children included. */
+/** Every area in the tree, parents before children, with how deep each sits. */
+export function flattenAreas(
+  areas: RenderedArea[],
+  depth = 0
+): { area: RenderedArea; depth: number }[] {
+  return areas.flatMap((area) => [{ area, depth }, ...flattenAreas(area.children, depth + 1)])
+}
+
 export function descendantPins(area: RenderedArea): RenderedPin[] {
   return [...area.pins, ...area.children.flatMap(descendantPins)]
 }

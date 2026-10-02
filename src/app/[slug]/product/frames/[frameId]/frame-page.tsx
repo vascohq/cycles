@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ClientSideSuspense } from '@liveblocks/react'
-import { Check, ExternalLink, Link2, Megaphone, Pencil, Sparkles, TriangleAlert } from 'lucide-react'
+import {
+  Check,
+  ExternalLink,
+  Link2,
+  Megaphone,
+  Pencil,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react'
 import {
   ProductMapRoomProvider,
   productMapInitialStorage,
@@ -12,11 +20,12 @@ import {
 } from '@/product-map-room-context'
 import type { Area, Frame } from '@/product-map-liveblocks.config'
 import {
+  FRAME_STATES,
+  type FrameState,
   POINTER_KIND_LABELS,
   renderFrame,
   renderProductMap,
   type CycleWindow,
-  type FrameState,
   type LinkedShape,
   type RenderedPin,
 } from '@/lib/product-map-engine'
@@ -24,22 +33,17 @@ import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import {
   OrganizationUsersProvider,
+  useMember,
   useOrganizationUsers,
 } from '@/components/organization-users-context'
 import { UserAvatar } from '@/components/scope-card/assignee-picker'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  CyclesContext,
-  FrameDetail,
-  OpenFrameContext,
-  areaOptions,
-  useOpenFramePage,
-} from '../../product-map'
-import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '../../labels'
-import { Crumbs } from '../../areas/[areaId]/area-page'
-
-/** A frame's life, left to right. The page shows where it stands on this track. */
-const TRACK: FrameState[] = ['rough', 'candidate', 'in_flight', 'released', 'monitoring', 'resolved']
+import { CyclesContext, FrameDetail, OpenFrameContext, areaOptions } from '../../product-map'
+import { useOpenFramePage } from '../../links'
+import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
+import { Crumbs } from '../../crumbs'
+import { Missing } from '../../missing'
+import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
 
 /**
  * The frame on a page of its own, so it has a URL somebody can share. It reads
@@ -61,7 +65,11 @@ export function FramePage({
 }) {
   return (
     <OrganizationUsersProvider organizationUsers={organizationUsers}>
-      <ProductMapRoomProvider id={roomId} initialPresence={{}} initialStorage={productMapInitialStorage()}>
+      <ProductMapRoomProvider
+        id={roomId}
+        initialPresence={{}}
+        initialStorage={productMapInitialStorage()}
+      >
         <ClientSideSuspense fallback={<FramePageSkeleton />}>
           {() => <FramePageView frameId={frameId} cycles={cycles} shapes={shapes} />}
         </ClientSideSuspense>
@@ -107,13 +115,17 @@ export function FrameLayout({
     if (pin) document.title = `${pin.problem || 'Frame'} | Cycles`
   }, [pin?.problem]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!pin) return <NoFrame />
+  if (!pin) return <Missing what="frame" />
 
   return (
     <OpenFrameContext.Provider value={openFrame}>
       <CyclesContext.Provider value={cycles}>
-        <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-6">
-          <Breadcrumb areas={areas} areaId={pin.areaId} onEdit={editable ? () => setEditing(true) : undefined} />
+        <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8">
+          <Breadcrumb
+            areas={areas}
+            areaId={pin.areaId}
+            onEdit={editable ? () => setEditing(true) : undefined}
+          />
           {/* The same container and hero card as the Scope Map, so every page
               lines up under the header. */}
           <section className="flex flex-col gap-5 rounded-lg border bg-card p-6">
@@ -136,12 +148,15 @@ export function FrameLayout({
   )
 }
 
-function useMember(id: string | null | undefined) {
-  const users = useOrganizationUsers()
-  return id ? users.find((u) => u.userId === id) : undefined
-}
-
-function Breadcrumb({ areas, areaId, onEdit }: { areas: Area[]; areaId: string; onEdit?: () => void }) {
+function Breadcrumb({
+  areas,
+  areaId,
+  onEdit,
+}: {
+  areas: Area[]
+  areaId: string
+  onEdit?: () => void
+}) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
@@ -174,16 +189,26 @@ function Breadcrumb({ areas, areaId, onEdit }: { areas: Area[]; areaId: string; 
 function Header({ pin }: { pin: RenderedPin }) {
   const owner = useMember(pin.owner)
   // A frame can be attacked by more than one shape; the squads are the people on it now.
-  const squads = [...new Map(pin.shapes.filter((s) => s.squad).map((s) => [s.squad!.name, s.squad!])).values()]
+  const squads = [
+    ...new Map(pin.shapes.filter((s) => s.squad).map((s) => [s.squad!.name, s.squad!])).values(),
+  ]
   return (
     <div className="max-w-3xl">
       <h1 className="font-display text-3xl leading-tight">{pin.problem || 'Untitled frame'}</h1>
       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: pin.color }} />
+          <KindIcon kind={pin.kind} label={KIND_LABELS[pin.kind]} className="h-4 w-4" />
           {KIND_LABELS[pin.kind]}
         </span>
-        <span>{TYPE_LABELS[pin.type]}</span>
+        <span className="flex items-center gap-1.5">
+          <TypeIcon
+            type={pin.type}
+            color="currentColor"
+            label={TYPE_LABELS[pin.type]}
+            className="h-4 w-4"
+          />
+          {TYPE_LABELS[pin.type]}
+        </span>
         <span>Appetite: {pin.appetite || 'not set'}</span>
         <span className="flex items-center gap-1.5">
           Owner:{' '}
@@ -199,7 +224,8 @@ function Header({ pin }: { pin: RenderedPin }) {
         </span>
         {squads.map((squad) => (
           <span key={squad.name} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: squad.color }} /> {squad.name}
+            <span className="h-2 w-2 rounded-full" style={{ background: squad.color }} />{' '}
+            {squad.name}
           </span>
         ))}
         {!pin.sharp && <span className="rounded bg-muted px-1.5 text-xs">Rough</span>}
@@ -210,14 +236,23 @@ function Header({ pin }: { pin: RenderedPin }) {
 }
 
 function Track({ pin }: { pin: RenderedPin }) {
-  const at = TRACK.indexOf(pin.state)
+  // A frame's life, left to right. The page shows where it stands on it.
+  const at = FRAME_STATES.indexOf(pin.state)
   const current = pin.shapes.find((s) => s.stage !== 'done')
   return (
     <ol className="grid grid-cols-6 gap-1" aria-label="Frame state">
-      {TRACK.map((state, i) => (
-        <li key={state} className="flex flex-col gap-1.5" aria-current={i === at ? 'step' : undefined}>
-          <span className={`h-1.5 rounded-full ${i < at ? 'bg-foreground/70' : i === at ? 'bg-fuchsia-600' : 'bg-border'}`} />
-          <span className={`flex items-center gap-1 text-xs ${i === at ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+      {FRAME_STATES.map((state, i) => (
+        <li
+          key={state}
+          className="flex flex-col gap-1.5"
+          aria-current={i === at ? 'step' : undefined}
+        >
+          <span
+            className={`h-1.5 rounded-full ${i < at ? 'bg-foreground/30' : i === at ? 'bg-foreground' : 'bg-border'}`}
+          />
+          <span
+            className={`flex items-center gap-1 text-xs ${i === at ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+          >
             {i < at && <Check className="h-3 w-3" />}
             {STATE_LABELS[state]}
             {i === at && state === 'in_flight' && current && ` · ${current.cycleTitle}`}
@@ -249,7 +284,7 @@ function Brief({ pin }: { pin: RenderedPin }) {
       rel="noreferrer"
       className="flex shrink-0 items-center gap-1 self-start rounded-md border px-2 py-1 text-xs hover:bg-muted"
     >
-      <Sparkles className="h-3.5 w-3.5 text-fuchsia-600" /> {brief ? 'Ask Paulo again' : 'Ask Paulo'}
+      <Sparkles className="h-3.5 w-3.5" /> {brief ? 'Ask Paulo again' : 'Ask Paulo'}
       <ExternalLink className="h-3 w-3 opacity-60" />
     </a>
   )
@@ -258,7 +293,10 @@ function Brief({ pin }: { pin: RenderedPin }) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-dashed bg-background p-4 text-sm text-muted-foreground">
         <Sparkles className="h-5 w-5 shrink-0" />
-        <p className="flex-1">No brief yet. Ask Paulo to read the frame and leave one: where it stands and the next step.</p>
+        <p className="flex-1">
+          No brief yet. Ask Paulo to read the frame and leave one: where it stands and the next
+          step.
+        </p>
         {ask}
       </div>
     )
@@ -266,7 +304,7 @@ function Brief({ pin }: { pin: RenderedPin }) {
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-background p-4 shadow-sm ring-1 ring-border sm:flex-row">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900 dark:text-fuchsia-100">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
         <Sparkles className="h-4 w-4" />
       </span>
       <div className="flex-1">
@@ -274,7 +312,9 @@ function Brief({ pin }: { pin: RenderedPin }) {
           {writer?.name ?? capitalize(brief.written_by)} left this on {formatDate(brief.written_on)}
         </p>
         <p className="font-medium">{brief.headline}</p>
-        {brief.where_we_are && <p className="mt-1 text-sm text-muted-foreground">{brief.where_we_are}</p>}
+        {brief.where_we_are && (
+          <p className="mt-1 text-sm text-muted-foreground">{brief.where_we_are}</p>
+        )}
         <p className="mt-2 text-sm">
           <span className="font-semibold">To move on:</span> {brief.next_step}
           {nextOwner && <span className="text-muted-foreground"> ({nextOwner.name})</span>}
@@ -294,7 +334,7 @@ function Brief({ pin }: { pin: RenderedPin }) {
 const SHIPPED: FrameState[] = ['released', 'monitoring', 'resolved']
 
 /**
- * The release note customers would read once the problem is solved. Written
+ * The note customers would read once the problem is solved. Written
  * first, as a draft, so the frame says in the customer's words what solving it
  * means before anybody builds anything.
  */
@@ -304,11 +344,15 @@ function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
         <Megaphone className="h-5 w-5 shrink-0" />
         <p className="flex-1">
-          No release announcement yet. Write the note you would send customers once this is
-          solved. It shows what the fix means for them.
+          No release announcement yet. Write the note you would send customers once this is solved.
+          It shows what the fix means for them.
         </p>
         {onWrite && (
-          <button type="button" onClick={onWrite} className="rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted">
+          <button
+            type="button"
+            onClick={onWrite}
+            className="rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
+          >
             Write it
           </button>
         )}
@@ -320,7 +364,11 @@ function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void
     <section className="rounded-xl border bg-background p-5" aria-label="Release announcement">
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
         <Megaphone className="h-3.5 w-3.5" /> Release announcement
-        {draft && <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">Draft</span>}
+        {draft && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            Draft
+          </span>
+        )}
       </div>
       <p className="max-w-3xl whitespace-pre-line text-base leading-relaxed">{pin.announcement}</p>
     </section>
@@ -336,17 +384,25 @@ function Framing({ pin }: { pin: RenderedPin }) {
       ) : (
         <Empty>No business case yet.</Empty>
       )}
-      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outcomes</p>
+      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Outcomes
+      </p>
       {pin.outcomes.length ? (
         pin.outcomes.map((o) => <Card key={o.id}>{o.text}</Card>)
       ) : (
         <Empty>None yet, so it cannot be bet on.</Empty>
       )}
-      {pin.candidateStatement && <p className="text-sm italic text-muted-foreground">{pin.candidateStatement}</p>}
+      {pin.candidateStatement && (
+        <p className="text-sm italic text-muted-foreground">{pin.candidateStatement}</p>
+      )}
       {pin.originChain.length > 0 && (
         <p className="text-sm text-muted-foreground">
           Surfaced while monitoring{' '}
-          <button type="button" onClick={() => openFrame(pin.originChain[0].frameId)} className="text-foreground underline">
+          <button
+            type="button"
+            onClick={() => openFrame(pin.originChain[0].frameId)}
+            className="text-foreground underline"
+          >
             {pin.originChain[0].problem}
           </button>
         </p>
@@ -355,12 +411,17 @@ function Framing({ pin }: { pin: RenderedPin }) {
   )
 }
 
-type Event = { date: string; label: string; text: string; tone: 'internal' | 'customer' | 'work' }
+type TimelineEntry = {
+  date: string
+  label: string
+  text: string
+  tone: 'internal' | 'customer' | 'work'
+}
 
 function Timeline({ pin, cycles }: { pin: RenderedPin; cycles: CycleWindow[] }) {
   const users = useOrganizationUsers()
   const name = (id: string) => users.find((u) => u.userId === id)?.name ?? id
-  const events: Event[] = [
+  const events: TimelineEntry[] = [
     ...pin.reports.map((r) => ({
       date: r.date,
       label: `${name(r.capturer)} ${r.source === 'customer' ? `reported for ${r.customer || 'a customer'}` : 'reported'}`,
@@ -370,7 +431,16 @@ function Timeline({ pin, cycles }: { pin: RenderedPin; cycles: CycleWindow[] }) 
     // A shape stores no bet date, so the timeline marks the cycle it started in.
     ...pin.shapes.flatMap((s) => {
       const start = cycles.find((c) => c.slug === s.cycleSlug)?.start_date
-      return start ? [{ date: start, label: `${s.cycleTitle} started`, text: `“${s.title}”${s.squad ? ` with ${s.squad.name}` : ''}`, tone: 'work' as const }] : []
+      return start
+        ? [
+            {
+              date: start,
+              label: `${s.cycleTitle} started`,
+              text: `“${s.title}”${s.squad ? ` with ${s.squad.name}` : ''}`,
+              tone: 'work' as const,
+            },
+          ]
+        : []
     }),
   ].sort((a, b) => b.date.localeCompare(a.date))
 
@@ -381,7 +451,11 @@ function Timeline({ pin, cycles }: { pin: RenderedPin; cycles: CycleWindow[] }) 
         <li key={i} className="relative">
           <span
             className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-background ${
-              e.tone === 'work' ? 'bg-foreground' : e.tone === 'customer' ? 'bg-amber-500' : 'bg-muted-foreground/40'
+              e.tone === 'work'
+                ? 'bg-foreground'
+                : e.tone === 'customer'
+                  ? 'bg-amber-500'
+                  : 'bg-muted-foreground/40'
             }`}
           />
           <p className="text-xs text-muted-foreground">
@@ -427,8 +501,15 @@ function Work({ pin }: { pin: RenderedPin }) {
       )}
 
       {pitchUrl ? (
-        <a href={pitchUrl} target="_blank" rel="noreferrer" className="group flex items-center gap-3 rounded-lg border bg-background p-3 text-sm hover:bg-muted">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-sm font-bold">N</span>
+        <a
+          href={pitchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="group flex items-center gap-3 rounded-lg border bg-background p-3 text-sm hover:bg-muted"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-sm font-bold">
+            N
+          </span>
           <span className="min-w-0 flex-1">
             <span className="block text-xs text-muted-foreground">Pitch</span>
             <span className="block truncate font-medium">Open in Notion</span>
@@ -437,7 +518,9 @@ function Work({ pin }: { pin: RenderedPin }) {
         </a>
       ) : (
         <div className="flex items-center gap-3 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed text-sm font-bold">N</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed text-sm font-bold">
+            N
+          </span>
           No pitch yet. Link the Notion pitch on the shape once shaping starts.
         </div>
       )}
@@ -445,15 +528,25 @@ function Work({ pin }: { pin: RenderedPin }) {
       <ul className="flex flex-col gap-1.5">
         {pointers.map((p, i) => (
           <li key={i}>
-            <a href={p.url} target="_blank" rel="noreferrer" className="group flex items-start gap-2 rounded-md p-1.5 text-sm hover:bg-muted">
-              <span className="mt-0.5 w-24 shrink-0 text-xs text-muted-foreground">{POINTER_KIND_LABELS[p.kind]}</span>
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex items-start gap-2 rounded-md p-1.5 text-sm hover:bg-muted"
+            >
+              <span className="mt-0.5 w-24 shrink-0 text-xs text-muted-foreground">
+                {POINTER_KIND_LABELS[p.kind]}
+              </span>
               <span className="min-w-0 flex-1 truncate">{p.label}</span>
               <ExternalLink className="mt-0.5 h-3.5 w-3.5 opacity-0 group-hover:opacity-60" />
             </a>
           </li>
         ))}
         {gaps.map((g) => (
-          <li key={g} className="flex items-center gap-2 rounded-md border border-dashed p-1.5 text-sm text-muted-foreground">
+          <li
+            key={g}
+            className="flex items-center gap-2 rounded-md border border-dashed p-1.5 text-sm text-muted-foreground"
+          >
             <span className="w-24 shrink-0 text-xs">{POINTER_KIND_LABELS[g]}</span>
             <span>Missing. The {TYPE_LABELS[pin.type].toLowerCase()} playbook expects one.</span>
           </li>
@@ -463,7 +556,15 @@ function Work({ pin }: { pin: RenderedPin }) {
   )
 }
 
-function Lane({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+function Lane({
+  title,
+  hint,
+  children,
+}: {
+  title: string
+  hint: string
+  children: React.ReactNode
+}) {
   return (
     <section className="flex flex-col gap-2">
       <div>
@@ -483,23 +584,10 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
-function NoFrame() {
-  const { slug } = useParams<{ slug: string }>()
-  return (
-    <main className="mx-auto flex max-w-xl flex-col items-center gap-3 px-6 py-24 text-center">
-      <p className="font-display text-xl">No frame here</p>
-      <p className="text-sm text-muted-foreground">It was deleted, or the link is wrong.</p>
-      <Link href={`/${slug}/product`} className="text-sm underline">
-        Back to the Product Map
-      </Link>
-    </main>
-  )
-}
-
 /** The page's own layout in grey, so nothing jumps when the room arrives. */
 function FramePageSkeleton() {
   return (
-    <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-6" aria-busy="true">
+    <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8" aria-busy="true">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Skeleton className="h-4 w-24" />

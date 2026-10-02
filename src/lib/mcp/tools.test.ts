@@ -1388,6 +1388,7 @@ describe('map_upsert_frame schema', () => {
     expect(parsed.area_id).toBeUndefined()
     expect(parsed.owner).toBeUndefined()
     expect(parsed.origin_frame_id).toBeUndefined()
+    expect(parsed.announcement).toBeUndefined()
   })
 
   it('refuses a Kind or a Type outside the vocabulary', () => {

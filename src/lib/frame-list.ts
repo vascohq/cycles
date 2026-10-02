@@ -1,5 +1,5 @@
-import type { FrameKind, FrameType } from '@/product-map-liveblocks.config'
-import type { FrameState, RenderedPin } from '@/lib/product-map-engine'
+import type { FrameKind, FrameReport, FrameType } from '@/product-map-liveblocks.config'
+import type { FrameState, RenderedArea, RenderedPin } from '@/lib/product-map-engine'
 
 /**
  * How top of mind a frame is, read from the same freshness the pin fades by.
@@ -17,6 +17,12 @@ export function freshnessOf(opacity: number): Freshness {
   return 'fading'
 }
 
+/** The Area filter's value for the frames that belong to no area. */
+export const UNMAPPED_AREA = 'unmapped'
+
+/** The Owner filter's value for the frames that nobody owns. */
+export const NO_OWNER = 'nobody'
+
 /**
  * The filters on a frame list. Every value is a URL search param, so a filtered
  * list has a link somebody can share. An absent key means "any".
@@ -31,7 +37,7 @@ export type FrameFilters = {
   /** A Clerk user id, or "nobody". */
   owner?: string
   /** Frames with at least one report from that side — the heat lens. */
-  source?: 'internal' | 'customer'
+  source?: FrameReport['source']
   freshness?: Freshness
   /** Absent means top of mind first. */
   sort?: 'reports'
@@ -51,11 +57,11 @@ export function listFrames(
 ): RenderedPin[] {
   const passed = pins.filter(
     (pin) =>
-      (!areaIds || areaIds.has(pin.areaId || 'unmapped')) &&
+      (!areaIds || areaIds.has(pin.areaId || UNMAPPED_AREA)) &&
       (!filters.kind || pin.kind === filters.kind) &&
       (!filters.type || pin.type === filters.type) &&
       (filters.state ? pin.state === filters.state : pin.state !== 'resolved') &&
-      (!filters.owner || (filters.owner === 'nobody' ? !pin.owner : pin.owner === filters.owner)) &&
+      (!filters.owner || (filters.owner === NO_OWNER ? !pin.owner : pin.owner === filters.owner)) &&
       (!filters.source || pin.reports.some((r) => r.source === filters.source)) &&
       (!filters.freshness || freshnessOf(pin.opacity) === filters.freshness)
   )
@@ -70,4 +76,18 @@ function byTopOfMind(a: RenderedPin, b: RenderedPin): number {
 
 function byReports(a: RenderedPin, b: RenderedPin): number {
   return b.reports.length - a.reports.length || b.opacity - a.opacity
+}
+
+/**
+ * The area tree with only the frames in `keep` left on it, so the filters that
+ * shape the list shape the map too. The land itself never changes: an area with
+ * no frame left still draws, so the map does not jump when a filter changes.
+ */
+export function keepFrames(areas: RenderedArea[], keep: Set<string>): RenderedArea[] {
+  return areas.map((area) => ({
+    ...area,
+    pins: area.pins.filter((p) => keep.has(p.frameId)),
+    resolved: area.resolved.filter((p) => keep.has(p.frameId)),
+    children: keepFrames(area.children, keep),
+  }))
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-import { FrameList } from '@/app/[slug]/product/frame-list'
+import { FilteredFrames } from '@/app/[slug]/product/frame-filters'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import {
@@ -60,8 +60,6 @@ export default function ProductMapE2EPage() {
         ))}
       </div>
 
-      <MapCanvas areas={model.areas} onOpenFrame={setOpened} />
-
       <p data-testid="opened-frame" className="text-sm text-muted-foreground">
         {opened ? `Opened: ${opened}` : 'No frame open'}
       </p>
@@ -72,7 +70,8 @@ export default function ProductMapE2EPage() {
       </p>
 
       <OrganizationUsersProvider organizationUsers={USERS}>
-        <FrameList pins={[...model.pins, ...model.resolved]} areas={model.areas} />
+        <MapCanvas areas={model.areas} onOpenFrame={setOpened} />
+        <FilteredFrames pins={[...model.pins, ...model.resolved]} areas={model.areas} />
       </OrganizationUsersProvider>
     </main>
   )

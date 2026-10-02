@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { freshnessOf, listFrames } from './frame-list'
-import type { RenderedPin } from './product-map-engine'
+import { freshnessOf, keepFrames, listFrames } from './frame-list'
+import type { RenderedArea, RenderedPin } from './product-map-engine'
 
 function pin(overrides: Partial<RenderedPin>): RenderedPin {
   return {
@@ -81,5 +81,20 @@ describe('listFrames', () => {
 
     const result = listFrames(pins, { kind: 'brand_burn', type: 'bug', freshness: 'top_of_mind' })
     expect(result.map((p) => p.frameId)).toEqual(['hit'])
+  })
+})
+
+describe('keepFrames', () => {
+  // The filters shape the map too, but the land never changes, so it never jumps.
+  it('drops the frames not kept, at every level, and keeps every area', () => {
+    const area = (id: string, pins: string[], children: RenderedArea[] = []) =>
+      ({ areaId: id, pins: pins.map((frameId) => pin({ frameId })), resolved: [], children }) as unknown as RenderedArea
+    const tree = [area('root', ['a', 'b'], [area('leaf', ['c', 'd'])])]
+
+    const kept = keepFrames(tree, new Set(['a', 'd']))
+
+    expect(kept[0].pins.map((p) => p.frameId)).toEqual(['a'])
+    expect(kept[0].children[0].pins.map((p) => p.frameId)).toEqual(['d'])
+    expect(kept[0].children[0].areaId).toBe('leaf')
   })
 })

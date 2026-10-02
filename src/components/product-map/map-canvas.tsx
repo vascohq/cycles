@@ -5,12 +5,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   clusterForViewport,
   descendantPins,
+  flattenAreas,
   KIND_COLORS,
   type CanvasNode,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
 import { unionBounds, type Bounds, type Point } from '@/lib/product-map-geometry'
+import { listFrames } from '@/lib/frame-list'
+import { cn } from '@/lib/utils'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
+import { KIND_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import {
   Tooltip,
   TooltipContent,
@@ -27,21 +33,6 @@ import {
  * merged silhouette of the leaves underneath them, fused by a blur-and-threshold
  * filter. Nothing about those two is stored or computed as a polygon.
  */
-
-/** Plain words for the tooltip. The engine holds rules; the view holds prose. */
-const KIND_WORDS: Record<RenderedPin['kind'], string> = {
-  brand_burn: 'Brand burn',
-  pain_point: 'Pain point',
-  unlock_win: 'Win to unlock',
-}
-
-const TYPE_WORDS: Record<RenderedPin['type'], string> = {
-  bug: 'bug',
-  idea: 'idea',
-  request: 'request',
-  security: 'security',
-  irritant: 'irritant',
-}
 
 /** A bubble carries a color, not a Kind, so it is read back from the color. */
 const WORST_WORDS: Record<string, string> = {
@@ -62,9 +53,19 @@ type View = { x: number; y: number; w: number; h: number }
 export function MapCanvas({
   areas,
   onOpenFrame,
+  className,
+  inset,
 }: {
   areas: RenderedArea[]
   onOpenFrame: (frameId: string) => void
+  /** Overrides the canvas height, for a page that lays the map out its own way. */
+  className?: string
+  /**
+   * Pixels on each side that something floats over, such as the frame list or
+   * a toolbar. The fit centers the land in the part still visible, so nothing
+   * hides under them.
+   */
+  inset?: { top?: number; right?: number; bottom?: number }
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 960, height: 560 })
@@ -106,23 +107,32 @@ export function MapCanvas({
     return () => observer.disconnect()
   }, [])
 
+  const top = inset?.top ?? 0
+  const right = inset?.right ?? 0
+  const bottom = inset?.bottom ?? 0
+
   const fit = useCallback(
     (target: Bounds): View => {
       const padX = target.width * FIT_PAD + 8
       const padY = target.height * FIT_PAD + 8
       const w = Math.max(target.width + padX * 2, MIN_SPAN)
       const h = Math.max(target.height + padY * 2, MIN_SPAN)
-      // Match the container's aspect, so fitting never squashes the coastline.
-      const ratio = box.width / Math.max(box.height, 1)
+      // Fit into the part of the host nothing floats over, then grow the view
+      // under the overlays at the same scale, so the land centers where it shows.
+      const visibleW = Math.max(box.width - right, box.width * 0.4)
+      const visibleH = Math.max(box.height - top - bottom, box.height * 0.4)
+      // Match that part's aspect, so fitting never squashes the coastline.
+      const ratio = visibleW / Math.max(visibleH, 1)
       const span = w / h > ratio ? { w, h: w / ratio } : { w: h * ratio, h }
+      const unit = span.w / visibleW
       return {
         x: target.x + target.width / 2 - span.w / 2,
-        y: target.y + target.height / 2 - span.h / 2,
-        w: span.w,
-        h: span.h,
+        y: target.y + target.height / 2 - span.h / 2 - top * unit,
+        w: box.width * unit,
+        h: box.height * unit,
       }
     },
-    [box.width, box.height]
+    [box.width, box.height, top, right, bottom]
   )
 
   // No view of their own means fitted to the whole map, recomputed each render —
@@ -263,7 +273,10 @@ export function MapCanvas({
     <TooltipProvider delayDuration={80}>
       <div
         ref={hostRef}
-        className="relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20"
+        className={cn(
+          'relative h-[min(70vh,620px)] min-h-[360px] w-full touch-none overflow-hidden rounded-xl border bg-muted/20',
+          className
+        )}
       >
       {/*
         Absolutely positioned, so the SVG is OUT OF FLOW. An SVG carries an
@@ -338,6 +351,8 @@ export function MapCanvas({
               node={node}
               k={k}
               onOpen={() => setView(fit(boundsOf(areas, node.areaId)))}
+              pins={pinsUnder(areas, node.areaId)}
+              onOpenFrame={onOpenFrame}
             />
           )
         )}
@@ -592,13 +607,31 @@ function Pin({
         </g>
       </TooltipTrigger>
       <TooltipPortal>
-        <TooltipContent side="top" className="max-w-[260px] px-2.5 py-1.5">
-          <p className="text-xs font-medium leading-snug">{pin.problem}</p>
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            {KIND_WORDS[pin.kind]} · {TYPE_WORDS[pin.type]} ·{' '}
-            {pin.reportCount === 1 ? '1 report' : `${pin.reportCount} reports`}
-            {pin.dim ? ' · fading' : ''}
-          </p>
+        {/* The tooltip opens the frame too, the same as a row in a bubble's
+            list. aria-label keeps Radix's hidden copy from duplicating the button. */}
+        <TooltipContent side="top" className="max-w-[260px] p-1" aria-label={pin.problem}>
+          <button
+            type="button"
+            onClick={() => onOpen(pin.frameId)}
+            className="flex w-full flex-col rounded px-1.5 py-1 text-left hover:bg-muted"
+          >
+            <span className="flex items-start gap-1.5 text-xs font-medium leading-snug">
+              <TypeIcon
+                type={pin.type}
+                color={pin.color}
+                sharp={pin.sharp}
+                label={TYPE_LABELS[pin.type]}
+                className="mt-px h-3.5 w-3.5"
+              />
+              {pin.problem}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] leading-snug text-muted-foreground">
+              <KindIcon kind={pin.kind} label={KIND_LABELS[pin.kind]} className="h-3 w-3" />
+              {KIND_LABELS[pin.kind]} · {TYPE_LABELS[pin.type]} ·{' '}
+              {pin.reportCount === 1 ? '1 report' : `${pin.reportCount} reports`}
+              {pin.dim ? ' · fading' : ''} · click to open
+            </span>
+          </button>
         </TooltipContent>
       </TooltipPortal>
     </Tooltip>
@@ -609,10 +642,15 @@ function Bubble({
   node,
   k,
   onOpen,
+  pins,
+  onOpenFrame,
 }: {
   node: Extract<CanvasNode, { kind: 'bubble' }>
   k: number
   onOpen: () => void
+  /** The frames under the bubble, freshest first. */
+  pins: RenderedPin[]
+  onOpenFrame: (frameId: string) => void
 }) {
   const [x, y] = node.at
   const r = 19 * k
@@ -668,16 +706,97 @@ function Bubble({
         </g>
       </TooltipTrigger>
       <TooltipPortal>
-        <TooltipContent side="top" className="max-w-[260px] px-2.5 py-1.5">
+        {/* aria-label: Radix copies the content into a hidden region for screen
+            readers, which would duplicate every button in the list. */}
+        <TooltipContent
+          side="top"
+          className="w-[300px] px-2.5 py-2"
+          aria-label={`${node.name}, ${node.count} frames`}
+        >
           <p className="text-xs font-medium leading-snug">{node.name}</p>
           <p className="text-[11px] leading-snug text-muted-foreground">
             {node.count === 1 ? '1 frame' : `${node.count} frames`} · worst is{' '}
             {WORST_WORDS[node.color] ?? 'a problem'} · click to zoom in
           </p>
+          <BubbleList pins={pins} onOpenFrame={onOpenFrame} />
         </TooltipContent>
       </TooltipPortal>
     </Tooltip>
   )
+}
+
+const BUBBLE_PAGE = 5
+
+/**
+ * The frames inside a bubble, five at a time. The tooltip stays open while the
+ * pointer is on it, so a person can page through and open one without zooming.
+ */
+function BubbleList({
+  pins,
+  onOpenFrame,
+}: {
+  pins: RenderedPin[]
+  onOpenFrame: (frameId: string) => void
+}) {
+  const [page, setPage] = useState(0)
+  if (pins.length === 0) return null
+  const pages = Math.ceil(pins.length / BUBBLE_PAGE)
+  const shown = pins.slice(page * BUBBLE_PAGE, (page + 1) * BUBBLE_PAGE)
+  return (
+    <div className="mt-2 border-t pt-1.5">
+      <ul className="flex flex-col">
+        {shown.map((pin) => (
+          <li key={pin.frameId}>
+            <button
+              type="button"
+              onClick={() => onOpenFrame(pin.frameId)}
+              className="flex w-full items-start gap-1.5 rounded px-1 py-1 text-left text-xs hover:bg-muted"
+            >
+              <TypeIcon
+                type={pin.type}
+                color={pin.color}
+                sharp={pin.sharp}
+                label={TYPE_LABELS[pin.type]}
+                className="mt-px h-3.5 w-3.5"
+              />
+              <span className="line-clamp-2">{pin.problem}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {pages > 1 && (
+        <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            aria-label="Previous frames"
+            className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span>
+            {page * BUBBLE_PAGE + 1}–{Math.min(pins.length, (page + 1) * BUBBLE_PAGE)} of {pins.length}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
+            disabled={page === pages - 1}
+            aria-label="Next frames"
+            className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The awake frames under an area anywhere in the tree, freshest first. */
+function pinsUnder(areas: RenderedArea[], areaId: string): RenderedPin[] {
+  const area = flattenAreas(areas).find((a) => a.area.areaId === areaId)?.area
+  return area ? listFrames(descendantPins(area).filter((p) => p.passesLens), {}) : []
 }
 
 /** Where every area in the tree writes its name. */

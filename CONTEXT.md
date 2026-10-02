@@ -179,7 +179,7 @@ How much people still talk about a frame, read from the time since its last **Wa
 _Avoid_: Priority, score, hotness
 
 **Frame list**:
-The list of open frames under the Product Map and on each area page. It has filters for area, kind, type, state, owner, report source and freshness. The filters live in the URL, so a filtered list is a link that people can share. The default order is top of mind first, then the most reported. The list never shows a **Dormant** frame ([ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)).
+The list of open frames that floats over the Product Map and over each area page. It has filters for area, kind, type, state, owner, report source and freshness. The same filters shape the map, so a pin is always a row. The filters live in the URL, so a filtered view is a link that people can share. The default order is top of mind first, then the most reported. The list never shows a **Dormant** frame ([ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)). In cooldown, the capped review queue of that ADR shows under the list, in the same panel, as its own section.
 _Avoid_: Backlog, queue, board
 
 **Dormant**:
