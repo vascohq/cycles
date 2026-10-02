@@ -134,4 +134,11 @@ test.describe('Product Map canvas', () => {
     )
     expect(focusable).toBe(true)
   })
+
+  // The breadcrumb on a frame page lands here, so every level needs an anchor.
+  test('lists the frames by area, with an anchor for each level', async ({ page }) => {
+    await expect(page.locator('#area-front-office')).toContainText('Front office')
+    await expect(page.locator('#area-external')).toContainText('External to Vasco')
+    await expect(page.locator('#area-slack')).toContainText('Capture from Slack loses the thread link')
+  })
 })

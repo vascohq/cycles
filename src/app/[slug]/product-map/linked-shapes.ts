@@ -18,7 +18,7 @@ export async function linkedShapes(
     cycles.map(async (cycle) => {
       try {
         const storage = await getCycleStorage(orgPrefix, cycle.slug)
-        return { cycle, shapes: storage.pitches ?? [] }
+        return { cycle, shapes: storage.pitches ?? [], squads: storage.squads ?? [] }
       } catch {
         return { cycle, shapes: [] }
       }

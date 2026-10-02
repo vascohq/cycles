@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 
+import { AreaList, OpenFrameContext } from '@/app/[slug]/product-map/product-map'
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import {
   DEFAULT_LENS,
@@ -68,6 +69,10 @@ export default function ProductMapE2EPage() {
         {model.pins.filter((p) => p.passesLens).length} on the map ·{' '}
         {model.unmapped.length} unmapped · {model.resolved.length} resolved
       </p>
+
+      <OpenFrameContext.Provider value={setOpened}>
+        <AreaList areas={model.areas} />
+      </OpenFrameContext.Provider>
     </main>
   )
 }

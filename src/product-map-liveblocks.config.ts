@@ -83,6 +83,28 @@ export type FrameOutcome = {
   text: string
 }
 
+/**
+ * A short written answer to "where are we, and what is next?", left on the
+ * frame by an agent or a person. The page never asks an agent live: it shows
+ * the last brief somebody wrote, with its date, and every write replaces the
+ * whole brief (ADR 0029). Writing a brief does not wake the frame.
+ */
+export type FrameBrief = {
+  /** One line: where the frame stands, in plain words. */
+  headline: string
+  where_we_are: string
+  /** The one move that gets the frame to its next state. */
+  next_step: string
+  /** Clerk user id of the person who takes the next step. */
+  next_step_owner?: string
+  /** Something nobody asked about that somebody should know. */
+  watch?: string
+  /** A Clerk user id or an agent name. Provenance is never anonymous. */
+  written_by: string
+  /** ISO date (YYYY-MM-DD) the brief was written. */
+  written_on: string
+}
+
 /** An outbound link a frame packages. The artifact itself is never stored. */
 export type FramePointer = {
   url: string
@@ -123,6 +145,14 @@ export type Frame = {
    * existed have no such field, so every reader treats it as possibly absent.
    */
   outcomes: FrameOutcome[]
+  /**
+   * The release announcement customers would read once the problem is solved.
+   * Written as a draft long before anything ships, so the frame says in the
+   * customer's words what solving it means (ADR 0029). Absent when unwritten.
+   */
+  announcement?: string
+  /** The last brief somebody left. Absent until the first one is written. */
+  brief?: FrameBrief
   /**
    * ISO date (YYYY-MM-DD) of the last wake. Only three things set it: a new
    * report, a wake call, and an explicit "still hurts" click (ADR 0024).
