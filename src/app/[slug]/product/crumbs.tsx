@@ -71,7 +71,7 @@ export function AreaCrumb({
       </Link>
     )
   }
-  return <CrumbMenu label={label} current={current} items={items} />
+  return <CrumbMenu label={label} href={areaHref(slug, areaId)} current={current} items={items} />
 }
 
 /**

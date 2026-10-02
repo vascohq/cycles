@@ -17,33 +17,46 @@ export type CrumbItem = { href: string; label: ReactNode; current?: boolean }
 
 /**
  * A breadcrumb part that switches to a sibling: the label, a chevron, and a
- * menu of the other places at the same level. `items` is null while loading;
- * `onOpen` lets a caller fetch on the first open, so a page pays nothing for a
- * menu nobody opens.
+ * menu of the other places at the same level. With an `href` (and not the
+ * current page) the label goes there and only the chevron opens the menu.
+ * `items` is null while loading; `onOpen` lets a caller fetch on the first
+ * open, so a page pays nothing for a menu nobody opens.
  */
 export function CrumbMenu({
   label,
+  href,
   items,
   onOpen,
   current = false,
 }: {
   label: ReactNode
+  href?: string
   items: CrumbItem[] | null
   onOpen?: () => void
   /** The page itself, so the label reads as where you are. */
   current?: boolean
 }) {
+  const ring = 'rounded outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+  const chevron = <ChevronDown className="size-3 shrink-0 opacity-60" />
   return (
     <DropdownMenu onOpenChange={(open) => open && onOpen?.()}>
-      <DropdownMenuTrigger
-        className={cn(
-          'inline-flex min-w-0 items-center gap-1 rounded outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-          current && 'font-medium text-foreground',
-        )}
-      >
-        <span className="truncate">{label}</span>
-        <ChevronDown className="size-3 shrink-0 opacity-60" />
-      </DropdownMenuTrigger>
+      {href && !current ? (
+        <span className="inline-flex min-w-0 items-center gap-0.5">
+          <Link href={href} className={cn('truncate', ring)}>
+            {label}
+          </Link>
+          <DropdownMenuTrigger aria-label="Switch to a sibling" className={cn('shrink-0 p-0.5', ring)}>
+            {chevron}
+          </DropdownMenuTrigger>
+        </span>
+      ) : (
+        <DropdownMenuTrigger
+          className={cn('inline-flex min-w-0 items-center gap-1', ring, current && 'font-medium text-foreground')}
+        >
+          <span className="truncate">{label}</span>
+          {chevron}
+        </DropdownMenuTrigger>
+      )}
       <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
         {items === null ? (
           <p className="px-2 py-1.5 text-sm text-muted-foreground">Loading…</p>
@@ -77,11 +90,13 @@ export function SectionCrumb({
   section: 'Cycles' | 'Product Map' | 'Settings'
   current?: boolean
 }) {
+  const sections = useSections()
   return (
     <CrumbMenu
       label={section}
+      href={sections.find((s) => s.label === section)?.href}
       current={current}
-      items={useSections().map((s) => ({
+      items={sections.map((s) => ({
         href: s.href,
         label: s.label,
         current: s.label === section,
@@ -117,5 +132,13 @@ export function CycleCrumb({
             label: `${c.type === 'cooldown' ? '🧊 ' : ''}${c.title}`,
             current: c.slug === cycleSlug,
           }))
-  return <CrumbMenu label={label} current={current} items={items} onOpen={list.ensureCycles} />
+  return (
+    <CrumbMenu
+      label={label}
+      href={`/${list.slug}/cycles/${cycleSlug}`}
+      current={current}
+      items={items}
+      onOpen={list.ensureCycles}
+    />
+  )
 }
