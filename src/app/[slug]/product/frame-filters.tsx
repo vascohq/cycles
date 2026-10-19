@@ -9,6 +9,7 @@ import {
   CircleUser,
   Flame,
   Map as MapIcon,
+  Megaphone,
   MessagesSquare,
   Shapes,
   type LucideIcon,
@@ -34,6 +35,7 @@ import {
   KIND_COLORS,
   FRAME_STATES,
   flattenAreas,
+  isMemberId,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
@@ -95,13 +97,23 @@ export function useFilteredFrames(pins: RenderedPin[], areas: RenderedArea[]) {
  */
 export function FilterBar({
   areas,
+  pins,
   withUnmapped = false,
 }: {
   areas: RenderedArea[]
+  /** Every frame before the filters. Feeds the free-text names in Raised by. */
+  pins: RenderedPin[]
   withUnmapped?: boolean
 }) {
   const { filters, set, clear, active } = useFrameFilters()
   const users = useOrganizationUsers()
+  // Somebody outside the app has no member entry, so the names come from the
+  // frames themselves. A Clerk id that is no longer a member is left out.
+  const outsiders = [
+    ...new Set(
+      pins.flatMap((p) => (p.raisedBy && !isMemberId(p.raisedBy) ? [p.raisedBy] : []))
+    ),
+  ].sort()
   return (
     <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
       {areas.length > 0 && (
@@ -155,6 +167,16 @@ export function FilterBar({
         options={[
           { value: NO_OWNER, label: 'Nobody yet' },
           ...users.map((u) => ({ value: u.userId, label: u.name })),
+        ]}
+      />
+      <Filter
+        label="Raised by"
+        icon={Megaphone}
+        value={filters.raised_by}
+        onChange={(v) => set('raised_by', v)}
+        options={[
+          ...users.map((u) => ({ value: u.userId, label: u.name })),
+          ...outsiders.map((name) => ({ value: name, label: name })),
         ]}
       />
       <Filter
@@ -216,7 +238,7 @@ function Stacked({ pins, areas, action }: FilteredFramesProps) {
   const { shown } = useFilteredFrames(pins, areas)
   return (
     <div className="flex flex-col gap-3">
-      <FilterBar areas={areas} />
+      <FilterBar areas={areas} pins={pins} />
       <FrameList pins={shown} areas={areas} action={action} />
     </div>
   )

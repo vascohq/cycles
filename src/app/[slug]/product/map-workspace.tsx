@@ -85,7 +85,7 @@ function Workspace({
         {heading && <div className="shrink-0 px-4 pb-2 pt-4">{heading}</div>}
         <div className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <div className="min-w-0 flex-1">
-            <FilterBar areas={areas} withUnmapped={withUnmapped} />
+            <FilterBar areas={areas} pins={pins} withUnmapped={withUnmapped} />
           </div>
           {!open && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">

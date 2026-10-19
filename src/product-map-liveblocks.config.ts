@@ -135,6 +135,12 @@ export type Frame = {
   business_case: string
   /** Clerk user id of the one person who cares that this gets addressed. */
   owner?: string
+  /**
+   * Who raised the problem: a Clerk user id for a member of the org, or a
+   * free-text name for somebody outside the app. Not the capturer of a report,
+   * who often records a problem somebody else raised.
+   */
+  raised_by?: string
   /** The frame whose monitoring surfaced this one (ADR 0025). */
   originFrameId?: string
   reports: FrameReport[]

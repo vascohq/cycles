@@ -29,6 +29,7 @@ import {
   FRAME_TYPES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
+  isMemberId,
   renderProductMap,
   type CycleWindow,
   type FrameState,
@@ -494,7 +495,13 @@ export function FrameDetail({
       // '' clears an optional field: the key goes away rather than sitting there
       // as an empty string nobody can tell from "unset". A frame with no areaId
       // is Unmapped, which is always a valid answer.
-      if ((field === 'owner' || field === 'areaId' || field === 'announcement') && value === '')
+      if (
+        (field === 'owner' ||
+          field === 'raised_by' ||
+          field === 'areaId' ||
+          field === 'announcement') &&
+        value === ''
+      )
         frame.delete(field)
       else frame.set(field, value as never)
     },
@@ -559,6 +566,7 @@ export function FrameDetail({
               ...users.map((u) => ({ value: u.userId, label: u.name })),
             ]}
           />
+          <RaisedByPicker value={pin.raisedBy} onChange={set('raised_by')} />
           <span className={PILL}>{STATE_LABELS[pin.state]}</span>
           {pin.worked && <span className={PILL}>Worked before</span>}
           {pin.dim && <span className={PILL}>Fading</span>}
@@ -655,7 +663,62 @@ type EditableField =
   | 'kind'
   | 'type'
   | 'owner'
+  | 'raised_by'
   | 'areaId'
+
+const SOMEONE_ELSE = '__someone_else__'
+
+/**
+ * Who raised the problem: a member, or a free-text name for somebody outside
+ * the app. It starts empty and never defaults to the current user, because the
+ * capturer is often not the person who raised the problem.
+ */
+function RaisedByPicker({
+  value,
+  onChange,
+}: {
+  value: string | null
+  onChange: (value: string) => void
+}) {
+  const users = useOrganizationUsers()
+  const [typing, setTyping] = useState(false)
+  const member = users.find((u) => u.userId === value)
+
+  if (typing) {
+    return (
+      <Input
+        autoFocus
+        aria-label="Raised by"
+        placeholder="Name, e.g. Jane at Acme"
+        defaultValue={value && !member ? value : ''}
+        className="h-7 w-52 text-xs"
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        onBlur={(e) => {
+          setTyping(false)
+          const name = e.target.value.trim()
+          if (name && name !== value) onChange(name)
+        }}
+      />
+    )
+  }
+
+  return (
+    <PillSelect
+      value={value ?? NOBODY}
+      onChange={(v) => (v === SOMEONE_ELSE ? setTyping(true) : onChange(v === NOBODY ? '' : v))}
+      label="Raised by"
+      options={[
+        { value: NOBODY, label: 'Raised by: not set' },
+        ...users.map((u) => ({ value: u.userId, label: `Raised by ${u.name}` })),
+        // A free-text name, or a Clerk id that is no longer a member.
+        ...(value && !member
+          ? [{ value, label: `Raised by ${isMemberId(value) ? 'a former member' : value}` }]
+          : []),
+        { value: SOMEONE_ELSE, label: 'Someone else…' },
+      ]}
+    />
+  )
+}
 
 /**
  * The origin chain, and the way to add to it.

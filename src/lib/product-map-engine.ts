@@ -467,6 +467,14 @@ export function isHeatLens(value: unknown): value is HeatLens {
   return (HEAT_LENSES as readonly unknown[]).includes(value)
 }
 
+/**
+ * Whether a `raised_by` names a member (a Clerk user id) rather than somebody
+ * outside the app, written as free text. Clerk user ids start with `user_`.
+ */
+export function isMemberId(raisedBy: string): boolean {
+  return raisedBy.startsWith('user_')
+}
+
 /** How many of a frame's reports the lens lets through. */
 export function reportCount(frame: Pick<Frame, 'reports'>, lens: HeatLens): number {
   const reports = frame.reports ?? []
@@ -508,6 +516,8 @@ export type RenderedPin = {
   outcomes: FrameOutcome[]
   /** Clerk user id of the frame owner, or null when nobody holds it. */
   owner: string | null
+  /** Who raised the problem: a Clerk user id or a free-text name. Null when unknown. */
+  raisedBy: string | null
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
   /** Every report on the frame, unfiltered — the detail shows the evidence. */
@@ -982,6 +992,7 @@ function renderPin(
     brief: frame.brief ?? null,
     outcomes: statedOutcomes(frame),
     owner: frame.owner ?? null,
+    raisedBy: frame.raised_by ?? null,
     color: KIND_COLORS[kind],
     reports: frame.reports ?? [],
     pointers: frame.pointers ?? [],

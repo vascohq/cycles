@@ -91,6 +91,10 @@ _Avoid_: President, DRI, maintainer
 The one person who cares that a frame gets addressed. A frame owner is not the person who will do the work. A frame with no cycle and no **Shape** is still owned.
 _Avoid_: Assignee, DRI, responsible
 
+**Raised by**:
+The person who raised the problem that a frame holds. It is a member of the org, or a free-text name for a person outside the app. It is not the capturer of a **Report**, because somebody other than the person who raised the problem often records it. Nothing fills it by default. A frame with no "raised by" is valid. The **Business case** says why now, so there is no separate field for it.
+_Avoid_: Reporter, requester, author, submitter
+
 **Kind**:
 What is at stake. `brand_burn` costs reputation or revenue right now. `pain_point` hurts, and nobody is leaving over it. `unlock_win` breaks nothing and leaves value unclaimed. A person sets it. Kind is the only axis with a color on the map.
 _Avoid_: Severity, priority, type (**Type** is a different axis). Do not read Kind as a pain scale — a win to unlock is not a small pain.
