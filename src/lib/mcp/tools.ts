@@ -774,6 +774,7 @@ export async function handleUpsertFrame(
     owner?: string
     raised_by?: string
     origin_frame_id?: string
+    related_frame_ids?: string[]
   }
 ): Promise<ToolResult> {
   // Type decides the workflow, so a frame can never exist without one (ADR
@@ -804,6 +805,7 @@ export async function handleUpsertFrame(
       owner: params.owner,
       raisedBy: params.raised_by,
       originFrameId: params.origin_frame_id,
+      related_frame_ids: params.related_frame_ids,
     })
     return jsonResult(result)
   } catch (err) {
@@ -2063,6 +2065,12 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe('The frame whose monitoring surfaced this one. Pass "" to clear.'),
+      related_frame_ids: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Every frame related to this one, for example two problems one solution would close. The relation goes both ways: both frames list each other, and removing a frame here removes the link from both. Passing this REPLACES the whole set; omit it to leave the relations alone, and pass [] to clear them. A duplicate is not related: delete it with map_delete_frame.'
+        ),
     },
     {
       title: 'Capture or update a frame',
@@ -2089,6 +2097,7 @@ export function registerCyclesTools(server: any): void {
         owner?: string
         raised_by?: string
         origin_frame_id?: string
+        related_frame_ids?: string[]
       },
       extra: ToolExtra
     ) => {

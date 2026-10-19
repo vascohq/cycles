@@ -164,7 +164,11 @@ The sentence the Product Map shows under a sharp frame: "If we can shape this in
 
 **Origin frame**:
 The frame whose **monitoring** surfaced this one. A quality problem or an adoption problem found after release becomes a **new frame** with a pointer back, never a reopening of the old one. This gives a visible chain of which releases create follow-on pain.
-_Avoid_: Parent, duplicate, related
+_Avoid_: Parent, duplicate, related (that is a **Related frame**)
+
+**Related frame**:
+A frame that relates to this one, for example two problems that one solution would close. The relation goes both ways: if frame A relates to frame B, frame B relates to frame A. The frame page shows each related frame with its current problem line, so the link does not break when that line changes. A duplicate is not a related frame. It gets deleted ([ADR 0026](docs/adr/0026-a-frame-can-be-deleted-only-for-map-hygiene.md)). There is no "blocks" relation, because blocking is about work, and work lives in a **Shape**.
+_Avoid_: Linked issue, dependency, duplicate, child
 
 **Report**:
 One record of a problem happening. A report holds an id, a capturer (a Clerk user id or an agent id), a source (`internal` or `customer`), an optional customer label, an optional link, text, and a date. Nothing reaches a frame unmediated. A person or an agent always captures it. The report count sets the **Pin** size.

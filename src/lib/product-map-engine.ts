@@ -131,6 +131,84 @@ export function originChain(frame: Frame, frames: Frame[]): OriginLink[] {
   return chain
 }
 
+/** A frame related to this one, shown by its current problem line. */
+export type RelatedLink = { frameId: string; problem: string }
+
+/**
+ * The frames related to this one. The relation goes both ways, so a frame
+ * named on either side counts, and a frame that no longer exists drops out.
+ */
+export function relatedFrames(frame: Frame, frames: Frame[]): RelatedLink[] {
+  const ids = new Set(frame.related_frame_ids ?? [])
+  for (const f of frames) if (f.related_frame_ids?.includes(frame.id)) ids.add(f.id)
+  ids.delete(frame.id)
+  return frames.filter((f) => ids.has(f.id)).map((f) => ({ frameId: f.id, problem: f.problem }))
+}
+
+/**
+ * The related lists that make `frameId` related to exactly `ids`, on both
+ * sides. Only the frames whose list changes come back, keyed by frame id; an
+ * empty list means the field goes away. Refusing an unknown id or the frame's
+ * own id is the caller's job.
+ */
+export function relateFrames(
+  frames: Pick<Frame, 'id' | 'related_frame_ids'>[],
+  frameId: string,
+  ids: string[]
+): Map<string, string[]> {
+  const want = new Set(ids)
+  const changes = new Map<string, string[]>()
+  for (const f of frames) {
+    const current = f.related_frame_ids ?? []
+    const next =
+      f.id === frameId
+        ? [...want]
+        : want.has(f.id)
+          ? current.includes(frameId)
+            ? current
+            : [...current, frameId]
+          : current.filter((id) => id !== frameId)
+    if (next.length !== current.length || next.some((id, i) => id !== current[i])) {
+      changes.set(f.id, next)
+    }
+  }
+  return changes
+}
+
+/** A stored frame the relation is written to: a LiveObject, in the app or on the server. */
+type RelatableFrame = {
+  get(key: 'id' | 'related_frame_ids'): unknown
+  set(key: 'related_frame_ids', value: string[]): void
+  delete(key: 'related_frame_ids'): void
+}
+
+/**
+ * Write the relation of `frameId` to exactly `ids` onto the stored frames, on
+ * both sides. An empty list removes the field. The app, the MCP writer and a
+ * frame delete all write through here, so the two sides never drift apart.
+ */
+export function storeRelated(
+  frames: Iterable<RelatableFrame>,
+  frameId: string,
+  ids: string[]
+): void {
+  const list = [...frames]
+  const changes = relateFrames(
+    list.map((f) => ({
+      id: f.get('id') as string,
+      related_frame_ids: f.get('related_frame_ids') as string[] | undefined,
+    })),
+    frameId,
+    ids
+  )
+  for (const f of list) {
+    const next = changes.get(f.get('id') as string)
+    if (!next) continue
+    if (next.length) f.set('related_frame_ids', next)
+    else f.delete('related_frame_ids')
+  }
+}
+
 /**
  * Engagement, the fourth and last pin channel:
  *
@@ -634,6 +712,8 @@ export type RenderedPin = {
   worked: boolean
   /** The frames whose monitoring surfaced this one, nearest first. */
   originChain: OriginLink[]
+  /** The frames related to this one, read from both sides. */
+  related: RelatedLink[]
   /** Built from the problem and the appetite. null for a rough frame. */
   candidateStatement: string | null
   /**
@@ -1088,6 +1168,7 @@ function renderPin(
     shapes,
     worked: shapes.length > 0,
     originChain: originChain(frame, allFrames),
+    related: relatedFrames(frame, allFrames),
     candidateStatement: candidateStatement(frame),
     daysSinceWoken: days,
     cyclesSinceWoken: elapsed,

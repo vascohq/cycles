@@ -29,6 +29,7 @@ import {
   isPointerKind,
   correctReport,
   removeReport,
+  storeRelated,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
@@ -1199,6 +1200,8 @@ type FrameFields = {
   owner: string
   raisedBy: string
   originFrameId: string
+  /** The full set of frames related to this one. The writer keeps both sides. */
+  related_frame_ids: string[]
 }
 
 /**
@@ -1246,11 +1249,15 @@ export async function upsertFrame(
   }
   // Narrowed above; held in a local so the check survives into the closure.
   const newType = params.type as Frame['type']
+  let badRelated: string | null = null
 
   await ensureProductMapRoom(roomId)
 
   await withRoot(roomId, undefined, (root: any) => {
     const frames = root.get('frames')
+
+    badRelated = relatedFramesError(frames, id, params.related_frame_ids)
+    if (badRelated) return
 
     if (created) {
       // Every frame wants an owner: somebody has to care that it gets
@@ -1279,6 +1286,7 @@ export async function upsertFrame(
         resolved: false,
       }
       frames.push(new LiveObject(frame))
+      if (params.related_frame_ids !== undefined) storeRelated(frames, id, params.related_frame_ids)
       return
     }
 
@@ -1287,6 +1295,7 @@ export async function upsertFrame(
       notFound = true
       return
     }
+    if (params.related_frame_ids !== undefined) storeRelated(frames, id, params.related_frame_ids)
     // undefined = omitted = leave unchanged. Guard every field explicitly, so an
     // omitted field is never coerced away (the timebox-nullification incident).
     if (params.kind !== undefined) existing.set('kind', params.kind)
@@ -1306,7 +1315,25 @@ export async function upsertFrame(
   })
 
   if (notFound) throw new Error(`Frame not found: "${id}"`)
+  if (badRelated) throw new Error(badRelated)
   return { created, id }
+}
+
+/**
+ * Why `ids` cannot be the related frames of `frameId`, or null when they can.
+ * Undefined means the caller left the relations alone.
+ */
+function relatedFramesError(
+  frames: any,
+  frameId: string,
+  ids: string[] | undefined
+): string | null {
+  if (ids === undefined) return null
+  if (ids.includes(frameId)) return 'A frame cannot be related to itself.'
+  const known = new Set<string>()
+  for (const f of frames) known.add(getField(f, 'id'))
+  const unknown = ids.find((rid) => !known.has(rid))
+  return unknown ? `Related frame not found: "${unknown}"` : null
 }
 
 /**
@@ -1640,6 +1667,8 @@ export async function deleteFrame(roomId: string, id: string): Promise<void> {
       notFound = true
       return
     }
+    // Unrelate first, while the frame is still there to unrelate from.
+    storeRelated(frames, id, [])
     frames.delete(idx)
 
     for (const f of frames) {

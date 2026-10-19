@@ -1450,6 +1450,7 @@ describe('map_upsert_frame schema', () => {
     expect(parsed.origin_frame_id).toBeUndefined()
     expect(parsed.announcement).toBeUndefined()
     expect(parsed.raised_by).toBeUndefined()
+    expect(parsed.related_frame_ids).toBeUndefined()
   })
 
   it('refuses a Kind or a Type outside the vocabulary', () => {

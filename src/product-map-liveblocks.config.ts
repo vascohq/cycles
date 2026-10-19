@@ -158,6 +158,11 @@ export type Frame = {
   raised_by?: string
   /** The frame whose monitoring surfaced this one (ADR 0025). */
   originFrameId?: string
+  /**
+   * Frames related to this one. The relation goes both ways, and every writer
+   * stores it on both frames (`relateFrames`). Absent when there are none.
+   */
+  related_frame_ids?: string[]
   reports: FrameReport[]
   pointers: FramePointer[]
   /**

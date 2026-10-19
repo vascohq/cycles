@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  relateFrames,
+  relatedFrames,
   withReportIds,
   AREA_GAP,
   FRAME_KINDS,
@@ -1606,5 +1608,21 @@ describe('withReportIds', () => {
     const first = withReportIds([old])[0].id
     const [, twin] = withReportIds([{ ...old, id: first, text: 'edited' }, old])
     expect(twin.id).not.toBe(first)
+  })
+})
+
+describe('related frames', () => {
+  const frame = (id: string, related?: string[]) =>
+    ({ id, problem: `p-${id}`, related_frame_ids: related }) as Frame
+
+  it('reads the relation from either side and drops a frame that is gone', () => {
+    const frames = [frame('a', ['b', 'gone']), frame('b'), frame('c', ['a'])]
+    expect(relatedFrames(frames[0], frames).map((r) => r.frameId)).toEqual(['b', 'c'])
+    expect(relatedFrames(frames[1], frames)).toEqual([{ frameId: 'a', problem: 'p-a' }])
+  })
+
+  it('returns only the lists that change, on both sides', () => {
+    const changes = relateFrames([frame('a', ['b']), frame('b', ['a']), frame('c')], 'a', ['c'])
+    expect(Object.fromEntries(changes)).toEqual({ a: ['c'], b: [], c: ['a'] })
   })
 })
