@@ -50,6 +50,7 @@ import { Crumbs, FrameCrumb } from '../../crumbs'
 import { Missing } from '../../missing'
 import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
 import { TopBar } from '@/components/sidebar-layout'
+import { Markdown } from '@/components/ui/markdown'
 
 /**
  * The frame on a page of its own, so it has a URL somebody can share. It reads
@@ -316,16 +317,20 @@ function Brief({ pin }: { pin: RenderedPin }) {
         </p>
         <p className="font-medium">{brief.headline}</p>
         {brief.where_we_are && (
-          <p className="mt-1 text-sm text-muted-foreground">{brief.where_we_are}</p>
+          <Markdown breaks className="mt-1 text-sm text-muted-foreground">
+            {brief.where_we_are}
+          </Markdown>
         )}
-        <p className="mt-2 text-sm">
-          <span className="font-semibold">To move on:</span> {brief.next_step}
+        <div className="mt-2 text-sm">
+          <span className="font-semibold">To move on:</span>
           {nextOwner && <span className="text-muted-foreground"> ({nextOwner.name})</span>}
-        </p>
+          <Markdown breaks>{brief.next_step}</Markdown>
+        </div>
         {brief.watch && (
-          <p className="mt-2 flex gap-2 text-sm text-amber-800 dark:text-amber-300">
-            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /> {brief.watch}
-          </p>
+          <div className="mt-2 flex gap-2 text-sm text-amber-800 dark:text-amber-300">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <Markdown breaks>{brief.watch}</Markdown>
+          </div>
         )}
       </div>
       {ask}
@@ -373,7 +378,9 @@ function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void
           </span>
         )}
       </div>
-      <p className="max-w-3xl whitespace-pre-line text-base leading-relaxed">{pin.announcement}</p>
+      <Markdown breaks className="max-w-3xl text-base leading-relaxed">
+        {pin.announcement}
+      </Markdown>
     </section>
   )
 }
@@ -383,7 +390,9 @@ function Framing({ pin }: { pin: RenderedPin }) {
   return (
     <Lane title="Framing" hint="What hurts, and what changes">
       {pin.businessCase ? (
-        <p className="whitespace-pre-line text-sm leading-relaxed">{pin.businessCase}</p>
+        <Markdown breaks className="text-sm leading-relaxed">
+          {pin.businessCase}
+        </Markdown>
       ) : (
         <Empty>No business case yet.</Empty>
       )}

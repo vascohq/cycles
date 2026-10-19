@@ -61,11 +61,22 @@ const COMPONENTS: Components = {
 export type MarkdownProps = {
   children: string
   className?: string
+  /**
+   * Keep a single newline as a line break, as plain text did. Text written
+   * before it rendered as Markdown relies on that.
+   */
+  breaks?: boolean
 }
 
-export function Markdown({ children, className }: MarkdownProps) {
+export function Markdown({ children, className, breaks }: MarkdownProps) {
   return (
-    <div className={cn('break-words', className)}>
+    <div
+      className={cn(
+        'break-words',
+        breaks && '[&_li]:whitespace-pre-line [&_p]:whitespace-pre-line',
+        className,
+      )}
+    >
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
         {children}
       </ReactMarkdown>

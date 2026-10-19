@@ -13,7 +13,16 @@ import { AREAS, CYCLES, FRAMES, SHAPES, USERS } from '../../fixture'
 // here, not in the shared fixture, because the map spec reads that one.
 const F1: Partial<Frame> = {
   owner: 'user_1',
-  business_case: 'Most reports reach the map from Slack. Without the thread, nobody can read the conversation.',
+  business_case: [
+    '**Context:** most reports reach the map from Slack.',
+    '**Problem:** without the thread, nobody can read the conversation.',
+    '',
+    '**How to reproduce**',
+    '1. Capture a report from a Slack message.',
+    '2. Open the frame. The report has no `permalink`.',
+    '',
+    'See [the capture guide](https://example.test/capture).',
+  ].join('\n'),
   outcomes: [{ id: 'o1', text: 'A report captured from Slack always opens the thread it came from.' }],
   announcement:
     'Every report you capture from Slack now links back to its thread. Open a frame and you are one click from the conversation.',

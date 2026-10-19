@@ -79,6 +79,7 @@ import {
 } from '@/components/ui/select'
 import { SidebarButton, TopBar } from '@/components/sidebar-layout'
 import { SectionCrumb } from '@/components/crumb-menu'
+import { DraftMarkdown } from '@/components/draft-markdown'
 
 const SOURCE_LABELS: Record<FrameReport['source'], string> = {
   internal: 'Internal',
@@ -590,7 +591,12 @@ export function FrameDetail({
               one thing must not move between creating a frame and reading it. */}
           <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
             <Field label={WHY_LABEL} hint="Who is affected, what it is worth, why now.">
-              <DraftTextarea value={pin.businessCase} rows={4} onCommit={set('business_case')} />
+              <DraftMarkdown
+                value={pin.businessCase}
+                rows={4}
+                label={WHY_LABEL}
+                onCommit={set('business_case')}
+              />
             </Field>
 
             <Field label="Appetite" hint="The time the business will spend, e.g. 6 weeks.">
@@ -603,7 +609,12 @@ export function FrameDetail({
               label="Release announcement"
               hint="What customers would read once it is solved. A draft until it ships."
             >
-              <DraftTextarea value={pin.announcement} rows={4} onCommit={set('announcement')} />
+              <DraftMarkdown
+                value={pin.announcement}
+                rows={4}
+                label="Release announcement"
+                onCommit={set('announcement')}
+              />
             </Field>
 
             {pin.candidateStatement && (
@@ -1322,26 +1333,6 @@ function DraftTitle({
       placeholder="What hurts, or what could we unlock?…"
       aria-label="Problem"
       className={TITLE_INPUT}
-    />
-  )
-}
-
-function DraftTextarea({
-  value,
-  rows,
-  onCommit,
-}: {
-  value: string
-  rows: number
-  onCommit: (value: string) => void
-}) {
-  const [draft, setDraft] = useState(value)
-  return (
-    <Textarea
-      rows={rows}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => draft !== value && onCommit(draft)}
     />
   )
 }
