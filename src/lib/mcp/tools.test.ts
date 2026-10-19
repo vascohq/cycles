@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleLinkPointer, handleWakeFrame, handleWriteBrief, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleUpdateReport, handleDeleteReport, handleLinkPointer, handleWakeFrame, handleWriteBrief, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -32,6 +32,8 @@ vi.mock('./liveblocks-writer', () => ({
   upsertArea: vi.fn(),
   upsertFrame: vi.fn(),
   attachReport: vi.fn(),
+  updateReport: vi.fn(),
+  deleteReport: vi.fn(),
   linkPointer: vi.fn(),
   wakeFrame: vi.fn(),
   writeBrief: vi.fn(),
@@ -61,7 +63,7 @@ import {
   resolvePitch,
   getProductMapStorage,
 } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, linkPointer, wakeFrame, writeBrief, resolveFrame } from './liveblocks-writer'
+import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, updateReport, deleteReport, linkPointer, wakeFrame, writeBrief, resolveFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -806,7 +808,7 @@ describe('tool annotations', () => {
   }
 
   const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_frames', 'map_list_areas']
-  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch', 'map_delete_frame', 'map_delete_area']
+  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch', 'map_delete_frame', 'map_delete_area', 'map_delete_report']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
     const tools = collectTools()
@@ -1251,6 +1253,32 @@ describe('map_list_frames', () => {
     expect(parsed.frames).toHaveLength(1)
   })
 
+  it('names every report, including one written before ids existed', async () => {
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [
+        {
+          id: 'f1',
+          kind: 'brand_burn',
+          type: 'bug',
+          problem: 'p',
+          appetite: '',
+          business_case: '',
+          reports: [{ capturer: 'u', source: 'internal', text: 't', date: '2026-09-01' }],
+          pointers: [],
+          outcomes: [],
+          last_woken: '2026-09-01',
+          resolved: false,
+        },
+      ],
+    })
+
+    const result = await handleListFrames(ORG_ID)
+
+    const parsed = JSON.parse(result.content[0].text) as { frames: { reports: { id: string }[] }[] }
+    expect(parsed.frames[0].reports[0].id).toMatch(/^r_/)
+  })
+
   it('filters by who raised the frame', async () => {
     const frame = {
       kind: 'pain_point' as const,
@@ -1438,6 +1466,18 @@ describe('map_upsert_frame schema', () => {
     expect(schemaFor('map_upsert_frame')).not.toHaveProperty('cycle_slug')
     expect(schemaFor('map_list_frames')).not.toHaveProperty('cycle_slug')
     expect(schemaFor('map_attach_report')).not.toHaveProperty('cycle_slug')
+  })
+
+  it('lets map_update_report omit every field it corrects (ADR 0011)', () => {
+    const parsed = z
+      .object(schemaFor('map_update_report'))
+      .parse({ frame_id: 'f1', report_id: 'r1' })
+
+    expect(parsed.text).toBeUndefined()
+    expect(parsed.source).toBeUndefined()
+    expect(parsed.customer).toBeUndefined()
+    expect(parsed.link).toBeUndefined()
+    expect(parsed.editor).toBeUndefined()
   })
 
   it('lets map_attach_report omit everything but the frame and the text', () => {
@@ -1876,5 +1916,34 @@ describe('handleResolveFrame', () => {
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toBe('Frame not found: "nope"')
+  })
+})
+
+describe('map_update_report and map_delete_report', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('needs the frame and the report', async () => {
+    expect((await handleUpdateReport(ORG_ID, { report_id: 'r1' })).isError).toBe(true)
+    expect((await handleUpdateReport(ORG_ID, { frame_id: 'f1' })).isError).toBe(true)
+    expect((await handleDeleteReport(ORG_ID, { frame_id: 'f1' })).isError).toBe(true)
+  })
+
+  it('passes only the fields the caller sent, with the editor', async () => {
+    vi.mocked(updateReport).mockResolvedValue({ frameId: 'f1', reportId: 'r1' })
+
+    await handleUpdateReport(ORG_ID, { frame_id: 'f1', report_id: 'r1', editor: 'user_2', text: 'x' })
+
+    const [, params] = vi.mocked(updateReport).mock.calls[0]
+    expect(params).toMatchObject({ frameId: 'f1', reportId: 'r1', editor: 'user_2', text: 'x' })
+    expect(params.link).toBeUndefined()
+    expect(params.source).toBeUndefined()
+  })
+
+  it('returns the new count after a delete', async () => {
+    vi.mocked(deleteReport).mockResolvedValue({ frameId: 'f1', reportCount: 3 })
+
+    const result = await handleDeleteReport(ORG_ID, { frame_id: 'f1', report_id: 'r1' })
+
+    expect(JSON.parse(result.content[0].text)).toEqual({ deleted: true, frameId: 'f1', reportCount: 3 })
   })
 })

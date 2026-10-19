@@ -33,6 +33,8 @@ import {
   upsertArea,
   upsertFrame,
   attachReport,
+  updateReport,
+  deleteReport,
   linkPointer,
   wakeFrame,
   writeBrief,
@@ -42,6 +44,8 @@ import {
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
+import type { FrameReport } from '@/product-map-liveblocks.config'
+import { withReportIds } from '@/lib/product-map-engine'
 
 const mockGetRoom = vi.mocked(liveblocks.getRoom)
 const mockCreateRoom = vi.mocked(liveblocks.createRoom)
@@ -1889,6 +1893,131 @@ describe('upsertFrame validation', () => {
   })
 })
 
+describe('updateReport', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const legacy = { capturer: 'user_9', source: 'internal', text: 'again', date: '2026-08-01' }
+  const legacyId = withReportIds([legacy as FrameReport])[0].id
+
+  it('corrects an old report by its derived id and stores the id', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await updateReport(MAP_ROOM, {
+      frameId: 'f1',
+      reportId: legacyId,
+      editor: 'user_2',
+      text: ' Their import dropped 400 rows ',
+      source: 'customer',
+      customer: 'Acme',
+    })
+
+    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(report).toEqual({
+      id: legacyId,
+      capturer: 'user_9',
+      source: 'customer',
+      customer: 'Acme',
+      text: 'Their import dropped 400 rows',
+      date: '2026-08-01',
+      edited_on: expect.any(String),
+      edited_by: 'user_2',
+    })
+  })
+
+  it('keeps the id after the text that derived it changes', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: legacyId, editor: 'u', text: 'one' })
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: legacyId, editor: 'u', text: 'two' })
+
+    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(report.text).toBe('two')
+  })
+
+  // An edit is not the problem happening again.
+  it('never wakes the frame, never changes the count, and clears with ""', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({
+      frames: [makeFrameItem({ reports: [{ ...legacy, id: 'r1', link: 'https://x.test' }] })],
+    })
+
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', link: '' })
+
+    const frame = storage.frames.find(() => true)!
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+    const reports = frame.get('reports') as any[]
+    expect(reports).toHaveLength(1)
+    expect(reports[0]).not.toHaveProperty('link')
+    expect(reports[0].text).toBe('again')
+  })
+
+  it('leaves no "edited" mark when nothing changed', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [{ ...legacy, id: 'r1' }] })] })
+
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', text: 'again' })
+
+    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(report).not.toHaveProperty('edited_on')
+  })
+
+  // The same rule capture follows, so the app and the MCP agree.
+  it('drops the customer label when a report moves to internal', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const customerReport = { ...legacy, id: 'r1', source: 'customer', customer: 'Acme' }
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [customerReport] })] })
+
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', source: 'internal' })
+
+    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(report.source).toBe('internal')
+    expect(report).not.toHaveProperty('customer')
+  })
+
+  it('refuses empty text and an unknown report', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(
+      updateReport(MAP_ROOM, { frameId: 'f1', reportId: legacyId, editor: 'u', text: ' ' })
+    ).rejects.toThrow('needs text')
+    await expect(
+      updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'nope', editor: 'u', text: 'x' })
+    ).rejects.toThrow('Report not found')
+  })
+})
+
+describe('deleteReport', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('removes one report, lowers the count and leaves the clock alone', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const reports = [
+      { id: 'r1', capturer: 'u', source: 'internal', text: 'a', date: '2026-08-01' },
+      { id: 'r2', capturer: 'u', source: 'internal', text: 'b', date: '2026-08-02' },
+    ]
+    const storage = setupStorage({ frames: [makeFrameItem({ reports })] })
+
+    const result = await deleteReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1' })
+
+    expect(result).toEqual({ frameId: 'f1', reportCount: 1 })
+    const frame = storage.frames.find(() => true)!
+    expect((frame.get('reports') as any[]).map((r) => r.id)).toEqual(['r2'])
+    expect(frame.get('last_woken')).toBe('2026-08-01')
+  })
+
+  it('refuses an unknown report', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    setupStorage({ frames: [makeFrameItem()] })
+
+    await expect(deleteReport(MAP_ROOM, { frameId: 'f1', reportId: 'nope' })).rejects.toThrow(
+      'Report not found'
+    )
+  })
+})
+
 describe('attachReport', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -1910,6 +2039,7 @@ describe('attachReport', () => {
     const reports = storage.frames.find(() => true)!.get('reports') as any[]
     expect(reports).toHaveLength(2)
     expect(reports[1]).toEqual({
+      id: expect.any(String),
       capturer: 'user_2',
       source: 'customer',
       customer: 'Acme',

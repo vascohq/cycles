@@ -475,6 +475,88 @@ export function isMemberId(raisedBy: string): boolean {
   return raisedBy.startsWith('user_')
 }
 
+/**
+ * Every report with an id. A report written before ids existed has none stored,
+ * so it gets one derived from its capturer, date and text, and nothing needs
+ * migrating. The first correction on a frame stores the ids, so they never move
+ * after that. Identical old reports take a numbered suffix, so each one can be
+ * addressed on its own.
+ */
+/** A report whose id is known, stored or derived. */
+export type IdentifiedReport = FrameReport & { id: string }
+
+export function withReportIds(reports: FrameReport[]): IdentifiedReport[] {
+  const used = new Set(reports.flatMap((r) => (r.id ? [r.id] : [])))
+  return reports.map((r) => {
+    if (r.id) return { ...r, id: r.id }
+    const base = `r_${fnv1a(`${r.capturer}\n${r.date}\n${r.text}`)}`
+    let id = base
+    for (let n = 1; used.has(id); n++) id = `${base}_${n}`
+    used.add(id)
+    return { ...r, id }
+  })
+}
+
+/** What a correction can change. The date and the capturer never change. */
+export type ReportPatch = {
+  text?: string
+  link?: string
+  customer?: string
+  source?: FrameReport['source']
+}
+
+/**
+ * The reports with one corrected in place (ADR 0030), or null when no report
+ * has that id. Partial: an omitted field stays, and "" clears the link or the
+ * customer. Every report comes back with its id stored, so a derived id never
+ * moves after the first correction.
+ */
+export function correctReport(
+  reports: FrameReport[],
+  reportId: string,
+  patch: ReportPatch,
+  editor: string,
+  today: string
+): FrameReport[] | null {
+  const all: FrameReport[] = withReportIds(reports)
+  const idx = all.findIndex((r) => r.id === reportId)
+  if (idx === -1) return null
+  const before = all[idx]
+  const report = { ...before }
+  if (patch.text !== undefined) report.text = patch.text.trim()
+  if (patch.source !== undefined) report.source = patch.source
+  for (const key of ['link', 'customer'] as const) {
+    const value = patch[key]?.trim()
+    if (value === undefined) continue
+    if (value) report[key] = value
+    else delete report[key]
+  }
+  // An internal report names no customer, the same rule capture follows.
+  if (report.source === 'internal') delete report.customer
+  // A save that changes nothing is not an edit, so it leaves no "edited" mark.
+  const fields = ['text', 'source', 'link', 'customer'] as const
+  if (fields.every((key) => report[key] === before[key])) return all
+  all[idx] = { ...report, edited_on: today, edited_by: editor }
+  return all
+}
+
+/** The reports without the one recorded in error, or null when no report has that id. */
+export function removeReport(reports: FrameReport[], reportId: string): FrameReport[] | null {
+  const all = withReportIds(reports)
+  const kept = all.filter((r) => r.id !== reportId)
+  return kept.length === all.length ? null : kept
+}
+
+// ponytail: 32-bit FNV-1a. Ids only need to differ within one frame's reports.
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 /** How many of a frame's reports the lens lets through. */
 export function reportCount(frame: Pick<Frame, 'reports'>, lens: HeatLens): number {
   const reports = frame.reports ?? []
@@ -521,7 +603,7 @@ export type RenderedPin = {
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
   /** Every report on the frame, unfiltered — the detail shows the evidence. */
-  reports: FrameReport[]
+  reports: IdentifiedReport[]
   /** The outbound links this frame packages. No artifact is ever stored. */
   pointers: FramePointer[]
   /** What the playbook expects and the frame lacks. A prompt, never a gate. */
@@ -994,7 +1076,7 @@ function renderPin(
     owner: frame.owner ?? null,
     raisedBy: frame.raised_by ?? null,
     color: KIND_COLORS[kind],
-    reports: frame.reports ?? [],
+    reports: withReportIds(frame.reports ?? []),
     pointers: frame.pointers ?? [],
     gaps: gapList(frame),
     reportCount: count,

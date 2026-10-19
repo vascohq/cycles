@@ -27,6 +27,8 @@ import {
   isFrameKind,
   isFrameType,
   isPointerKind,
+  correctReport,
+  removeReport,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
@@ -1352,6 +1354,7 @@ export async function attachReport(
       return
     }
     const report: FrameReport = {
+      id: nanoid(),
       capturer: params.capturer,
       // Internal is the quieter claim, so it is the safe default: a report only
       // counts under the customer lens when somebody said it came from one.
@@ -1369,6 +1372,92 @@ export async function attachReport(
 
   if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
   return { frameId: params.frameId, reportCount }
+}
+
+/**
+ * Replace a frame's reports with what `change` returns, and return them. A null
+ * from `change` means no report has that id. The two report corrections share
+ * this, so a missing frame or report reads the same from both.
+ */
+async function changeReports(
+  roomId: string,
+  frameId: string,
+  reportId: string,
+  change: (reports: FrameReport[]) => FrameReport[] | null
+): Promise<FrameReport[]> {
+  let missing: 'frame' | 'report' | null = null
+  let changed: FrameReport[] = []
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === frameId)
+    if (!existing) {
+      missing = 'frame'
+      return
+    }
+    const next = change((getField(existing, 'reports') ?? []) as FrameReport[])
+    if (!next) {
+      missing = 'report'
+      return
+    }
+    existing.set('reports', next)
+    changed = next
+  })
+
+  if (missing === 'frame') throw new Error(`Frame not found: "${frameId}"`)
+  if (missing === 'report') {
+    throw new Error(`Report not found: "${reportId}". map_list_frames names them.`)
+  }
+  return changed
+}
+
+/**
+ * Correct a report in place (ADR 0030). Only the text, the link, the customer
+ * label and the source can change; the date and the capturer stay. Partial: an
+ * omitted field is left unchanged, and "" clears the link or the customer.
+ *
+ * An edit is not the problem happening again, so it never wakes the frame and
+ * never changes the count. It stores every report id on the frame, so ids that
+ * were derived for old reports never move after this.
+ */
+export async function updateReport(
+  roomId: string,
+  params: {
+    frameId: string
+    reportId: string
+    /** Who made the edit: a Clerk user id or an agent id. */
+    editor: string
+    text?: string
+    link?: string
+    customer?: string
+    source?: FrameReport['source']
+  }
+): Promise<{ frameId: string; reportId: string }> {
+  if (params.text !== undefined && !params.text.trim()) {
+    throw new Error('A report needs text — one line saying what happened.')
+  }
+  if (params.source !== undefined && params.source !== 'internal' && params.source !== 'customer') {
+    throw new Error(`Invalid source: "${params.source}". One of: internal, customer.`)
+  }
+
+  const today = getTeamToday(new Date())
+  await changeReports(roomId, params.frameId, params.reportId, (reports) =>
+    correctReport(reports, params.reportId, params, params.editor, today)
+  )
+  return { frameId: params.frameId, reportId: params.reportId }
+}
+
+/**
+ * Delete a report recorded in error (ADR 0030). The count goes down by one.
+ * The freshness clock stays where it is: rewinding it would mean replaying
+ * every wake, and a wake from a transcript is not stored.
+ */
+export async function deleteReport(
+  roomId: string,
+  params: { frameId: string; reportId: string }
+): Promise<{ frameId: string; reportCount: number }> {
+  const kept = await changeReports(roomId, params.frameId, params.reportId, (reports) =>
+    removeReport(reports, params.reportId)
+  )
+  return { frameId: params.frameId, reportCount: kept.length }
 }
 
 /**

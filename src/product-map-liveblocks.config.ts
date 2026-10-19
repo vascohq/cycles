@@ -41,8 +41,19 @@ export type FrameKind = 'brand_burn' | 'pain_point' | 'unlock_win'
 /** Where a problem came from and how it gets worked. Type selects the playbook (ADR 0025). */
 export type FrameType = 'bug' | 'idea' | 'request' | 'security' | 'irritant'
 
-/** One record of the problem happening. Nothing reaches a frame unmediated. */
+/**
+ * One record of the problem happening. Nothing reaches a frame unmediated.
+ *
+ * A report can be corrected: an edit replaces it in place and a delete removes
+ * it, so a badly written report never has to be fixed by adding another one
+ * that counts as the problem happening again (ADR 0030).
+ */
 export type FrameReport = {
+  /**
+   * Absent on reports written before ids existed. Read it through `withReportIds`,
+   * which derives one; the first correction on the frame stores it.
+   */
+  id?: string
   /** A Clerk user id or an agent id. Provenance is never anonymous. */
   capturer: string
   source: 'internal' | 'customer'
@@ -52,6 +63,10 @@ export type FrameReport = {
   text: string
   /** ISO date (YYYY-MM-DD). */
   date: string
+  /** ISO date (YYYY-MM-DD) of the last edit. Absent on a report never edited. */
+  edited_on?: string
+  /** Who made the last edit: a Clerk user id or an agent id. */
+  edited_by?: string
 }
 
 /**
