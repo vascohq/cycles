@@ -671,17 +671,18 @@ export async function handleUpsertArea(
 
 /**
  * List the frames on the Product Map. Awake frames only, unless the caller asks for
- * dormant ones AND names an area or a Type. There is deliberately no unfiltered
+ * dormant ones AND names an area, a Type or who raised it. There is deliberately no unfiltered
  * dormant listing: an unfiltered list somebody grooms is a backlog (ADR 0024).
  */
 export async function handleListFrames(
   orgId: string,
   params: { area_id?: string; type?: string; raised_by?: string; include_dormant?: boolean } = {}
 ): Promise<ToolResult> {
-  const filtered = !!params.area_id || !!params.type
+  // Who raised a frame narrows the list as much as an area does, so it counts.
+  const filtered = !!params.area_id || !!params.type || !!params.raised_by
   if (params.include_dormant && !filtered) {
     return errorResult(
-      'A dormant listing needs a filter. Pass "area_id" or "type" — there is no browsable list of dormant frames, by design.'
+      'A dormant listing needs a filter. Pass "area_id", "type" or "raised_by" — there is no browsable list of dormant frames, by design.'
     )
   }
 
@@ -796,7 +797,7 @@ export async function handleUpsertFrame(
       outcomes: params.outcomes,
       areaId: params.area_id,
       owner: params.owner,
-      raised_by: params.raised_by,
+      raisedBy: params.raised_by,
       originFrameId: params.origin_frame_id,
     })
     return jsonResult(result)
@@ -1901,7 +1902,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_list_frames',
-    "List the frames on the organization's Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the Product Map holds problems, a cycle holds the bets. Awake frames only by default. To reach dormant frames — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter. There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
+    "List the frames on the organization's Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the Product Map holds problems, a cycle holds the bets. Awake frames only by default. To reach dormant frames — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter (\"area_id\", \"type\" or \"raised_by\"). There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
     {
       ...orgArg,
       area_id: z.string().optional().describe('Only frames filed in this area.'),
@@ -1916,7 +1917,7 @@ export function registerCyclesTools(server: any): void {
       include_dormant: z
         .boolean()
         .optional()
-        .describe('Include sleeping frames. Needs "area_id" or "type" alongside it.'),
+        .describe('Include sleeping frames. Needs "area_id", "type" or "raised_by" alongside it.'),
     },
     { title: 'List frames', readOnlyHint: true, openWorldHint: false },
     async (

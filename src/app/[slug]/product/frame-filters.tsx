@@ -35,6 +35,7 @@ import {
   KIND_COLORS,
   FRAME_STATES,
   flattenAreas,
+  isMemberId,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
@@ -110,7 +111,7 @@ export function FilterBar({
   // frames themselves. A Clerk id that is no longer a member is left out.
   const outsiders = [
     ...new Set(
-      pins.flatMap((p) => (p.raisedBy && !p.raisedBy.startsWith('user_') ? [p.raisedBy] : []))
+      pins.flatMap((p) => (p.raisedBy && !isMemberId(p.raisedBy) ? [p.raisedBy] : []))
     ),
   ].sort()
   return (

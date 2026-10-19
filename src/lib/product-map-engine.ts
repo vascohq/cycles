@@ -467,6 +467,14 @@ export function isHeatLens(value: unknown): value is HeatLens {
   return (HEAT_LENSES as readonly unknown[]).includes(value)
 }
 
+/**
+ * Whether a `raised_by` names a member (a Clerk user id) rather than somebody
+ * outside the app, written as free text. Clerk user ids start with `user_`.
+ */
+export function isMemberId(raisedBy: string): boolean {
+  return raisedBy.startsWith('user_')
+}
+
 /** How many of a frame's reports the lens lets through. */
 export function reportCount(frame: Pick<Frame, 'reports'>, lens: HeatLens): number {
   const reports = frame.reports ?? []

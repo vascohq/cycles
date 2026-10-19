@@ -1277,6 +1277,10 @@ describe('map_list_frames', () => {
 
     const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
     expect(parsed.frames.map((f) => f.id)).toEqual(['theirs'])
+
+    // A person's own frames are a narrow list, so it unlocks the dormant ones too.
+    const dormant = await handleListFrames(ORG_ID, { raised_by: 'user_3', include_dormant: true })
+    expect(dormant.isError).toBeFalsy()
   })
 
   // The Product Map opens for an org that has never created a cycle, and for
@@ -1417,6 +1421,7 @@ describe('map_upsert_frame schema', () => {
     expect(parsed.owner).toBeUndefined()
     expect(parsed.origin_frame_id).toBeUndefined()
     expect(parsed.announcement).toBeUndefined()
+    expect(parsed.raised_by).toBeUndefined()
   })
 
   it('refuses a Kind or a Type outside the vocabulary', () => {

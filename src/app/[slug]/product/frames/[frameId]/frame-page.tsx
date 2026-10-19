@@ -23,6 +23,7 @@ import {
   FRAME_STATES,
   type FrameState,
   POINTER_KIND_LABELS,
+  isMemberId,
   renderFrame,
   renderProductMap,
   type CycleWindow,
@@ -234,7 +235,7 @@ function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
               <>
                 <UserAvatar user={raiser} /> {raiser.name}
               </>
-            ) : pin.raisedBy.startsWith('user_') ? (
+            ) : isMemberId(pin.raisedBy) ? (
               'Former member'
             ) : (
               pin.raisedBy

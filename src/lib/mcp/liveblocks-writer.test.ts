@@ -1712,16 +1712,16 @@ describe('upsertFrame', () => {
     const storage = setupStorage({ frames: [makeFrameItem()] })
     const frame = () => storage.frames.find(() => true)!
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', raised_by: ' Jane at Acme ' })
+    await upsertFrame(MAP_ROOM, { id: 'f1', raisedBy: ' Jane at Acme ' })
     expect(frame().get('raised_by')).toBe('Jane at Acme')
 
     await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '2 weeks' })
     expect(frame().get('raised_by')).toBe('Jane at Acme')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', raised_by: 'user_3' })
+    await upsertFrame(MAP_ROOM, { id: 'f1', raisedBy: 'user_3' })
     expect(frame().get('raised_by')).toBe('user_3')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', raised_by: '' })
+    await upsertFrame(MAP_ROOM, { id: 'f1', raisedBy: '' })
     expect(frame().get('raised_by')).toBeUndefined()
   })
 

@@ -1195,7 +1195,7 @@ type FrameFields = {
   outcomes: string[]
   areaId: string
   owner: string
-  raised_by: string
+  raisedBy: string
   originFrameId: string
 }
 
@@ -1267,7 +1267,7 @@ export async function upsertFrame(
         ...(params.areaId ? { areaId: params.areaId } : {}),
         ...(owner ? { owner } : {}),
         // Never defaulted: the capturer is often not who raised the problem.
-        ...(params.raised_by?.trim() ? { raised_by: params.raised_by.trim() } : {}),
+        ...(params.raisedBy?.trim() ? { raised_by: params.raisedBy.trim() } : {}),
         ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
         reports: [],
         pointers: [],
@@ -1298,7 +1298,7 @@ export async function upsertFrame(
     // sitting there as an empty string nobody can tell from "unset".
     setOrClear(existing, 'areaId', params.areaId)
     setOrClear(existing, 'owner', params.owner)
-    setOrClear(existing, 'raised_by', params.raised_by?.trim())
+    setOrClear(existing, 'raised_by', params.raisedBy?.trim())
     setOrClear(existing, 'originFrameId', params.originFrameId)
     setOrClear(existing, 'announcement', params.announcement)
   })

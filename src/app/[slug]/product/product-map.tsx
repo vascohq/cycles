@@ -29,6 +29,7 @@ import {
   FRAME_TYPES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
+  isMemberId,
   renderProductMap,
   type CycleWindow,
   type FrameState,
@@ -711,7 +712,7 @@ function RaisedByPicker({
         ...users.map((u) => ({ value: u.userId, label: `Raised by ${u.name}` })),
         // A free-text name, or a Clerk id that is no longer a member.
         ...(value && !member
-          ? [{ value, label: `Raised by ${value.startsWith('user_') ? 'a former member' : value}` }]
+          ? [{ value, label: `Raised by ${isMemberId(value) ? 'a former member' : value}` }]
           : []),
         { value: SOMEONE_ELSE, label: 'Someone else…' },
       ]}
