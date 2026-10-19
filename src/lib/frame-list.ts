@@ -36,6 +36,8 @@ export type FrameFilters = {
   state?: FrameState
   /** A Clerk user id, or "nobody". */
   owner?: string
+  /** A Clerk user id, or the exact free-text name of somebody outside the app. */
+  raised_by?: string
   /** Frames with at least one report from that side — the heat lens. */
   source?: FrameReport['source']
   freshness?: Freshness
@@ -43,7 +45,17 @@ export type FrameFilters = {
   sort?: 'reports'
 }
 
-export const FILTER_KEYS = ['area', 'kind', 'type', 'state', 'owner', 'source', 'freshness', 'sort'] as const
+export const FILTER_KEYS = [
+  'area',
+  'kind',
+  'type',
+  'state',
+  'owner',
+  'raised_by',
+  'source',
+  'freshness',
+  'sort',
+] as const
 
 /**
  * The frames that pass every filter, in the order asked for. `areaIds` is the
@@ -62,6 +74,7 @@ export function listFrames(
       (!filters.type || pin.type === filters.type) &&
       (filters.state ? pin.state === filters.state : pin.state !== 'resolved') &&
       (!filters.owner || (filters.owner === NO_OWNER ? !pin.owner : pin.owner === filters.owner)) &&
+      (!filters.raised_by || pin.raisedBy === filters.raised_by) &&
       (!filters.source || pin.reports.some((r) => r.source === filters.source)) &&
       (!filters.freshness || freshnessOf(pin.opacity) === filters.freshness)
   )

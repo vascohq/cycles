@@ -59,6 +59,18 @@ describe('listFrames', () => {
     expect(listFrames(pins, {}, new Set(['unmapped'])).map((p) => p.frameId)).toEqual(['loose'])
   })
 
+  it('filters by who raised the frame, a member or a free-text name', () => {
+    const pins = [
+      pin({ frameId: 'member', raisedBy: 'u1' }),
+      pin({ frameId: 'outside', raisedBy: 'Jane at Acme' }),
+      pin({ frameId: 'unknown' }),
+    ]
+    expect(listFrames(pins, { raised_by: 'u1' }).map((p) => p.frameId)).toEqual(['member'])
+    expect(listFrames(pins, { raised_by: 'Jane at Acme' }).map((p) => p.frameId)).toEqual([
+      'outside',
+    ])
+  })
+
   it('filters by owner, including frames nobody owns', () => {
     const pins = [pin({ frameId: 'mine', owner: 'u1' }), pin({ frameId: 'orphan' })]
 

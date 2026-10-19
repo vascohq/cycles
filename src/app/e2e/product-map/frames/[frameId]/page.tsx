@@ -13,6 +13,7 @@ import { AREAS, CYCLES, FRAMES, SHAPES, USERS } from '../../fixture'
 // here, not in the shared fixture, because the map spec reads that one.
 const F1: Partial<Frame> = {
   owner: 'user_1',
+  raised_by: 'Jane at Northwind',
   business_case: [
     '**Context:** most reports reach the map from Slack.',
     '**Problem:** without the thread, nobody can read the conversation.',

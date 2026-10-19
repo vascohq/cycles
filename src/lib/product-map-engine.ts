@@ -508,6 +508,8 @@ export type RenderedPin = {
   outcomes: FrameOutcome[]
   /** Clerk user id of the frame owner, or null when nobody holds it. */
   owner: string | null
+  /** Who raised the problem: a Clerk user id or a free-text name. Null when unknown. */
+  raisedBy: string | null
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
   /** Every report on the frame, unfiltered — the detail shows the evidence. */
@@ -982,6 +984,7 @@ function renderPin(
     brief: frame.brief ?? null,
     outcomes: statedOutcomes(frame),
     owner: frame.owner ?? null,
+    raisedBy: frame.raised_by ?? null,
     color: KIND_COLORS[kind],
     reports: frame.reports ?? [],
     pointers: frame.pointers ?? [],

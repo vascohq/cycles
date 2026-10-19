@@ -1696,6 +1696,35 @@ describe('upsertFrame', () => {
     expect(storage.frames.find(() => true)!.get('owner')).toBeUndefined()
   })
 
+  // The capturer often records a problem somebody else raised, so nothing
+  // fills raised_by on its own.
+  it('never defaults who raised the frame', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
+
+    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
+
+    expect(storage.frames.find(() => true)!.get('raised_by')).toBeUndefined()
+  })
+
+  it('records who raised the frame, a member or a free-text name', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const frame = () => storage.frames.find(() => true)!
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', raised_by: ' Jane at Acme ' })
+    expect(frame().get('raised_by')).toBe('Jane at Acme')
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '2 weeks' })
+    expect(frame().get('raised_by')).toBe('Jane at Acme')
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', raised_by: 'user_3' })
+    expect(frame().get('raised_by')).toBe('user_3')
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', raised_by: '' })
+    expect(frame().get('raised_by')).toBeUndefined()
+  })
+
   it('defaults the Kind to pain_point, so capture never has to pick a severity', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()

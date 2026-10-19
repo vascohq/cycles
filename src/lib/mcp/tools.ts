@@ -676,7 +676,7 @@ export async function handleUpsertArea(
  */
 export async function handleListFrames(
   orgId: string,
-  params: { area_id?: string; type?: string; include_dormant?: boolean } = {}
+  params: { area_id?: string; type?: string; raised_by?: string; include_dormant?: boolean } = {}
 ): Promise<ToolResult> {
   const filtered = !!params.area_id || !!params.type
   if (params.include_dormant && !filtered) {
@@ -694,6 +694,7 @@ export async function handleListFrames(
   const answered = frames
     .filter((f) => !params.area_id || f.areaId === params.area_id)
     .filter((f) => !params.type || f.type === params.type)
+    .filter((f) => !params.raised_by || f.raised_by === params.raised_by)
     .map((f) => ({
       ...f,
       dormant: isDormant(f.last_woken, cycles, today),
@@ -765,6 +766,7 @@ export async function handleUpsertFrame(
     outcomes?: string[]
     area_id?: string
     owner?: string
+    raised_by?: string
     origin_frame_id?: string
   }
 ): Promise<ToolResult> {
@@ -794,6 +796,7 @@ export async function handleUpsertFrame(
       outcomes: params.outcomes,
       areaId: params.area_id,
       owner: params.owner,
+      raised_by: params.raised_by,
       originFrameId: params.origin_frame_id,
     })
     return jsonResult(result)
@@ -1906,6 +1909,10 @@ export function registerCyclesTools(server: any): void {
         .enum(FRAME_TYPES)
         .optional()
         .describe('Only frames of this Type, e.g. "bug" for "what bugs could I take".'),
+      raised_by: z
+        .string()
+        .optional()
+        .describe('Only frames raised by this person: a Clerk user id, or the exact free-text name.'),
       include_dormant: z
         .boolean()
         .optional()
@@ -1916,7 +1923,13 @@ export function registerCyclesTools(server: any): void {
       {
         org,
         ...params
-      }: { org?: string; area_id?: string; type?: string; include_dormant?: boolean },
+      }: {
+        org?: string
+        area_id?: string
+        type?: string
+        raised_by?: string
+        include_dormant?: boolean
+      },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -1976,6 +1989,12 @@ export function registerCyclesTools(server: any): void {
         .optional()
         .describe('Area to file the frame in. Omit to leave it Unmapped, which is always valid. Pass "" to unfile it.'),
       owner: z.string().optional().describe('Clerk user id of the frame owner. Pass "" to clear.'),
+      raised_by: z
+        .string()
+        .optional()
+        .describe(
+          'Who raised the problem: the Clerk user id of a member, or a free-text name for somebody outside the app. Not the capturer, and never defaulted: leave it out when you do not know. Pass "" to clear.'
+        ),
       origin_frame_id: z
         .string()
         .optional()
@@ -2004,6 +2023,7 @@ export function registerCyclesTools(server: any): void {
         outcomes?: string[]
         area_id?: string
         owner?: string
+        raised_by?: string
         origin_frame_id?: string
       },
       extra: ToolExtra

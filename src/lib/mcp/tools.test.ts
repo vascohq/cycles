@@ -1251,6 +1251,34 @@ describe('map_list_frames', () => {
     expect(parsed.frames).toHaveLength(1)
   })
 
+  it('filters by who raised the frame', async () => {
+    const frame = {
+      kind: 'pain_point' as const,
+      type: 'bug' as const,
+      problem: 'p',
+      appetite: '',
+      business_case: '',
+      reports: [],
+      pointers: [],
+      outcomes: [],
+      last_woken: '2026-09-01',
+      resolved: false,
+    }
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      frames: [
+        { ...frame, id: 'mine', raised_by: 'user_3' },
+        { ...frame, id: 'theirs', raised_by: 'Jane at Acme' },
+        { ...frame, id: 'unknown' },
+      ],
+    })
+
+    const result = await handleListFrames(ORG_ID, { raised_by: 'Jane at Acme' })
+
+    const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
+    expect(parsed.frames.map((f) => f.id)).toEqual(['theirs'])
+  })
+
   // The Product Map opens for an org that has never created a cycle, and for
   // one that has never captured a frame (ADR 0021).
   it('answers with an empty list for an organization with no map yet', async () => {

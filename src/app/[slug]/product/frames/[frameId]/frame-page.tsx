@@ -187,6 +187,7 @@ function FrameActions({ onEdit }: { onEdit?: () => void }) {
 
 function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
   const owner = useMember(pin.owner)
+  const raiser = useMember(pin.raisedBy)
   // A frame can be attacked by more than one shape; the squads are the people on it now.
   const squads = [
     ...new Map(pin.shapes.filter((s) => s.squad).map((s) => [s.squad!.name, s.squad!])).values(),
@@ -226,6 +227,20 @@ function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
             <span className="text-amber-600">nobody yet</span>
           )}
         </span>
+        {pin.raisedBy && (
+          <span className="flex items-center gap-1.5">
+            Raised by:{' '}
+            {raiser ? (
+              <>
+                <UserAvatar user={raiser} /> {raiser.name}
+              </>
+            ) : pin.raisedBy.startsWith('user_') ? (
+              'Former member'
+            ) : (
+              pin.raisedBy
+            )}
+          </span>
+        )}
         {squads.map((squad) => (
           <span key={squad.name} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full" style={{ background: squad.color }} />{' '}
