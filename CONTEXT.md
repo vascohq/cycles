@@ -167,7 +167,9 @@ The frame whose **monitoring** surfaced this one. A quality problem or an adopti
 _Avoid_: Parent, duplicate, related
 
 **Report**:
-One record of a problem happening. A report holds a capturer (a Clerk user id or an agent id), a source (`internal` or `customer`), an optional customer label, an optional link, text, and a date. Nothing reaches a frame unmediated. A person or an agent always captures it. The report count sets the **Pin** size.
+One record of a problem happening. A report holds an id, a capturer (a Clerk user id or an agent id), a source (`internal` or `customer`), an optional customer label, an optional link, text, and a date. Nothing reaches a frame unmediated. A person or an agent always captures it. The report count sets the **Pin** size.
+
+A report can be corrected. An edit changes the text, the link, the customer label or the source, and marks the report as edited. An edit never wakes the frame and never changes the count. A delete removes a report recorded in error and lowers the count by one. To fix a report, correct it. Do not add a second report, because a second report counts as the problem happening again ([ADR 0030](docs/adr/0030-a-report-can-be-corrected.md)).
 _Avoid_: Vote, upvote, duplicate, occurrence
 
 **Heat lens**:

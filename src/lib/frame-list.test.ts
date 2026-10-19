@@ -17,6 +17,7 @@ function pin(overrides: Partial<RenderedPin>): RenderedPin {
 }
 
 const report = (source: 'internal' | 'customer') => ({
+  id: 'r',
   capturer: 'u',
   source,
   text: 't',

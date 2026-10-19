@@ -29,6 +29,8 @@ import {
   FRAME_TYPES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
+  correctReport,
+  removeReport,
   isMemberId,
   renderProductMap,
   type CycleWindow,
@@ -37,13 +39,14 @@ import {
   type HeatLens,
   type RenderedArea,
   type RenderedPin,
+  type ReportPatch,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
-import { ExternalLink, Plus, type LucideIcon } from 'lucide-react'
+import { ExternalLink, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react'
 import { claudeChatHref, useOpenFramePage } from './links'
 import { FilteredFrames } from './frame-filters'
 import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
@@ -1244,6 +1247,7 @@ function Reports({ pin }: { pin: RenderedPin }) {
     addReport(
       pin.frameId,
       {
+        id: nanoid(),
         capturer: userId,
         source,
         ...(source === 'customer' && customer.trim() ? { customer: customer.trim() } : {}),
@@ -1266,23 +1270,8 @@ function Reports({ pin }: { pin: RenderedPin }) {
         </p>
       )}
       <ul className="flex flex-col gap-2">
-        {pin.reports.map((report, i) => (
-          <li key={i} className="rounded-lg border p-2 text-sm">
-            <p>{report.text}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {SOURCE_LABELS[report.source]}
-              {report.customer && ` · ${report.customer}`} · {report.date} · recorded by{' '}
-              {capturerName(report.capturer, users)}
-              {report.link && (
-                <>
-                  {' · '}
-                  <a className="underline" href={report.link} target="_blank" rel="noreferrer">
-                    link
-                  </a>
-                </>
-              )}
-            </p>
-          </li>
+        {pin.reports.map((report) => (
+          <ReportItem key={report.id} frameId={pin.frameId} report={report} />
         ))}
       </ul>
       <AddDialog
@@ -1329,6 +1318,167 @@ function Reports({ pin }: { pin: RenderedPin }) {
         </div>
       </AddDialog>
     </div>
+  )
+}
+
+/**
+ * One report, with the way to correct it (ADR 0030). An edit replaces the
+ * report in place: it never wakes the frame and never changes the count, so a
+ * badly written report is fixed without counting as the problem happening
+ * again. A delete is for a report recorded in error, and it asks first.
+ */
+function ReportItem({ frameId, report }: { frameId: string; report: FrameReport & { id: string } }) {
+  const users = useOrganizationUsers()
+  const { userId } = useAuth()
+  const [mode, setMode] = useState<'read' | 'edit' | 'delete'>('read')
+  const [draft, setDraft] = useState(report)
+
+  const correct = useProductMapMutation(
+    ({ storage }, patch: ReportPatch, editor: string, today: string) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      const reports = frame && correctReport(frame.get('reports') ?? [], report.id, patch, editor, today)
+      if (reports) frame.set('reports', reports)
+    },
+    [frameId, report.id]
+  )
+  const remove = useProductMapMutation(
+    ({ storage }) => {
+      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
+      const reports = frame && removeReport(frame.get('reports') ?? [], report.id)
+      if (reports) frame.set('reports', reports)
+    },
+    [frameId, report.id]
+  )
+
+  if (mode === 'edit') {
+    return (
+      <li className="flex flex-col gap-2 rounded-lg border p-2 text-sm">
+        <Textarea
+          rows={2}
+          aria-label="Report"
+          value={draft.text}
+          onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+        />
+        <div className="flex items-center gap-2">
+          <Select
+            value={draft.source}
+            onValueChange={(v) => setDraft({ ...draft, source: v as FrameReport['source'] })}
+          >
+            <SelectTrigger className="w-32" aria-label="Source">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="internal">{SOURCE_LABELS.internal}</SelectItem>
+              <SelectItem value="customer">{SOURCE_LABELS.customer}</SelectItem>
+            </SelectContent>
+          </Select>
+          {draft.source === 'customer' && (
+            <Input
+              className="flex-1"
+              placeholder="Which customer?"
+              aria-label="Customer"
+              value={draft.customer ?? ''}
+              onChange={(e) => setDraft({ ...draft, customer: e.target.value })}
+            />
+          )}
+        </div>
+        <Input
+          placeholder="Link, e.g. the call or the ticket"
+          aria-label="Link"
+          value={draft.link ?? ''}
+          onChange={(e) => setDraft({ ...draft, link: e.target.value })}
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setMode('read')}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={!draft.text.trim() || !userId}
+            onClick={() => {
+              correct(
+                {
+                  text: draft.text,
+                  source: draft.source,
+                  // An internal report names no customer.
+                  customer: draft.source === 'customer' ? (draft.customer ?? '') : '',
+                  link: draft.link ?? '',
+                },
+                userId!,
+                getTeamToday(new Date())
+              )
+              setMode('read')
+            }}
+          >
+            Save
+          </Button>
+        </div>
+      </li>
+    )
+  }
+
+  return (
+    <li className="group rounded-lg border p-2 text-sm">
+      <div className="flex items-start gap-2">
+        <p className="flex-1">{report.text}</p>
+        {mode === 'read' && (
+          <span className="flex shrink-0 gap-1 opacity-60 group-hover:opacity-100">
+            <button
+              type="button"
+              aria-label="Edit report"
+              title="Edit report"
+              onClick={() => {
+                setDraft(report)
+                setMode('edit')
+              }}
+              className="rounded p-1 hover:bg-muted"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Delete report"
+              title="Delete report"
+              onClick={() => setMode('delete')}
+              className="rounded p-1 hover:bg-muted"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {SOURCE_LABELS[report.source]}
+        {report.customer && ` · ${report.customer}`} · {report.date} · recorded by{' '}
+        {capturerName(report.capturer, users)}
+        {report.edited_on && (
+          <span title={`Edited on ${report.edited_on} by ${capturerName(report.edited_by ?? '', users)}`}>
+            {' · '}edited
+          </span>
+        )}
+        {report.link && (
+          <>
+            {' · '}
+            <a className="underline" href={report.link} target="_blank" rel="noreferrer">
+              link
+            </a>
+          </>
+        )}
+      </p>
+      {mode === 'delete' && (
+        <div className="mt-2 flex items-center justify-end gap-2 border-t pt-2 text-xs">
+          <span className="flex-1 text-muted-foreground">
+            Delete this report? The count goes down by one, and nothing brings it back.
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setMode('read')}>
+            Cancel
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => remove()}>
+            Delete
+          </Button>
+        </div>
+      )}
+    </li>
   )
 }
 
@@ -1478,6 +1628,7 @@ function CaptureForm({
       reports: struggleText
         ? [
             {
+              id: nanoid(),
               capturer: userId ?? 'unknown',
               source: who ? ('customer' as const) : ('internal' as const),
               ...(who ? { customer: who } : {}),

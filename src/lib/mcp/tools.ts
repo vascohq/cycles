@@ -28,6 +28,7 @@ import {
   FRAME_TYPES,
   POINTER_KINDS,
   isDormant,
+  withReportIds,
 } from '@/lib/product-map-engine'
 import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
 import {
@@ -51,6 +52,8 @@ import {
   upsertArea,
   upsertFrame,
   attachReport,
+  updateReport,
+  deleteReport,
   linkPointer,
   wakeFrame,
   writeBrief,
@@ -698,6 +701,8 @@ export async function handleListFrames(
     .filter((f) => !params.raised_by || f.raised_by === params.raised_by)
     .map((f) => ({
       ...f,
+      // Every report carries an id, so map_update_report can name one.
+      reports: withReportIds(f.reports ?? []),
       dormant: isDormant(f.last_woken, cycles, today),
     }))
     .filter((f) => (params.include_dormant ? true : !f.dormant))
@@ -881,6 +886,61 @@ export async function handleResolveFrame(
       resolved: params.resolved,
     })
     return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleUpdateReport(
+  orgId: string,
+  params: {
+    frame_id?: string
+    report_id?: string
+    editor?: string
+    text?: string
+    link?: string
+    customer?: string
+    source?: string
+  }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  if (!params.report_id) {
+    return errorResult('Which report? Pass "report_id" — map_list_frames names them.')
+  }
+  try {
+    const result = await updateReport(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      reportId: params.report_id,
+      editor: params.editor!,
+      text: params.text,
+      link: params.link,
+      customer: params.customer,
+      source: params.source as never,
+    })
+    return jsonResult(result)
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+export async function handleDeleteReport(
+  orgId: string,
+  params: { frame_id?: string; report_id?: string }
+): Promise<ToolResult> {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  if (!params.report_id) {
+    return errorResult('Which report? Pass "report_id" — map_list_frames names them.')
+  }
+  try {
+    const result = await deleteReport(productMapRoomId(orgId), {
+      frameId: params.frame_id,
+      reportId: params.report_id,
+    })
+    return jsonResult({ deleted: true, ...result })
   } catch (err) {
     return errorResult((err as Error).message)
   }
@@ -2102,6 +2162,94 @@ export function registerCyclesTools(server: any): void {
         ...params,
         capturer: params.capturer?.trim() || getUserId(extra),
       })
+    }
+  )
+
+  defineTool(
+    server,
+    'map_update_report',
+    'Correct a report that is badly written or wrong. Use this, never map_attach_report, to fix a report: a second report counts as the problem happening again (ADR 0030). Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear the link or the customer. The date and the capturer never change. An edit marks the report as edited, does not wake the frame and does not change the report count.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame that holds the report.'),
+      report_id: z.string().describe('The report to correct. map_list_frames names them.'),
+      text: z.string().optional().describe('One line saying what happened.'),
+      source: z
+        .enum(['internal', 'customer'])
+        .optional()
+        .describe('Who raised it. Changing it moves the report to the other heat lens.'),
+      customer: z
+        .string()
+        .optional()
+        .describe('Free-text customer label, e.g. "Acme". Pass "" to clear.'),
+      link: z
+        .string()
+        .optional()
+        .describe('Link to the conversation, ticket or transcript. Pass "" to clear.'),
+      editor: z
+        .string()
+        .optional()
+        .describe(
+          'Who made the edit — a Clerk user id, or your own agent id. Defaults to the calling user.'
+        ),
+    },
+    {
+      title: 'Correct a report',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      {
+        org,
+        ...params
+      }: {
+        org?: string
+        frame_id?: string
+        report_id?: string
+        text?: string
+        source?: string
+        customer?: string
+        link?: string
+        editor?: string
+      },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleUpdateReport(resolved.org.id, {
+        ...params,
+        editor: params.editor?.trim() || getUserId(extra),
+      })
+    }
+  )
+
+  defineTool(
+    server,
+    'map_delete_report',
+    'Delete a report that was recorded in error: on the wrong frame, a test, or a duplicate of another report. The report count goes down by one. The frame stays awake as it is: the freshness clock does not rewind. To fix the wording of a report, use map_update_report instead. No tool puts a deleted report back.',
+    {
+      ...orgArg,
+      frame_id: z.string().describe('The frame that holds the report.'),
+      report_id: z.string().describe('The report to delete. map_list_frames names them.'),
+    },
+    {
+      title: 'Delete a report',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, ...params }: { org?: string; frame_id?: string; report_id?: string },
+      extra: ToolExtra
+    ) => {
+      const memberships = getMemberships(extra)
+      const resolved = resolveOrg(memberships, org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleDeleteReport(resolved.org.id, params)
     }
   )
 

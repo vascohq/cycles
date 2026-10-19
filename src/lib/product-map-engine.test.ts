@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  withReportIds,
   AREA_GAP,
   FRAME_KINDS,
   FRAME_TYPES,
@@ -1582,5 +1583,28 @@ describe('renderFrame', () => {
 
   it('returns null for an unknown frame', () => {
     expect(renderFrame({ frames: [makeFrame()], today: '2026-05-01' }, 'nope')).toBeNull()
+  })
+})
+
+describe('withReportIds', () => {
+  const old = { capturer: 'u', source: 'internal' as const, text: 'again', date: '2026-08-01' }
+
+  it('keeps a stored id and derives a stable one for an old report', () => {
+    const [stored, derived] = withReportIds([{ ...old, id: 'r1' }, old])
+    expect(stored.id).toBe('r1')
+    expect(derived.id).toMatch(/^r_/)
+    expect(withReportIds([old])[0].id).toBe(derived.id)
+  })
+
+  it('gives identical old reports different ids', () => {
+    const ids = withReportIds([old, old, old]).map((r) => r.id)
+    expect(new Set(ids).size).toBe(3)
+  })
+
+  // The first edit stores the derived id; the identical twin must not take it.
+  it('never derives an id that a stored report already holds', () => {
+    const first = withReportIds([old])[0].id
+    const [, twin] = withReportIds([{ ...old, id: first, text: 'edited' }, old])
+    expect(twin.id).not.toBe(first)
   })
 })
