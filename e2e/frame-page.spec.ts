@@ -36,6 +36,20 @@ test.describe('Frame page', () => {
     await expect(note).toContainText('Draft')
   })
 
+  // The business case is written in Markdown, so a frame in sections reads as sections.
+  test('renders the business case as Markdown', async ({ page }) => {
+    await page.goto('/e2e/product-map/frames/f1')
+
+    const framing = page.locator('section', { hasText: 'What hurts, and what changes' })
+    await expect(framing.locator('strong', { hasText: 'Context:' })).toBeVisible()
+    await expect(framing.locator('ol li')).toHaveCount(2)
+    await expect(framing.locator('code', { hasText: 'permalink' })).toBeVisible()
+    await expect(framing.getByRole('link', { name: 'the capture guide' })).toHaveAttribute(
+      'href',
+      'https://example.test/capture'
+    )
+  })
+
   // Each part of the breadcrumb opens that area's own page.
   test('links every part of the breadcrumb to its area page', async ({ page }) => {
     await page.goto('/e2e/product-map/frames/f1')
