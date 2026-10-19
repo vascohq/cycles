@@ -16,12 +16,16 @@ describe('DraftMarkdown', () => {
 
   it('commits on blur and shows the rendered text again', () => {
     const onCommit = vi.fn()
-    render(<DraftMarkdown value="old" rows={3} label="Why" onCommit={onCommit} />)
+    const { rerender } = render(
+      <DraftMarkdown value="old" rows={3} label="Why" onCommit={onCommit} />
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Edit Why' }))
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '`new`' } })
     fireEvent.blur(screen.getByRole('textbox'))
 
     expect(onCommit).toHaveBeenCalledWith('`new`')
+    // The room hands the committed text back as the new value.
+    rerender(<DraftMarkdown value="`new`" rows={3} label="Why" onCommit={onCommit} />)
     expect(screen.getByText('new').tagName).toBe('CODE')
   })
 
@@ -35,5 +39,29 @@ describe('DraftMarkdown', () => {
     render(<DraftMarkdown value="[docs](https://x.test)" rows={3} label="Why" onCommit={() => {}} />)
     fireEvent.click(screen.getByRole('link', { name: 'docs' }))
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  // Somebody else edited the text while the dialog was open. A click and a
+  // blur with no typing must not write the old copy back over theirs.
+  it('shows text changed elsewhere, and never commits a stale copy over it', () => {
+    const onCommit = vi.fn()
+    const { rerender } = render(
+      <DraftMarkdown value="old" rows={3} label="Why" onCommit={onCommit} />
+    )
+    rerender(<DraftMarkdown value="**new**" rows={3} label="Why" onCommit={onCommit} />)
+    expect(screen.getByText('new').tagName).toBe('STRONG')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Why' }))
+    expect(screen.getByRole('textbox')).toHaveValue('**new**')
+    fireEvent.blur(screen.getByRole('textbox'))
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
+  it('shows raw HTML as text and never renders it', () => {
+    const html = '<b>bold</b> <img src=x onerror=alert(1)>'
+    render(<DraftMarkdown value={html} rows={3} label="Why" onCommit={() => {}} />)
+    const field = screen.getByRole('button', { name: 'Edit Why' })
+    expect(field.querySelector('b, img')).toBeNull()
+    expect(field).toHaveTextContent('<b>bold</b> <img src=x onerror=alert(1)>')
   })
 })

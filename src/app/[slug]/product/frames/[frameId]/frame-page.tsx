@@ -322,9 +322,12 @@ function Brief({ pin }: { pin: RenderedPin }) {
           </Markdown>
         )}
         <div className="mt-2 text-sm">
-          <span className="font-semibold">To move on:</span>
+          <span className="font-semibold">To move on:</span>{' '}
+          {/* Inline, so a one-line step reads on the label's line as before. */}
+          <Markdown breaks className="inline [&>p]:inline">
+            {brief.next_step}
+          </Markdown>
           {nextOwner && <span className="text-muted-foreground"> ({nextOwner.name})</span>}
-          <Markdown breaks>{brief.next_step}</Markdown>
         </div>
         {brief.watch && (
           <div className="mt-2 flex gap-2 text-sm text-amber-800 dark:text-amber-300">
