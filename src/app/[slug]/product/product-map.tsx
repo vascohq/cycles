@@ -38,6 +38,7 @@ import {
   type LinkedShape,
   type HeatLens,
   type RenderedArea,
+  type IdentifiedReport,
   type RenderedPin,
   type ReportPatch,
 } from '@/lib/product-map-engine'
@@ -1327,7 +1328,7 @@ function Reports({ pin }: { pin: RenderedPin }) {
  * badly written report is fixed without counting as the problem happening
  * again. A delete is for a report recorded in error, and it asks first.
  */
-function ReportItem({ frameId, report }: { frameId: string; report: FrameReport & { id: string } }) {
+function ReportItem({ frameId, report }: { frameId: string; report: IdentifiedReport }) {
   const users = useOrganizationUsers()
   const { userId } = useAuth()
   const [mode, setMode] = useState<'read' | 'edit' | 'delete'>('read')
@@ -1400,8 +1401,7 @@ function ReportItem({ frameId, report }: { frameId: string; report: FrameReport 
                 {
                   text: draft.text,
                   source: draft.source,
-                  // An internal report names no customer.
-                  customer: draft.source === 'customer' ? (draft.customer ?? '') : '',
+                  customer: draft.customer ?? '',
                   link: draft.link ?? '',
                 },
                 userId!,

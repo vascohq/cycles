@@ -1953,6 +1953,29 @@ describe('updateReport', () => {
     expect(reports[0].text).toBe('again')
   })
 
+  it('leaves no "edited" mark when nothing changed', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [{ ...legacy, id: 'r1' }] })] })
+
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', text: 'again' })
+
+    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(report).not.toHaveProperty('edited_on')
+  })
+
+  // The same rule capture follows, so the app and the MCP agree.
+  it('drops the customer label when a report moves to internal', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const customerReport = { ...legacy, id: 'r1', source: 'customer', customer: 'Acme' }
+    const storage = setupStorage({ frames: [makeFrameItem({ reports: [customerReport] })] })
+
+    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', source: 'internal' })
+
+    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(report.source).toBe('internal')
+    expect(report).not.toHaveProperty('customer')
+  })
+
   it('refuses empty text and an unknown report', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     setupStorage({ frames: [makeFrameItem()] })

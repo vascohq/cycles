@@ -1375,6 +1375,41 @@ export async function attachReport(
 }
 
 /**
+ * Replace a frame's reports with what `change` returns, and return them. A null
+ * from `change` means no report has that id. The two report corrections share
+ * this, so a missing frame or report reads the same from both.
+ */
+async function changeReports(
+  roomId: string,
+  frameId: string,
+  reportId: string,
+  change: (reports: FrameReport[]) => FrameReport[] | null
+): Promise<FrameReport[]> {
+  let missing: 'frame' | 'report' | null = null
+  let changed: FrameReport[] = []
+  await withRoot(roomId, undefined, (root: any) => {
+    const existing = root.get('frames').find((f: any) => getField(f, 'id') === frameId)
+    if (!existing) {
+      missing = 'frame'
+      return
+    }
+    const next = change((getField(existing, 'reports') ?? []) as FrameReport[])
+    if (!next) {
+      missing = 'report'
+      return
+    }
+    existing.set('reports', next)
+    changed = next
+  })
+
+  if (missing === 'frame') throw new Error(`Frame not found: "${frameId}"`)
+  if (missing === 'report') {
+    throw new Error(`Report not found: "${reportId}". map_list_frames names them.`)
+  }
+  return changed
+}
+
+/**
  * Correct a report in place (ADR 0030). Only the text, the link, the customer
  * label and the source can change; the date and the capturer stay. Partial: an
  * omitted field is left unchanged, and "" clears the link or the customer.
@@ -1403,31 +1438,10 @@ export async function updateReport(
     throw new Error(`Invalid source: "${params.source}". One of: internal, customer.`)
   }
 
-  let missing: 'frame' | 'report' | null = null
-  await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
-    if (!existing) {
-      missing = 'frame'
-      return
-    }
-    const reports = correctReport(
-      (getField(existing, 'reports') ?? []) as FrameReport[],
-      params.reportId,
-      params,
-      params.editor,
-      getTeamToday(new Date())
-    )
-    if (!reports) {
-      missing = 'report'
-      return
-    }
-    existing.set('reports', reports)
-  })
-
-  if (missing === 'frame') throw new Error(`Frame not found: "${params.frameId}"`)
-  if (missing === 'report') {
-    throw new Error(`Report not found: "${params.reportId}". map_list_frames names them.`)
-  }
+  const today = getTeamToday(new Date())
+  await changeReports(roomId, params.frameId, params.reportId, (reports) =>
+    correctReport(reports, params.reportId, params, params.editor, today)
+  )
   return { frameId: params.frameId, reportId: params.reportId }
 }
 
@@ -1440,31 +1454,10 @@ export async function deleteReport(
   roomId: string,
   params: { frameId: string; reportId: string }
 ): Promise<{ frameId: string; reportCount: number }> {
-  let missing: 'frame' | 'report' | null = null
-  let reportCount = 0
-  await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
-    if (!existing) {
-      missing = 'frame'
-      return
-    }
-    const kept = removeReport(
-      (getField(existing, 'reports') ?? []) as FrameReport[],
-      params.reportId
-    )
-    if (!kept) {
-      missing = 'report'
-      return
-    }
-    existing.set('reports', kept)
-    reportCount = kept.length
-  })
-
-  if (missing === 'frame') throw new Error(`Frame not found: "${params.frameId}"`)
-  if (missing === 'report') {
-    throw new Error(`Report not found: "${params.reportId}". map_list_frames names them.`)
-  }
-  return { frameId: params.frameId, reportCount }
+  const kept = await changeReports(roomId, params.frameId, params.reportId, (reports) =>
+    removeReport(reports, params.reportId)
+  )
+  return { frameId: params.frameId, reportCount: kept.length }
 }
 
 /**

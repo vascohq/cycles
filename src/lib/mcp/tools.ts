@@ -891,6 +891,17 @@ export async function handleResolveFrame(
   }
 }
 
+/** The error for a report call that does not name its frame and its report. */
+function reportArgsError(params: { frame_id?: string; report_id?: string }): ToolResult | null {
+  if (!params.frame_id) {
+    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  }
+  if (!params.report_id) {
+    return errorResult('Which report? Pass "report_id" — map_list_frames names them.')
+  }
+  return null
+}
+
 export async function handleUpdateReport(
   orgId: string,
   params: {
@@ -903,16 +914,12 @@ export async function handleUpdateReport(
     source?: string
   }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
-  }
-  if (!params.report_id) {
-    return errorResult('Which report? Pass "report_id" — map_list_frames names them.')
-  }
+  const argsError = reportArgsError(params)
+  if (argsError) return argsError
   try {
     const result = await updateReport(productMapRoomId(orgId), {
-      frameId: params.frame_id,
-      reportId: params.report_id,
+      frameId: params.frame_id!,
+      reportId: params.report_id!,
       editor: params.editor!,
       text: params.text,
       link: params.link,
@@ -929,16 +936,12 @@ export async function handleDeleteReport(
   orgId: string,
   params: { frame_id?: string; report_id?: string }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
-  }
-  if (!params.report_id) {
-    return errorResult('Which report? Pass "report_id" — map_list_frames names them.')
-  }
+  const argsError = reportArgsError(params)
+  if (argsError) return argsError
   try {
     const result = await deleteReport(productMapRoomId(orgId), {
-      frameId: params.frame_id,
-      reportId: params.report_id,
+      frameId: params.frame_id!,
+      reportId: params.report_id!,
     })
     return jsonResult({ deleted: true, ...result })
   } catch (err) {
@@ -2108,7 +2111,7 @@ export function registerCyclesTools(server: any): void {
         .enum(['internal', 'customer'])
         .optional()
         .describe(
-          'Who raised it. Drives the heat lens. Defaults to "internal", the quieter claim.'
+          'Where the report came from: a customer, or inside the team. Drives the heat lens. Defaults to "internal", the quieter claim.'
         ),
       capturer: z
         .string()
@@ -2177,7 +2180,9 @@ export function registerCyclesTools(server: any): void {
       source: z
         .enum(['internal', 'customer'])
         .optional()
-        .describe('Who raised it. Changing it moves the report to the other heat lens.'),
+        .describe(
+          'Where the report came from: a customer, or inside the team. Changing it moves the report to the other heat lens, and "internal" drops the customer label.'
+        ),
       customer: z
         .string()
         .optional()

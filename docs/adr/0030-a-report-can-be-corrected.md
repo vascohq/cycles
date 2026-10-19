@@ -20,6 +20,8 @@ The only fix was to add a corrected report. That is worse than no fix. A report 
 
 **An edit records `edited_on` and `edited_by` on the report.** The app shows "edited" next to the report. There is no change log, and the old text is not kept.
 
+**A save that changes no field is not an edit.** It leaves no "edited" mark. **A report that moves to `internal` loses its customer label**, the same rule that capture follows.
+
 **An edit never wakes the frame and never changes the report count.** It is not a new mention of the problem.
 
 **A delete lowers the count by one and does not rewind the freshness clock.** To rewind, the app would have to replay every wake. A wake from a transcript through `map_wake_frame` is not stored, so that replay is not possible.

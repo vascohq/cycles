@@ -1468,6 +1468,18 @@ describe('map_upsert_frame schema', () => {
     expect(schemaFor('map_attach_report')).not.toHaveProperty('cycle_slug')
   })
 
+  it('lets map_update_report omit every field it corrects (ADR 0011)', () => {
+    const parsed = z
+      .object(schemaFor('map_update_report'))
+      .parse({ frame_id: 'f1', report_id: 'r1' })
+
+    expect(parsed.text).toBeUndefined()
+    expect(parsed.source).toBeUndefined()
+    expect(parsed.customer).toBeUndefined()
+    expect(parsed.link).toBeUndefined()
+    expect(parsed.editor).toBeUndefined()
+  })
+
   it('lets map_attach_report omit everything but the frame and the text', () => {
     const schema = z.object(schemaFor('map_attach_report'))
     const parsed = schema.parse({ frame_id: 'f1', text: 'again' })

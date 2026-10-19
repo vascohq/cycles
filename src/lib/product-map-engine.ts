@@ -482,7 +482,10 @@ export function isMemberId(raisedBy: string): boolean {
  * after that. Identical old reports take a numbered suffix, so each one can be
  * addressed on its own.
  */
-export function withReportIds(reports: FrameReport[]): (FrameReport & { id: string })[] {
+/** A report whose id is known, stored or derived. */
+export type IdentifiedReport = FrameReport & { id: string }
+
+export function withReportIds(reports: FrameReport[]): IdentifiedReport[] {
   const used = new Set(reports.flatMap((r) => (r.id ? [r.id] : [])))
   return reports.map((r) => {
     if (r.id) return { ...r, id: r.id }
@@ -518,7 +521,8 @@ export function correctReport(
   const all: FrameReport[] = withReportIds(reports)
   const idx = all.findIndex((r) => r.id === reportId)
   if (idx === -1) return null
-  const report = { ...all[idx] }
+  const before = all[idx]
+  const report = { ...before }
   if (patch.text !== undefined) report.text = patch.text.trim()
   if (patch.source !== undefined) report.source = patch.source
   for (const key of ['link', 'customer'] as const) {
@@ -527,6 +531,11 @@ export function correctReport(
     if (value) report[key] = value
     else delete report[key]
   }
+  // An internal report names no customer, the same rule capture follows.
+  if (report.source === 'internal') delete report.customer
+  // A save that changes nothing is not an edit, so it leaves no "edited" mark.
+  const fields = ['text', 'source', 'link', 'customer'] as const
+  if (fields.every((key) => report[key] === before[key])) return all
   all[idx] = { ...report, edited_on: today, edited_by: editor }
   return all
 }
@@ -594,7 +603,7 @@ export type RenderedPin = {
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
   /** Every report on the frame, unfiltered — the detail shows the evidence. */
-  reports: (FrameReport & { id: string })[]
+  reports: IdentifiedReport[]
   /** The outbound links this frame packages. No artifact is ever stored. */
   pointers: FramePointer[]
   /** What the playbook expects and the frame lacks. A prompt, never a gate. */
