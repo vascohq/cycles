@@ -45,7 +45,7 @@ import {
   OpenFrameContext,
   areaOptions,
 } from '../../product-map'
-import { claudeChatHref, useOpenFramePage } from '../../links'
+import { claudeChatHref, frameHref, useOpenFramePage } from '../../links'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { Crumbs, FrameCrumb } from '../../crumbs'
 import { Missing } from '../../missing'
@@ -406,6 +406,7 @@ function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void
 
 function Framing({ pin }: { pin: RenderedPin }) {
   const openFrame = useOpenFramePage()
+  const { slug } = useParams<{ slug: string }>()
   return (
     <Lane title="Framing" hint="What hurts, and what changes">
       {pin.businessCase ? (
@@ -446,13 +447,9 @@ function Framing({ pin }: { pin: RenderedPin }) {
           <ul className="flex flex-col gap-1">
             {pin.related.map((r) => (
               <li key={r.frameId}>
-                <button
-                  type="button"
-                  onClick={() => openFrame(r.frameId)}
-                  className="text-left text-sm underline"
-                >
+                <Link href={frameHref(slug, r.frameId)} className="text-sm underline">
                   {r.problem || 'Untitled frame'}
-                </button>
+                </Link>
               </li>
             ))}
           </ul>

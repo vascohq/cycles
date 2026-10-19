@@ -175,6 +175,40 @@ export function relateFrames(
   return changes
 }
 
+/** A stored frame the relation is written to: a LiveObject, in the app or on the server. */
+type RelatableFrame = {
+  get(key: 'id' | 'related_frame_ids'): unknown
+  set(key: 'related_frame_ids', value: string[]): void
+  delete(key: 'related_frame_ids'): void
+}
+
+/**
+ * Write the relation of `frameId` to exactly `ids` onto the stored frames, on
+ * both sides. An empty list removes the field. The app, the MCP writer and a
+ * frame delete all write through here, so the two sides never drift apart.
+ */
+export function storeRelated(
+  frames: Iterable<RelatableFrame>,
+  frameId: string,
+  ids: string[]
+): void {
+  const list = [...frames]
+  const changes = relateFrames(
+    list.map((f) => ({
+      id: f.get('id') as string,
+      related_frame_ids: f.get('related_frame_ids') as string[] | undefined,
+    })),
+    frameId,
+    ids
+  )
+  for (const f of list) {
+    const next = changes.get(f.get('id') as string)
+    if (!next) continue
+    if (next.length) f.set('related_frame_ids', next)
+    else f.delete('related_frame_ids')
+  }
+}
+
 /**
  * Engagement, the fourth and last pin channel:
  *

@@ -5,6 +5,8 @@ import { ClientSideSuspense } from '@liveblocks/react'
 import { LiveObject } from '@liveblocks/client'
 import { useAuth } from '@clerk/nextjs'
 import { nanoid } from 'nanoid'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import {
   ProductMapRoomProvider,
   useProductMapStorage,
@@ -30,8 +32,8 @@ import {
   POINTER_KINDS,
   POINTER_KIND_LABELS,
   correctReport,
-  relateFrames,
   removeReport,
+  storeRelated,
   isMemberId,
   renderProductMap,
   type CycleWindow,
@@ -49,7 +51,7 @@ import { betOnFrame } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
 import { ExternalLink, Pencil, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
-import { claudeChatHref, useOpenFramePage } from './links'
+import { claudeChatHref, frameHref, useOpenFramePage } from './links'
 import { FilteredFrames } from './frame-filters'
 import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
 import {
@@ -732,23 +734,10 @@ function RaisedByPicker({
  * not related: it gets deleted (ADR 0026).
  */
 function Related({ pin }: { pin: RenderedPin }) {
-  const openFrame = useContext(OpenFrameContext)
+  const { slug } = useParams<{ slug: string }>()
   const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
   const relate = useProductMapMutation(
-    ({ storage }, ids: string[]) => {
-      const list = storage.get('frames')
-      const changes = relateFrames(
-        list.map((f) => ({ id: f.get('id'), related_frame_ids: f.get('related_frame_ids') })),
-        pin.frameId,
-        ids
-      )
-      list.forEach((f) => {
-        const next = changes.get(f.get('id'))
-        if (!next) return
-        if (next.length) f.set('related_frame_ids', next)
-        else f.delete('related_frame_ids')
-      })
-    },
+    ({ storage }, ids: string[]) => storeRelated(storage.get('frames'), pin.frameId, ids),
     [pin.frameId]
   )
   const current = pin.related.map((r) => r.frameId)
@@ -765,9 +754,9 @@ function Related({ pin }: { pin: RenderedPin }) {
       <ul className="flex flex-col gap-1">
         {pin.related.map((r) => (
           <li key={r.frameId} className="flex items-start gap-2 text-sm">
-            <button type="button" className="flex-1 text-left underline" onClick={() => openFrame(r.frameId)}>
+            <Link href={frameHref(slug, r.frameId)} className="flex-1 underline">
               {r.problem || 'Untitled frame'}
-            </button>
+            </Link>
             <button
               type="button"
               aria-label={`Unrelate ${r.problem}`}
