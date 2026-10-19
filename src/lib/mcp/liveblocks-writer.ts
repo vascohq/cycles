@@ -28,6 +28,7 @@ import {
   isFrameType,
   isPointerKind,
   correctReport,
+  relateFrames,
   removeReport,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
@@ -1199,6 +1200,8 @@ type FrameFields = {
   owner: string
   raisedBy: string
   originFrameId: string
+  /** The full set of frames related to this one. The writer keeps both sides. */
+  related_frame_ids: string[]
 }
 
 /**
@@ -1246,11 +1249,15 @@ export async function upsertFrame(
   }
   // Narrowed above; held in a local so the check survives into the closure.
   const newType = params.type as Frame['type']
+  let badRelated: string | null = null
 
   await ensureProductMapRoom(roomId)
 
   await withRoot(roomId, undefined, (root: any) => {
     const frames = root.get('frames')
+
+    badRelated = relate(frames, id, params.related_frame_ids)
+    if (badRelated) return
 
     if (created) {
       // Every frame wants an owner: somebody has to care that it gets
@@ -1279,6 +1286,7 @@ export async function upsertFrame(
         resolved: false,
       }
       frames.push(new LiveObject(frame))
+      if (params.related_frame_ids !== undefined) applyRelated(frames, id, params.related_frame_ids)
       return
     }
 
@@ -1287,6 +1295,7 @@ export async function upsertFrame(
       notFound = true
       return
     }
+    if (params.related_frame_ids !== undefined) applyRelated(frames, id, params.related_frame_ids)
     // undefined = omitted = leave unchanged. Guard every field explicitly, so an
     // omitted field is never coerced away (the timebox-nullification incident).
     if (params.kind !== undefined) existing.set('kind', params.kind)
@@ -1306,7 +1315,36 @@ export async function upsertFrame(
   })
 
   if (notFound) throw new Error(`Frame not found: "${id}"`)
+  if (badRelated) throw new Error(badRelated)
   return { created, id }
+}
+
+/**
+ * Why `ids` cannot be the related frames of `frameId`, or null when they can.
+ * Undefined means the caller left the relations alone.
+ */
+function relate(frames: any, frameId: string, ids: string[] | undefined): string | null {
+  if (ids === undefined) return null
+  if (ids.includes(frameId)) return 'A frame cannot be related to itself.'
+  const known = new Set<string>()
+  for (const f of frames) known.add(getField(f, 'id'))
+  const unknown = ids.find((rid) => !known.has(rid))
+  return unknown ? `Related frame not found: "${unknown}"` : null
+}
+
+/** Store the relation on both sides, so a read from either frame agrees. */
+function applyRelated(frames: any, frameId: string, ids: string[]): void {
+  const plain: { id: string; related_frame_ids?: string[] }[] = []
+  for (const f of frames) {
+    plain.push({ id: getField(f, 'id'), related_frame_ids: getField(f, 'related_frame_ids') })
+  }
+  const changes = relateFrames(plain, frameId, ids)
+  for (const f of frames) {
+    const next = changes.get(getField(f, 'id'))
+    if (!next) continue
+    if (next.length) f.set('related_frame_ids', next)
+    else f.delete('related_frame_ids')
+  }
 }
 
 /**
@@ -1644,6 +1682,12 @@ export async function deleteFrame(roomId: string, id: string): Promise<void> {
 
     for (const f of frames) {
       if (getField(f, 'originFrameId') === id) f.delete('originFrameId')
+      const related = (getField(f, 'related_frame_ids') ?? []) as string[]
+      if (related.includes(id)) {
+        const kept = related.filter((rid) => rid !== id)
+        if (kept.length) f.set('related_frame_ids', kept)
+        else f.delete('related_frame_ids')
+      }
     }
   })
 

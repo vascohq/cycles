@@ -14,6 +14,7 @@ import { AREAS, CYCLES, FRAMES, SHAPES, USERS } from '../../fixture'
 const F1: Partial<Frame> = {
   owner: 'user_1',
   raised_by: 'Jane at Northwind',
+  related_frame_ids: ['f2'],
   business_case: [
     '**Context:** most reports reach the map from Slack.',
     '**Problem:** without the thread, nobody can read the conversation.',

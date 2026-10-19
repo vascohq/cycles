@@ -30,6 +30,7 @@ import {
   POINTER_KINDS,
   POINTER_KIND_LABELS,
   correctReport,
+  relateFrames,
   removeReport,
   isMemberId,
   renderProductMap,
@@ -47,7 +48,7 @@ import type { OrganizationUser } from '@/lib/users'
 import { betOnFrame } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
-import { ExternalLink, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react'
+import { ExternalLink, Pencil, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
 import { claudeChatHref, useOpenFramePage } from './links'
 import { FilteredFrames } from './frame-filters'
 import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
@@ -651,6 +652,7 @@ export function FrameDetail({
           <TabsContent value="history" className="flex flex-col gap-3 pt-2">
             <Shapes pin={pin} />
             <Origin pin={pin} />
+            <Related pin={pin} />
             <Resolve pin={pin} onClose={onClose} />
           </TabsContent>
         </Tabs>
@@ -721,6 +723,78 @@ function RaisedByPicker({
         { value: SOMEONE_ELSE, label: 'Someone else…' },
       ]}
     />
+  )
+}
+
+/**
+ * Frames related to this one, and the way to change the set. The relation goes
+ * both ways, so the write updates both frames (`relateFrames`). A duplicate is
+ * not related: it gets deleted (ADR 0026).
+ */
+function Related({ pin }: { pin: RenderedPin }) {
+  const openFrame = useContext(OpenFrameContext)
+  const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
+  const relate = useProductMapMutation(
+    ({ storage }, ids: string[]) => {
+      const list = storage.get('frames')
+      const changes = relateFrames(
+        list.map((f) => ({ id: f.get('id'), related_frame_ids: f.get('related_frame_ids') })),
+        pin.frameId,
+        ids
+      )
+      list.forEach((f) => {
+        const next = changes.get(f.get('id'))
+        if (!next) return
+        if (next.length) f.set('related_frame_ids', next)
+        else f.delete('related_frame_ids')
+      })
+    },
+    [pin.frameId]
+  )
+  const current = pin.related.map((r) => r.frameId)
+  const candidates = frames.filter((f) => f.id !== pin.frameId && !current.includes(f.id))
+
+  return (
+    <div className="flex flex-col gap-2 border-t pt-4">
+      <Label>Related frames</Label>
+      {pin.related.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          None yet. Relate a frame that one solution would also close.
+        </p>
+      )}
+      <ul className="flex flex-col gap-1">
+        {pin.related.map((r) => (
+          <li key={r.frameId} className="flex items-start gap-2 text-sm">
+            <button type="button" className="flex-1 text-left underline" onClick={() => openFrame(r.frameId)}>
+              {r.problem || 'Untitled frame'}
+            </button>
+            <button
+              type="button"
+              aria-label={`Unrelate ${r.problem}`}
+              title="Remove the relation"
+              onClick={() => relate(current.filter((id) => id !== r.frameId))}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {candidates.length > 0 && (
+        <Select value="" onValueChange={(id) => relate([...current, id])}>
+          <SelectTrigger aria-label="Relate a frame">
+            <SelectValue placeholder="Relate a frame…" />
+          </SelectTrigger>
+          <SelectContent>
+            {candidates.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.problem || 'Untitled frame'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
   )
 }
 

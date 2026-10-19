@@ -1893,6 +1893,71 @@ describe('upsertFrame validation', () => {
   })
 })
 
+describe('related frames', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const three = () =>
+    setupStorage({
+      frames: [makeFrameItem(), makeFrameItem({ id: 'f2' }), makeFrameItem({ id: 'f3' })],
+    })
+  const related = (storage: ReturnType<typeof setupStorage>, id: string) =>
+    storage.frames.find((f: any) => f.get('id') === id)!.get('related_frame_ids')
+
+  it('stores the relation on both frames', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = three()
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2', 'f3'] })
+
+    expect(related(storage, 'f1')).toEqual(['f2', 'f3'])
+    expect(related(storage, 'f2')).toEqual(['f1'])
+    expect(related(storage, 'f3')).toEqual(['f1'])
+  })
+
+  it('removes the relation from both frames, from either side', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = three()
+    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2', 'f3'] })
+
+    await upsertFrame(MAP_ROOM, { id: 'f2', related_frame_ids: [] })
+
+    expect(related(storage, 'f1')).toEqual(['f3'])
+    expect(related(storage, 'f2')).toBeUndefined()
+  })
+
+  it('leaves the relations alone when the field is omitted', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = three()
+    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2'] })
+
+    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '1 week' })
+
+    expect(related(storage, 'f1')).toEqual(['f2'])
+  })
+
+  it('refuses the frame itself and an unknown frame', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    three()
+
+    await expect(upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f1'] })).rejects.toThrow(
+      'itself'
+    )
+    await expect(upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['nope'] })).rejects.toThrow(
+      'Related frame not found'
+    )
+  })
+
+  it('clears a deleted frame from every frame related to it', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage = three()
+    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2', 'f3'] })
+
+    await deleteFrame(MAP_ROOM, 'f2')
+
+    expect(related(storage, 'f1')).toEqual(['f3'])
+  })
+})
+
 describe('updateReport', () => {
   beforeEach(() => vi.clearAllMocks())
 

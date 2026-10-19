@@ -438,6 +438,26 @@ function Framing({ pin }: { pin: RenderedPin }) {
           </button>
         </p>
       )}
+      {pin.related.length > 0 && (
+        <>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Related frames
+          </p>
+          <ul className="flex flex-col gap-1">
+            {pin.related.map((r) => (
+              <li key={r.frameId}>
+                <button
+                  type="button"
+                  onClick={() => openFrame(r.frameId)}
+                  className="text-left text-sm underline"
+                >
+                  {r.problem || 'Untitled frame'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </Lane>
   )
 }
