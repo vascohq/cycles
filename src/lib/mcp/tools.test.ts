@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleUpdateReport, handleDeleteReport, handleLinkPointer, handleWakeFrame, handleWriteBrief, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleUpdateReport, handleDeleteReport, handleLinkPointer, handleWakeFrame, handleWriteBrief, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, handleMovePitch, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -21,6 +21,7 @@ vi.mock('./liveblocks-writer', () => ({
   moveTask: vi.fn(),
   upsertParkingItem: vi.fn(),
   deletePitch: vi.fn(),
+  movePitch: vi.fn(),
   deleteScope: vi.fn(),
   deleteTask: vi.fn(),
   deleteParkingItem: vi.fn(),
@@ -63,7 +64,7 @@ import {
   resolvePitch,
   getProductMapStorage,
 } from './liveblocks-reader'
-import { deleteUpdate, pushUpdate, markSlackDelivered, updateCycle, upsertArea, upsertFrame, attachReport, updateReport, deleteReport, linkPointer, wakeFrame, writeBrief, resolveFrame } from './liveblocks-writer'
+import { deleteUpdate, movePitch, pushUpdate, markSlackDelivered, updateCycle,upsertArea, upsertFrame, attachReport, updateReport, deleteReport, linkPointer, wakeFrame, writeBrief, resolveFrame } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -787,6 +788,38 @@ describe('handleArchiveCycle', () => {
     expect(mockUpdateCycle).toHaveBeenNthCalledWith(2, `${ORG_ID}:cycle:q2-build`, { archived: false })
     expect(JSON.parse(archived.content[0].text)).toMatchObject({ updated: true, archived: true })
     expect(JSON.parse(restored.content[0].text)).toMatchObject({ updated: true, archived: false })
+  })
+})
+
+describe('handleMovePitch', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('moves between two rooms of the same org and returns the new slug path', async () => {
+    vi.mocked(movePitch).mockResolvedValue({ moved: true, id: 'p1', title: 'Mission Control' })
+
+    const result = await handleMovePitch(ORG_ID, 'q2-build', 'p1', 'q3-build')
+
+    expect(movePitch).toHaveBeenCalledWith(`${ORG_ID}:cycle:q2-build`, `${ORG_ID}:cycle:q3-build`, 'p1')
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      moved: true,
+      id: 'p1',
+      from: 'q2-build',
+      to: 'q3-build',
+      slug_path: 'q3-build/mission-control',
+    })
+  })
+
+  it('rejects a target slug that is not one slug segment, before touching storage', async () => {
+    const result = await handleMovePitch(ORG_ID, 'q2-build', 'p1', '../other-org')
+    expect(result.isError).toBe(true)
+    expect(movePitch).not.toHaveBeenCalled()
+  })
+
+  it('reports the writer error', async () => {
+    vi.mocked(movePitch).mockRejectedValue(new Error('Pitch not found: "p1"'))
+    const result = await handleMovePitch(ORG_ID, 'q2-build', 'p1', 'q3-build')
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Pitch not found: "p1"')
   })
 })
 

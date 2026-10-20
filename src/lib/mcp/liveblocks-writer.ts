@@ -32,6 +32,7 @@ import {
   storeRelated,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
+import { extractPitchBundle, moveConflict } from '@/lib/pitch-move-engine'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
 import { moveTargetIndex, isCardStatus, CARD_STATUSES } from '@/lib/card-engine'
 import {
@@ -900,6 +901,90 @@ export async function deletePitch(
   })
 
   if (notFound) throw new Error(`Pitch not found: "${pitchId}"`)
+}
+
+// ── Move pitch ──
+
+// Move a pitch and everything under it (scopes, cards, updates, parking items)
+// to another cycle of the same org (ADR 0031). Each cycle is its own room, so
+// this cannot be one storage transaction: it copies into the target first and
+// removes from the source second. A failure between the two leaves the pitch in
+// both cycles, never in neither — and a retry resumes, because a pitch already
+// present in the target (same id) is not copied again. Ids are kept, so links
+// between the pitch's own records (scopeId, hill snapshots, core scope) stay
+// valid. The squad is per-cycle (ADR 0009): it is matched by name in the target
+// and created there when missing.
+export async function movePitch(
+  sourceRoomId: string,
+  targetRoomId: string,
+  pitchId: string
+): Promise<{ moved: true; id: string; title: string }> {
+  if (sourceRoomId === targetRoomId) {
+    throw new Error('The pitch is already in this cycle')
+  }
+  if (!(await roomExists(targetRoomId))) {
+    throw new Error(`Target cycle not found: "${targetRoomId}"`)
+  }
+
+  const source = (await liveblocks.getStorageDocument(sourceRoomId, 'json')) as any
+  const bundle = extractPitchBundle(source, pitchId)
+  if (!bundle) throw new Error(`Pitch not found: "${pitchId}"`)
+
+  let conflict: string | null = null
+  await liveblocks.mutateStorage(targetRoomId, ({ root }: { root: any }) => {
+    const pitches = root.get('pitches')
+    const existing = pitches.map((p: any) => ({ id: getField(p, 'id'), title: getField(p, 'title') }))
+    conflict = moveConflict(existing, bundle.pitch)
+    if (conflict) return
+    // Already copied by an earlier, interrupted move: only the removal is left.
+    if (existing.some((p: { id: string }) => p.id === pitchId)) return
+
+    const pitch: CyclePitch = { ...bundle.pitch }
+    delete pitch.squadId
+    if (bundle.squad) {
+      const squads = getSquadList(root)
+      const targetSquads = squads.map((s: any) => ({
+        id: getField(s, 'id'),
+        name: getField(s, 'name'),
+        color: getField(s, 'color'),
+      }))
+      const match = resolveSquadByName(targetSquads, bundle.squad.name)
+      if (match) {
+        pitch.squadId = match.id
+      } else {
+        const used = targetSquads.map((s: Squad) => s.color).filter(Boolean)
+        const color = used.includes(bundle.squad.color) ? assignSquadColor(used) : bundle.squad.color
+        pitch.squadId = nanoid()
+        squads.push(new LiveObject({ id: pitch.squadId, name: bundle.squad.name, color }))
+      }
+    }
+
+    pitches.push(new LiveObject(pitch))
+    for (const s of bundle.scopes) root.get('scopes').push(new LiveObject(s))
+    for (const t of bundle.tasks) root.get('tasks').push(new LiveObject(t))
+    for (const u of bundle.updates) root.get('updates').push(new LiveObject(u))
+    for (const p of bundle.parkingItems) root.get('parkingItems').push(new LiveObject(p))
+  })
+  if (conflict) throw new Error(conflict)
+
+  await liveblocks.mutateStorage(sourceRoomId, ({ root }: { root: any }) => {
+    removeByIds(root.get('pitches'), [pitchId])
+    removeByIds(root.get('scopes'), bundle.scopes.map((s) => s.id))
+    removeByIds(root.get('tasks'), bundle.tasks.map((t) => t.id))
+    removeByIds(root.get('updates'), bundle.updates.map((u) => u.id))
+    removeByIds(root.get('parkingItems'), bundle.parkingItems.map((p) => p.id))
+  })
+
+  return { moved: true, id: pitchId, title: bundle.pitch.title }
+}
+
+// Delete every item whose id is in `ids`, walking backwards so indexes stay valid.
+function removeByIds(list: any, ids: string[]): void {
+  const remove = new Set(ids)
+  const items = [...list]
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (remove.has(getField(items[i], 'id'))) list.delete(i)
+  }
 }
 
 export async function deleteScope(

@@ -37,7 +37,9 @@ import { useAuth, useUser } from '@clerk/nextjs'
 import { useSlackEnabled } from '@/components/slack-config-context'
 import { useRegisterPalettePitches } from '@/components/command-palette/command-palette-context'
 import { slugify } from '@/lib/slugify'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { movePitchToCycle } from '@/app/[slug]/cycles/actions'
 
 type ScopeMapProps = {
   roomId: string
@@ -141,6 +143,25 @@ function ScopeMapWired({
         current: p.id === pitchId,
       })),
     [allPitches, slug, cycleSlug, pitchId]
+  )
+
+  // Move to another cycle (ADR 0031). Rooms are per cycle, so this runs on the
+  // server, not as a room mutation. `moving` holds from the start: the pitch
+  // leaves this room before the action returns.
+  const router = useRouter()
+  const [moving, setMoving] = useState(false)
+  const onMoveToCycle = useCallback(
+    async (targetCycleSlug: string) => {
+      setMoving(true)
+      const result = await movePitchToCycle(cycleSlug, pitchId, targetCycleSlug)
+      if ('error' in result) {
+        setMoving(false)
+        return result.error
+      }
+      router.push(result.href)
+      return null
+    },
+    [cycleSlug, pitchId, router]
   )
 
   const onStageChange = useCycleMutation(
@@ -787,7 +808,10 @@ function ScopeMapWired({
   if (!pitch) {
     return (
       <main className="w-full max-w-screen-xl mx-auto px-6 py-8">
-        <p className="text-sm text-muted-foreground">Pitch not found.</p>
+        {/* The room drops the pitch before the move's response arrives. */}
+        <p className="text-sm text-muted-foreground">
+          {moving ? 'Moving the pitch…' : 'Pitch not found.'}
+        </p>
       </main>
     )
   }
@@ -850,6 +874,7 @@ function ScopeMapWired({
       timelineCards={timelineCards}
       onRetrySlack={slackEnabled ? onRetrySlack : undefined}
       onDeleteUpdate={onDeleteUpdate}
+      onMoveToCycle={onMoveToCycle}
     />
   )
 }

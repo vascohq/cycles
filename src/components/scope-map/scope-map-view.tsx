@@ -50,6 +50,7 @@ import { STAGES } from '@/lib/stage-engine'
 import { StageBadge } from '@/components/scope-map/stage-badge'
 import { TopBar } from '@/components/sidebar-layout'
 import { CycleCrumb, SectionCrumb } from '@/components/crumb-menu'
+import { PitchActionsMenu } from '@/components/scope-map/pitch-actions-menu'
 
 export { STAGES }
 
@@ -151,6 +152,11 @@ export type ScopeMapViewProps = {
   timelineCards?: TimelineCard[]
   onRetrySlack?: (updateId: string) => void
   onDeleteUpdate?: (updateId: string) => void
+  /**
+   * Move the pitch to another cycle (ADR 0031). Resolves to an error message,
+   * or null once the move is done. Omitted = no pitch actions menu.
+   */
+  onMoveToCycle?: (targetCycleSlug: string) => Promise<string | null>
 }
 
 export function ScopeMapView({
@@ -205,6 +211,7 @@ export function ScopeMapView({
   timelineCards = [],
   onRetrySlack,
   onDeleteUpdate,
+  onMoveToCycle,
 }: ScopeMapViewProps) {
   usePitchDocumentTitle(pitch, cycleTitle)
   // Org members for the per-task assignee picker — read from context (no prop
@@ -270,6 +277,15 @@ export function ScopeMapView({
             pitchTitle={pitch.title}
             cyclePitches={cyclePitches}
           />
+        }
+        actions={
+          onMoveToCycle && (
+            <PitchActionsMenu
+              cycleSlug={cycleSlug}
+              pitchTitle={pitch.title}
+              onMoveToCycle={onMoveToCycle}
+            />
+          )
         }
       />
 
