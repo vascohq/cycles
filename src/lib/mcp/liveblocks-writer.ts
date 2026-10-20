@@ -967,11 +967,14 @@ export async function movePitch(
   return { moved: true, id: pitchId, title }
 }
 
-// The cycle's lists as plain records, for the pure engine.
+// The cycle's lists as plain records, for the pure engine. @liveblocks/node's
+// LiveObject has toJSON() and NO toImmutable() — calling the latter left every
+// item a LiveObject with no `.id`, so every move failed "Pitch not found".
+// A plain object pushed by older code is already a record.
 function readCycleLists(root: any) {
   const read = (key: string) => {
     const list = root.get(key)
-    return list ? list.map((item: any) => (typeof item?.toImmutable === 'function' ? item.toImmutable() : item)) : []
+    return list ? list.map((item: any) => (typeof item?.toJSON === 'function' ? item.toJSON() : item)) : []
   }
   return {
     pitches: read('pitches'),
