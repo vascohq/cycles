@@ -61,7 +61,14 @@ export function PitchActionsMenu({
   async function move() {
     setPending(true)
     setError(null)
-    const failure = await onMoveToCycle(target)
+    let failure: string | null
+    try {
+      failure = await onMoveToCycle(target)
+    } catch {
+      // A rejected call must not leave the dialog locked on "Moving…". A move
+      // is safe to repeat, so retrying is the advice.
+      failure = 'The move did not finish. Try again.'
+    }
     if (failure) {
       setError(failure)
       setPending(false)

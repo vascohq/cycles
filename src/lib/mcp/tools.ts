@@ -188,8 +188,11 @@ export async function handleMovePitch(
   pitchId: string,
   toCycleSlug: string
 ): Promise<ToolResult> {
-  if (!isValidSlugSegment(toCycleSlug)) {
-    return errorResult(`Invalid target cycle slug: "${toCycleSlug}"`)
+  // The app's slug rule (CLAUDE.md), not isValidSlugSegment: a cycle created in
+  // the app may carry capitals, and must still be a valid target. Both slugs
+  // become room ids, so both are checked.
+  for (const slug of [cycleSlug, toCycleSlug]) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(slug)) return errorResult(`Invalid cycle slug: "${slug}"`)
   }
   try {
     const { id, title } = await movePitch(

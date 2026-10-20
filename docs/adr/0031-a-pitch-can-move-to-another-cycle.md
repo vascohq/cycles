@@ -18,7 +18,11 @@ Each cycle is its own Liveblocks room (ADR 0002). A move therefore crosses two s
 
 **The squad is matched by name.** Squads are per cycle (ADR 0009). The target cycle's squad with the same name takes the pitch. When there is none, the move creates it, with the source color if no target squad uses that color. The source squad stays, because other pitches may use it.
 
-**Copy first, then remove.** The move writes the subtree into the target room, then deletes it from the source room. A failure between the two leaves the pitch in both cycles, never in neither. A second call resumes: a pitch already in the target (same id) is not copied again, and only the removal runs.
+**Copy first, then remove exactly what was copied.** A Liveblocks storage mutation is not a transaction. It works on a snapshot of the room and streams its ops. So the move reads the subtree from one snapshot of the source room, adds to the target every record of it that the target does not hold yet (by id), and only then deletes those same records from the source. Nothing is sent to the source before the copy succeeds.
+
+- A failure before or during the copy leaves the source untouched.
+- A failure after the copy leaves the pitch in both cycles, never in neither. A second call finishes the move. It copies whatever was added in the source since the first attempt, leaves records the target already holds as they are, and then removes from the source.
+- A record somebody adds to the pitch in the source during the move, between the snapshot and the removal, is not moved. It stays in the source cycle without a pitch and does not show. The window is one write to the target, so the risk is accepted.
 
 **A title clash refuses the move.** Pitches are addressed by the slug of their title (ADR 0003). A second pitch with the same slug in the target cycle could not be reached by its URL or its slug path. The move changes nothing and asks the caller to rename one of the two.
 

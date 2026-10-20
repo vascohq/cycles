@@ -153,13 +153,18 @@ function ScopeMapWired({
   const onMoveToCycle = useCallback(
     async (targetCycleSlug: string) => {
       setMoving(true)
-      const result = await movePitchToCycle(cycleSlug, pitchId, targetCycleSlug)
-      if ('error' in result) {
+      try {
+        const result = await movePitchToCycle(cycleSlug, pitchId, targetCycleSlug)
+        if ('error' in result) {
+          setMoving(false)
+          return result.error
+        }
+        router.push(result.href)
+        return null
+      } catch (err) {
         setMoving(false)
-        return result.error
+        throw err
       }
-      router.push(result.href)
-      return null
     },
     [cycleSlug, pitchId, router]
   )

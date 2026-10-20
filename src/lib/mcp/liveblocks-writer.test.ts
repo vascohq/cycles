@@ -75,6 +75,7 @@ function makeMockItem(data: Record<string, unknown>): MockItem {
     delete: (key: string) => {
       delete store[key]
     },
+    toImmutable: () => ({ ...store }),
   }
 }
 
@@ -2751,7 +2752,7 @@ describe('movePitch', () => {
     squads: [{ id: 'sq1', name: 'Platform', color: '#111111' }],
   }
 
-  // Two rooms: the source is read as JSON and then mutated; the target is mutated.
+  // Two rooms, each with its own lists; mutateStorage hands out the room's root.
   function setupRooms(target: Partial<Record<(typeof LISTS)[number], MockItem[]>> = {}) {
     const room = (data: Partial<Record<string, MockItem[]>>) =>
       Object.fromEntries(LISTS.map((k) => [k, makeMockList(data[k] ?? [])]))
@@ -2762,7 +2763,6 @@ describe('movePitch', () => {
       [TARGET]: room(target),
     }
     mockGetRoom.mockResolvedValue({} as any)
-    vi.mocked(liveblocks.getStorageDocument).mockResolvedValue(structuredClone(SOURCE_JSON) as any)
     mockMutateStorage.mockImplementation(async (roomId, callback) => {
       await callback({ root: { get: (key: string) => rooms[roomId][key] } } as any)
     })
@@ -2828,15 +2828,36 @@ describe('movePitch', () => {
     expect(ids(SOURCE, 'pitches')).toEqual(['p1', 'p2'])
   })
 
-  it('resumes an interrupted move without copying twice', async () => {
-    const { ids } = setupRooms({
-      pitches: [makeMockItem({ id: 'p1', title: 'Mission Control' })],
+  // An earlier move copied p1 and s1, then failed before removing them. Cards,
+  // an update and a parking item were added in the source since. The retry must
+  // copy those before it removes them — never delete what the target lacks.
+  it('on retry, copies what the target lacks and duplicates nothing', async () => {
+    const { ids, items } = setupRooms({
+      pitches: [makeMockItem({ id: 'p1', title: 'Mission Control', stage: 'shaping' })],
       scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
     })
     await movePitch(SOURCE, TARGET, 'p1')
     expect(ids(TARGET, 'pitches')).toEqual(['p1'])
     expect(ids(TARGET, 'scopes')).toEqual(['s1'])
+    expect(ids(TARGET, 'tasks')).toEqual(['t1', 't3'])
+    expect(ids(TARGET, 'updates')).toEqual(['u1'])
+    expect(ids(TARGET, 'parkingItems')).toEqual(['pk1'])
+    // A record the target already holds is left as is.
+    expect(items(TARGET, 'pitches')[0].get('stage')).toBe('shaping')
     expect(ids(SOURCE, 'pitches')).toEqual(['p2'])
+    expect(ids(SOURCE, 'tasks')).toEqual(['t2'])
+  })
+
+  it('leaves the source untouched when the target write fails', async () => {
+    const { ids } = setupRooms()
+    const realImpl = mockMutateStorage.getMockImplementation()!
+    mockMutateStorage.mockImplementation(async (roomId, callback, ...rest) => {
+      if (roomId === TARGET) throw new Error('Liveblocks unavailable')
+      return realImpl(roomId, callback, ...rest)
+    })
+    await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('Liveblocks unavailable')
+    expect(ids(SOURCE, 'pitches')).toEqual(['p1', 'p2'])
+    expect(ids(SOURCE, 'tasks')).toEqual(['t1', 't2', 't3'])
   })
 
   it('throws when the pitch is not in the source cycle', async () => {
@@ -2847,7 +2868,8 @@ describe('movePitch', () => {
   it('throws when the target cycle does not exist, before writing anything', async () => {
     setupRooms()
     mockGetRoom.mockRejectedValue(new Error('404'))
-    await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('Target cycle not found')
+    // Names the cycle by slug, not by the room id that carries the org id.
+    await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('Target cycle not found: "q3-build"')
     expect(mockMutateStorage).not.toHaveBeenCalled()
   })
 
