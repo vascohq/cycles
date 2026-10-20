@@ -1,7 +1,8 @@
 'use server'
 
 import { liveblocks } from '@/lib/liveblocks'
-import { updateCycle } from '@/lib/mcp/liveblocks-writer'
+import { movePitch, updateCycle } from '@/lib/mcp/liveblocks-writer'
+import { slugify } from '@/lib/slugify'
 import { readCycleSummaries } from '@/lib/mcp/liveblocks-reader'
 import type { PaletteCycleItem } from '@/components/command-palette/types'
 import { auth } from '@clerk/nextjs/server'
@@ -129,4 +130,38 @@ export async function setCycleArchived(cycleSlug: string, archived: boolean) {
   const urlSlug = orgSlug ?? 'me'
   revalidatePath(`/${urlSlug}/cycles/${cycleSlug}`)
   revalidatePath(`/${urlSlug}/cycles`, 'layout')
+}
+
+/**
+ * Move a pitch, with its scopes, cards, updates and parking items, to another
+ * cycle of the same org (ADR 0031). Reuses the `movePitch` writer the MCP
+ * `move_pitch` tool uses. Returns the pitch's new URL, or the reason it could
+ * not move: a thrown error would reach the browser without its message.
+ */
+export async function movePitchToCycle(
+  cycleSlug: string,
+  pitchId: string,
+  targetCycleSlug: string
+): Promise<{ href: string } | { error: string }> {
+  const { userId, orgId, orgSlug } = await auth()
+  if (!userId) throw new Error('Not authenticated')
+  if (![cycleSlug, targetCycleSlug].every((s) => /^[a-zA-Z0-9_-]+$/.test(s))) {
+    return { error: 'Invalid cycle' }
+  }
+
+  const roomPrefix = orgId ?? userId
+  let title: string
+  try {
+    ;({ title } = await movePitch(
+      `${roomPrefix}:cycle:${cycleSlug}`,
+      `${roomPrefix}:cycle:${targetCycleSlug}`,
+      pitchId
+    ))
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+
+  const urlSlug = orgSlug ?? 'me'
+  revalidatePath(`/${urlSlug}/cycles`, 'layout')
+  return { href: `/${urlSlug}/cycles/${targetCycleSlug}/${slugify(title)}` }
 }

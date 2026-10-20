@@ -40,6 +40,7 @@ import {
   moveTask,
   upsertParkingItem,
   deletePitch,
+  movePitch,
   deleteScope,
   deleteTask,
   deleteParkingItem,
@@ -174,6 +175,38 @@ export async function handleArchiveCycle(
   try {
     await updateCycle(roomId, { archived })
     return jsonResult({ updated: true, slug: cycleSlug, archived })
+  } catch (err) {
+    return errorResult((err as Error).message)
+  }
+}
+
+// Move a pitch with its whole subtree to another cycle of the same org (ADR
+// 0031). Not batchable: a batch holds one room open, and a move spans two.
+export async function handleMovePitch(
+  orgId: string,
+  cycleSlug: string,
+  pitchId: string,
+  toCycleSlug: string
+): Promise<ToolResult> {
+  // The app's slug rule (CLAUDE.md), not isValidSlugSegment: a cycle created in
+  // the app may carry capitals, and must still be a valid target. Both slugs
+  // become room ids, so both are checked.
+  for (const slug of [cycleSlug, toCycleSlug]) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(slug)) return errorResult(`Invalid cycle slug: "${slug}"`)
+  }
+  try {
+    const { id, title } = await movePitch(
+      `${orgId}:cycle:${cycleSlug}`,
+      `${orgId}:cycle:${toCycleSlug}`,
+      pitchId
+    )
+    return jsonResult({
+      moved: true,
+      id,
+      from: cycleSlug,
+      to: toCycleSlug,
+      slug_path: `${toCycleSlug}/${slugify(title)}`,
+    })
   } catch (err) {
     return errorResult((err as Error).message)
   }
@@ -1729,6 +1762,35 @@ export function registerCyclesTools(server: any): void {
       } catch (err) {
         return errorResult((err as Error).message)
       }
+    }
+  )
+
+  defineTool(
+    server,
+    'move_pitch',
+    'Move a pitch to another cycle of the same org, with everything under it: scopes, tasks (including Unscoped cards), needle updates and parking items. Ids are kept. The pitch\'s squad is matched by name in the target cycle and created there if missing. Fails if the target cycle already has a pitch with the same title (rename one first). Returns the pitch\'s new slug_path. Not available inside batch.',
+    {
+      ...orgArg,
+      ...cycleSlugArg,
+      id: z.string().describe('Pitch id to move'),
+      to_cycle_slug: z.string().describe('Slug of the cycle to move the pitch to, e.g. "2026-q3-build"'),
+    },
+    {
+      title: 'Move pitch to another cycle',
+      readOnlyHint: false,
+      // Reversible: moving it back restores it.
+      destructiveHint: false,
+      // A repeated call resumes an interrupted move instead of copying twice.
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async (
+      { org, cycle_slug, id, to_cycle_slug }: { org?: string; cycle_slug: string; id: string; to_cycle_slug: string },
+      extra: ToolExtra
+    ) => {
+      const resolved = resolveOrg(getMemberships(extra), org)
+      if (!resolved.ok) return errorResult(resolved.error)
+      return handleMovePitch(resolved.org.id, cycle_slug, id, to_cycle_slug)
     }
   )
 

@@ -8,6 +8,7 @@ vi.mock('@/lib/liveblocks', () => ({
     initializeStorageDocument: vi.fn(),
     updateRoom: vi.fn(),
     deleteRoom: vi.fn(),
+    getStorageDocument: vi.fn(),
   },
 }))
 
@@ -22,6 +23,7 @@ import {
   moveTask,
   upsertParkingItem,
   deletePitch,
+  movePitch,
   deleteScope,
   deleteTask,
   deleteParkingItem,
@@ -73,6 +75,7 @@ function makeMockItem(data: Record<string, unknown>): MockItem {
     delete: (key: string) => {
       delete store[key]
     },
+    toImmutable: () => ({ ...store }),
   }
 }
 
@@ -2720,5 +2723,158 @@ describe('upsertArea outlines', () => {
     await expect(upsertArea(MAP_ROOM, { name: 'Billing', outline: tooMany })).rejects.toThrow(
       'at most 64 points'
     )
+  })
+})
+
+describe('movePitch', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const SOURCE = 'org_1:cycle:q2-build'
+  const TARGET = 'org_1:cycle:q3-build'
+  const LISTS = ['pitches', 'scopes', 'tasks', 'updates', 'parkingItems', 'squads'] as const
+
+  const SOURCE_JSON: Record<string, Record<string, unknown>[]> = {
+    pitches: [
+      { id: 'p1', title: 'Mission Control', stage: 'building', squadId: 'sq1', core_scope_id: 's1' },
+      { id: 'p2', title: 'Other', stage: 'building' },
+    ],
+    scopes: [
+      { id: 's1', pitchId: 'p1', title: 'A' },
+      { id: 's2', pitchId: 'p2', title: 'B' },
+    ],
+    tasks: [
+      { id: 't1', scopeId: 's1', pitchId: 'p1', title: 'scoped' },
+      { id: 't2', scopeId: 's2', pitchId: 'p2', title: 'other' },
+      { id: 't3', pitchId: 'p1', title: 'unscoped' },
+    ],
+    updates: [{ id: 'u1', pitchId: 'p1', needle_snapshot: { progress: 0.4, zone: 'on_track' } }],
+    parkingItems: [{ id: 'pk1', pitchId: 'p1', text: 'later', resolved: false }],
+    squads: [{ id: 'sq1', name: 'Platform', color: '#111111' }],
+  }
+
+  // Two rooms, each with its own lists; mutateStorage hands out the room's root.
+  function setupRooms(target: Partial<Record<(typeof LISTS)[number], MockItem[]>> = {}) {
+    const room = (data: Partial<Record<string, MockItem[]>>) =>
+      Object.fromEntries(LISTS.map((k) => [k, makeMockList(data[k] ?? [])]))
+    const rooms: Record<string, Record<string, ReturnType<typeof makeMockList>>> = {
+      [SOURCE]: room(
+        Object.fromEntries(LISTS.map((k) => [k, SOURCE_JSON[k].map((x) => makeMockItem({ ...x }))]))
+      ),
+      [TARGET]: room(target),
+    }
+    mockGetRoom.mockResolvedValue({} as any)
+    mockMutateStorage.mockImplementation(async (roomId, callback) => {
+      await callback({ root: { get: (key: string) => rooms[roomId][key] } } as any)
+    })
+    const items = (roomId: string, key: string) => [...rooms[roomId][key]] as MockItem[]
+    const ids = (roomId: string, key: string) => items(roomId, key).map((i) => i.get('id'))
+    return { items, ids }
+  }
+
+  it('moves the pitch and its whole subtree, leaving the rest of the source alone', async () => {
+    const { ids } = setupRooms()
+
+    const result = await movePitch(SOURCE, TARGET, 'p1')
+
+    expect(result).toEqual({ moved: true, id: 'p1', title: 'Mission Control' })
+    expect(ids(TARGET, 'pitches')).toEqual(['p1'])
+    expect(ids(TARGET, 'scopes')).toEqual(['s1'])
+    expect(ids(TARGET, 'tasks')).toEqual(['t1', 't3'])
+    expect(ids(TARGET, 'updates')).toEqual(['u1'])
+    expect(ids(TARGET, 'parkingItems')).toEqual(['pk1'])
+    expect(ids(SOURCE, 'pitches')).toEqual(['p2'])
+    expect(ids(SOURCE, 'scopes')).toEqual(['s2'])
+    expect(ids(SOURCE, 'tasks')).toEqual(['t2'])
+    expect(ids(SOURCE, 'updates')).toEqual([])
+    expect(ids(SOURCE, 'parkingItems')).toEqual([])
+    // The source squad stays: other pitches may still use it.
+    expect(ids(SOURCE, 'squads')).toEqual(['sq1'])
+  })
+
+  it('keeps the pitch fields, including its core scope and needle history', async () => {
+    const { items } = setupRooms()
+    await movePitch(SOURCE, TARGET, 'p1')
+    const [moved] = items(TARGET, 'pitches')
+    expect(moved.get('core_scope_id')).toBe('s1')
+    expect(moved.get('stage')).toBe('building')
+    const [update] = items(TARGET, 'updates')
+    expect(update.get('needle_snapshot')).toEqual({ progress: 0.4, zone: 'on_track' })
+  })
+
+  it('creates the squad in the target, keeping its color when free', async () => {
+    const { items } = setupRooms()
+    await movePitch(SOURCE, TARGET, 'p1')
+    const squads = items(TARGET, 'squads')
+    expect(squads).toHaveLength(1)
+    expect(squads[0].get('name')).toBe('Platform')
+    expect(squads[0].get('color')).toBe('#111111')
+    expect(squads[0].get('id')).not.toBe('sq1')
+    expect(items(TARGET, 'pitches')[0].get('squadId')).toBe(squads[0].get('id'))
+  })
+
+  it('reuses a target squad with the same name', async () => {
+    const { items } = setupRooms({
+      squads: [makeMockItem({ id: 'sqX', name: 'platform', color: '#222222' })],
+    })
+    await movePitch(SOURCE, TARGET, 'p1')
+    expect(items(TARGET, 'squads')).toHaveLength(1)
+    expect(items(TARGET, 'pitches')[0].get('squadId')).toBe('sqX')
+  })
+
+  it('refuses a title the target cycle already uses, and changes nothing', async () => {
+    const { ids } = setupRooms({ pitches: [makeMockItem({ id: 'px', title: 'Mission control' })] })
+    await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('already has a pitch named')
+    expect(ids(TARGET, 'pitches')).toEqual(['px'])
+    expect(ids(SOURCE, 'pitches')).toEqual(['p1', 'p2'])
+  })
+
+  // An earlier move copied p1 and s1, then failed before removing them. Cards,
+  // an update and a parking item were added in the source since. The retry must
+  // copy those before it removes them — never delete what the target lacks.
+  it('on retry, copies what the target lacks and duplicates nothing', async () => {
+    const { ids, items } = setupRooms({
+      pitches: [makeMockItem({ id: 'p1', title: 'Mission Control', stage: 'shaping' })],
+      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+    })
+    await movePitch(SOURCE, TARGET, 'p1')
+    expect(ids(TARGET, 'pitches')).toEqual(['p1'])
+    expect(ids(TARGET, 'scopes')).toEqual(['s1'])
+    expect(ids(TARGET, 'tasks')).toEqual(['t1', 't3'])
+    expect(ids(TARGET, 'updates')).toEqual(['u1'])
+    expect(ids(TARGET, 'parkingItems')).toEqual(['pk1'])
+    // A record the target already holds is left as is.
+    expect(items(TARGET, 'pitches')[0].get('stage')).toBe('shaping')
+    expect(ids(SOURCE, 'pitches')).toEqual(['p2'])
+    expect(ids(SOURCE, 'tasks')).toEqual(['t2'])
+  })
+
+  it('leaves the source untouched when the target write fails', async () => {
+    const { ids } = setupRooms()
+    const realImpl = mockMutateStorage.getMockImplementation()!
+    mockMutateStorage.mockImplementation(async (roomId, callback, ...rest) => {
+      if (roomId === TARGET) throw new Error('Liveblocks unavailable')
+      return realImpl(roomId, callback, ...rest)
+    })
+    await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('Liveblocks unavailable')
+    expect(ids(SOURCE, 'pitches')).toEqual(['p1', 'p2'])
+    expect(ids(SOURCE, 'tasks')).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('throws when the pitch is not in the source cycle', async () => {
+    setupRooms()
+    await expect(movePitch(SOURCE, TARGET, 'nope')).rejects.toThrow('Pitch not found')
+  })
+
+  it('throws when the target cycle does not exist, before writing anything', async () => {
+    setupRooms()
+    mockGetRoom.mockRejectedValue(new Error('404'))
+    // Names the cycle by slug, not by the room id that carries the org id.
+    await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('Target cycle not found: "q3-build"')
+    expect(mockMutateStorage).not.toHaveBeenCalled()
+  })
+
+  it('refuses to move a pitch into its own cycle', async () => {
+    setupRooms()
+    await expect(movePitch(SOURCE, SOURCE, 'p1')).rejects.toThrow('already in this cycle')
   })
 })

@@ -32,6 +32,7 @@ import {
   storeRelated,
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
+import { extractPitchBundle, moveConflict, type PitchBundle } from '@/lib/pitch-move-engine'
 import { needleAfterDeletingLatest } from '@/lib/needle-engine'
 import { moveTargetIndex, isCardStatus, CARD_STATUSES } from '@/lib/card-engine'
 import {
@@ -196,18 +197,24 @@ function getField(item: any, key: string): any {
 }
 
 
-// Rooms created before squads existed have no `squads` list in root storage,
-// so root.get('squads') is undefined and reads on it throw. Lazily backfill it.
-function getSquadList(root: any): any {
-  if (!root.get('squads')) root.set('squads', new LiveList([]))
+// A root list, created when the room predates it. Rooms created before squads
+// existed have no `squads` list, so root.get('squads') is undefined and reads on
+// it throw.
+function getOrCreateList(root: any, key: string): any {
+  if (!root.get(key)) root.set(key, new LiveList([]))
   // Read back so we return the attached instance (the one with .map/.push),
   // not the detached LiveList we just constructed.
-  return root.get('squads')
+  return root.get(key)
+}
+
+function getSquadList(root: any): any {
+  return getOrCreateList(root, 'squads')
 }
 
 // Resolve a squad name to an id within the cycle's squad list, creating the
-// squad (with an auto-assigned color) when no case-insensitive match exists.
-function resolveOrCreateSquadId(squads: any, name: string): string {
+// squad when no case-insensitive match exists. A new squad takes
+// `preferredColor` when no sibling uses it, and an auto-assigned color otherwise.
+function resolveOrCreateSquadId(squads: any, name: string, preferredColor?: string): string {
   const arr = squads.map((s: any) => ({
     id: getField(s, 'id'),
     name: getField(s, 'name'),
@@ -216,8 +223,10 @@ function resolveOrCreateSquadId(squads: any, name: string): string {
   const existing = resolveSquadByName(arr, name)
   if (existing) return existing.id
   const usedColors = arr.map((s: any) => s.color).filter(Boolean)
+  const color =
+    preferredColor && !usedColors.includes(preferredColor) ? preferredColor : assignSquadColor(usedColors)
   const id = nanoid()
-  squads.push(new LiveObject({ id, name, color: assignSquadColor(usedColors) }))
+  squads.push(new LiveObject({ id, name, color }))
   return id
 }
 
@@ -900,6 +909,115 @@ export async function deletePitch(
   })
 
   if (notFound) throw new Error(`Pitch not found: "${pitchId}"`)
+}
+
+// ── Move pitch ──
+
+const PITCH_CHILD_LISTS = ['scopes', 'tasks', 'updates', 'parkingItems'] as const
+
+// The cycle slug inside a room id, for error messages: the room id carries the
+// org or user id, which the caller has no use for.
+function cycleSlugOf(roomId: string): string {
+  return roomId.split(':').slice(2).join(':')
+}
+
+// Move a pitch and everything under it (scopes, cards, updates, parking items)
+// to another cycle of the same org (ADR 0031). Each cycle is its own room, and
+// mutateStorage is not a transaction (it works on a snapshot and streams ops),
+// so the move is ordered to never lose data:
+//   1. Read the pitch's subtree from the source snapshot.
+//   2. Copy into the target every record it does not already hold (by id).
+//   3. Delete from the source exactly the records read in 1 — all now in the target.
+// Nothing is sent to the source before 2 succeeds. A failure after 2 leaves the
+// pitch in both cycles; a retry copies whatever was added since and finishes.
+// Ids are kept, so links inside the pitch (scopeId, hill snapshots, core scope)
+// stay valid. The squad is per cycle (ADR 0009): matched by name in the target,
+// created there when missing.
+export async function movePitch(
+  sourceRoomId: string,
+  targetRoomId: string,
+  pitchId: string
+): Promise<{ moved: true; id: string; title: string }> {
+  if (sourceRoomId === targetRoomId) {
+    throw new Error('The pitch is already in this cycle')
+  }
+  if (!(await roomExists(targetRoomId))) {
+    throw new Error(`Target cycle not found: "${cycleSlugOf(targetRoomId)}"`)
+  }
+
+  let title = ''
+  await liveblocks.mutateStorage(sourceRoomId, async ({ root }: { root: any }) => {
+    const bundle = extractPitchBundle(readCycleLists(root), pitchId)
+    if (!bundle) throw new Error(`Pitch not found: "${pitchId}"`)
+    title = bundle.pitch.title
+
+    let conflict: string | null = null
+    await liveblocks.mutateStorage(targetRoomId, ({ root: target }: { root: any }) => {
+      conflict = copyPitchBundle(target, bundle)
+    })
+    // Thrown before any source op, so the source is left untouched.
+    if (conflict) throw new Error(conflict)
+
+    removeByIds(root.get('pitches'), [pitchId])
+    for (const key of PITCH_CHILD_LISTS) {
+      removeByIds(getOrCreateList(root, key), bundle[key].map((item) => item.id))
+    }
+  })
+
+  return { moved: true, id: pitchId, title }
+}
+
+// The cycle's lists as plain records, for the pure engine.
+function readCycleLists(root: any) {
+  const read = (key: string) => {
+    const list = root.get(key)
+    return list ? list.map((item: any) => (typeof item?.toImmutable === 'function' ? item.toImmutable() : item)) : []
+  }
+  return {
+    pitches: read('pitches'),
+    scopes: read('scopes'),
+    tasks: read('tasks'),
+    updates: read('updates'),
+    parkingItems: read('parkingItems'),
+    squads: read('squads'),
+  }
+}
+
+// Add to the target every record of the bundle it does not hold yet, by id. A
+// record already there is left as is, so a retried move never duplicates. Returns
+// why the pitch cannot land, or null.
+function copyPitchBundle(root: any, bundle: PitchBundle): string | null {
+  const pitches = root.get('pitches')
+  const existing = pitches.map((p: any) => ({ id: getField(p, 'id'), title: getField(p, 'title') }))
+  const conflict = moveConflict(existing, bundle.pitch)
+  if (conflict) return conflict
+
+  if (!existing.some((p: { id: string }) => p.id === bundle.pitch.id)) {
+    const pitch: CyclePitch = { ...bundle.pitch }
+    delete pitch.squadId
+    if (bundle.squad) {
+      pitch.squadId = resolveOrCreateSquadId(getSquadList(root), bundle.squad.name, bundle.squad.color)
+    }
+    pitches.push(new LiveObject(pitch))
+  }
+
+  for (const key of PITCH_CHILD_LISTS) {
+    const list = getOrCreateList(root, key)
+    const held = new Set(list.map((item: any) => getField(item, 'id')))
+    for (const item of bundle[key]) {
+      if (!held.has(item.id)) list.push(new LiveObject({ ...item }))
+    }
+  }
+  return null
+}
+
+// Delete every item whose id is in `ids`, walking backwards so indexes stay valid.
+function removeByIds(list: any, ids: string[]): void {
+  const remove = new Set(ids)
+  const items = [...list]
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (remove.has(getField(items[i], 'id'))) list.delete(i)
+  }
 }
 
 export async function deleteScope(

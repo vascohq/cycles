@@ -18,7 +18,13 @@ vi.mock('next/navigation', () => ({
   redirect: vi.fn(),
 }))
 
-import { createCycleRoom } from './actions'
+vi.mock('@/lib/mcp/liveblocks-writer', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mcp/liveblocks-writer')>()),
+  movePitch: vi.fn(),
+}))
+
+import { createCycleRoom, movePitchToCycle } from './actions'
+import { movePitch } from '@/lib/mcp/liveblocks-writer'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { liveblocks } from '@/lib/liveblocks'
@@ -247,5 +253,35 @@ describe('createCycleRoom', () => {
     expect(mockCreateRoom).not.toHaveBeenCalled()
     expect(mockInitStorage).not.toHaveBeenCalled()
     expect(mockRedirect).toHaveBeenCalledWith('/my-org/cycles/existing-cycle')
+  })
+})
+
+describe('movePitchToCycle', () => {
+  const mockMovePitch = vi.mocked(movePitch)
+
+  it('moves within the org and returns the pitch URL in its new cycle', async () => {
+    mockMovePitch.mockResolvedValue({ moved: true, id: 'p1', title: 'Mission Control' })
+
+    const result = await movePitchToCycle('q2-build', 'p1', 'q3-build')
+
+    expect(mockMovePitch).toHaveBeenCalledWith('org_456:cycle:q2-build', 'org_456:cycle:q3-build', 'p1')
+    expect(result).toEqual({ href: '/my-org/cycles/q3-build/mission-control' })
+  })
+
+  it('returns the writer error as a message instead of throwing', async () => {
+    mockMovePitch.mockRejectedValue(new Error('The target cycle already has a pitch named "X".'))
+    const result = await movePitchToCycle('q2-build', 'p1', 'q3-build')
+    expect(result).toEqual({ error: 'The target cycle already has a pitch named "X".' })
+  })
+
+  it('rejects a target slug with a slash, before writing', async () => {
+    const result = await movePitchToCycle('q2-build', 'p1', '../org_other:cycle:x')
+    expect(result).toEqual({ error: 'Invalid cycle' })
+    expect(mockMovePitch).not.toHaveBeenCalled()
+  })
+
+  it('rejects unauthenticated users', async () => {
+    mockAuth.mockResolvedValue({ userId: null } as any)
+    await expect(movePitchToCycle('q2-build', 'p1', 'q3-build')).rejects.toThrow('Not authenticated')
   })
 })
