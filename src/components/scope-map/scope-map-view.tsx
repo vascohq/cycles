@@ -42,7 +42,7 @@ import { computeTimebox } from '@/lib/timebox-engine'
 import type { Tier } from '@/cycle-liveblocks.config'
 import { SquadPicker } from '@/components/scope-map/squad-picker'
 import { usePageCelebration } from '@/components/scope-map/use-page-celebration'
-import { areAllScopesDone, pageCelebration } from '@/lib/scope-map-helpers'
+import { areAllScopesDone, pageCelebration, pitchSurfaces } from '@/lib/scope-map-helpers'
 import { areAllCardsDone } from '@/lib/card-engine'
 import type { SquadLike } from '@/lib/squad-engine'
 import { usePitchDocumentTitle } from './use-pitch-document-title'
@@ -217,32 +217,26 @@ export function ScopeMapView({
   const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
   // Kanban MODE (derived — see ADR 0018): a pitch with no timebox/appetite has
   // no needle and no updates, and defaults to the board. It can still be
-  // switched to Scope Map view to place its scopes on the hill. A pitch WITH a
-  // timebox is a Shape-Up pitch that defaults to the Scope Map and can
-  // optionally be *viewed* as a board. `showKanban` = render the board.
+  // switched to Scope Map view to place its scopes on the hill.
   const isKanbanMode = !hasTimebox
-  const showKanban = isKanbanMode
-    ? pitch.view !== 'scope_map'
-    : pitch.view === 'kanban'
-  // The hill shows on every Shape-Up pitch (even viewed as a board), and on a
-  // Kanban-mode pitch while it's viewed as a Scope Map.
-  const showHill = hasTimebox || !showKanban
+  const { showKanban, showHill } = pitchSurfaces(hasTimebox, pitch.view)
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
   // shimmer that invites the final update during the `color` phase.
-  // In Kanban view there's no needle/scopes — the gold parade fires when every
-  // card is done (a celebration only, never a stage change; see ADR 0018).
-  // Kanban-MODE pitches (no needle) celebrate when every card is done;
+  // A Kanban-MODE pitch on its board (no needle) gets the gold parade when
+  // every card is done (a celebration only, never a stage change; see ADR
+  // 0018); viewed as a Scope Map it celebrates its scopes like any scope grid.
   // Shape-Up pitches keep the needle/scope celebration even when viewed as a
   // board (the needle/hill still show — see ADR 0018).
-  const celebration = isKanbanMode
-    ? areAllCardsDone(boardCards)
-      ? 'gold'
-      : 'none'
-    : pageCelebration(
-        pitch.needle?.progress ?? null,
-        areAllScopesDone(scopeGridItems)
-      )
+  const celebration =
+    isKanbanMode && showKanban
+      ? areAllCardsDone(boardCards)
+        ? 'gold'
+        : 'none'
+      : pageCelebration(
+          pitch.needle?.progress ?? null,
+          areAllScopesDone(scopeGridItems)
+        )
   usePageCelebration(celebration)
   const [highlightedScopeId, setHighlightedScopeId] = useState<string | null>(
     null
@@ -343,12 +337,12 @@ export function ScopeMapView({
             <MoveNeedleModal
               open={moveNeedleOpen}
               onOpenChange={setMoveNeedleOpen}
-              weekLabel={hasTimebox ? `Week ${timebox.currentWeek} of ${timebox.totalWeeks}` : ''}
+              weekLabel={`Week ${timebox.currentWeek} of ${timebox.totalWeeks}`}
               dateLabel={new Date(today + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               userName={userName}
               pitchTitle={pitch.title}
               pitchEmoji={pitch.emoji}
-              daysLeft={hasTimebox ? timebox.daysLeft : 0}
+              daysLeft={timebox.daysLeft}
               currentProgress={pitch.needle?.progress ?? 0.02}
               currentZone={pitch.needle?.zone ?? null}
               previousZone={previousZone}

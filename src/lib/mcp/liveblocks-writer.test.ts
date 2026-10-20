@@ -338,6 +338,21 @@ describe('upsertPitch', () => {
     const result = await upsertPitch(ROOM, { id: 'p1', title: 'P', stage: 'building', view: 'scope_map' })
     expect(noTimebox.get('view')).toBe('scope_map')
     expect(result).toEqual({ created: false, id: 'p1' })
+
+    // A timebox set in the same call is stored alongside the view.
+    const p2 = makeMockItem({ id: 'p2', title: 'Q', stage: 'building', timebox_start: '', timebox_end: '' })
+    setupStorage({ pitches: [p2] })
+    await upsertPitch(ROOM, {
+      id: 'p2',
+      title: 'Q',
+      stage: 'building',
+      view: 'kanban',
+      timebox_start: '2026-04-06',
+      timebox_end: '2026-05-15',
+    })
+    expect(p2.get('view')).toBe('kanban')
+    expect(p2.get('timebox_start')).toBe('2026-04-06')
+    expect(p2.get('timebox_end')).toBe('2026-05-15')
   })
 
   it('creates a new pitch when no id provided', async () => {
