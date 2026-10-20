@@ -215,12 +215,18 @@ export function ScopeMapView({
   // as 'Invalid Date' / NaN. The timebox is also the pitch's appetite, so it
   // decides Kanban MODE.
   const hasTimebox = Boolean(pitch.timebox_start && pitch.timebox_end)
-  // Kanban MODE (derived — see ADR 0018): a pitch with no timebox/appetite is
-  // board-only — no needle, hill, scope map, or view switcher. A pitch WITH a
-  // timebox is a Shape-Up pitch that can optionally be *viewed* as a board via
-  // the `view` toggle. `showKanban` = render the board, either way.
+  // Kanban MODE (derived — see ADR 0018): a pitch with no timebox/appetite has
+  // no needle and no updates, and defaults to the board. It can still be
+  // switched to Scope Map view to place its scopes on the hill. A pitch WITH a
+  // timebox is a Shape-Up pitch that defaults to the Scope Map and can
+  // optionally be *viewed* as a board. `showKanban` = render the board.
   const isKanbanMode = !hasTimebox
-  const showKanban = isKanbanMode || pitch.view === 'kanban'
+  const showKanban = isKanbanMode
+    ? pitch.view !== 'scope_map'
+    : pitch.view === 'kanban'
+  // The hill shows on every Shape-Up pitch (even viewed as a board), and on a
+  // Kanban-mode pitch while it's viewed as a Scope Map.
+  const showHill = hasTimebox || !showKanban
   // Page-wide celebration: `color` rain when every scope is done, `gold` rain
   // once the needle hits 100%. Drives both the confetti and the needle-box
   // shimmer that invites the final update during the `color` phase.
@@ -291,10 +297,12 @@ export function ScopeMapView({
       />
 
       {/* Needle + hill show for any Shape-Up pitch (has a timebox), including
-          when it's viewed as a board. A Kanban-MODE pitch (no timebox) has
-          neither — see ADR 0018. */}
-      {hasTimebox && (
-      <section className="grid grid-cols-1 gap-5 mc-row">
+          when it's viewed as a board. A Kanban-MODE pitch (no timebox) has no
+          needle; it shows the hill alone when viewed as a Scope Map — see
+          ADR 0018. */}
+      {showHill && (
+      <section className={`grid grid-cols-1 gap-5 ${hasTimebox ? 'mc-row' : ''}`}>
+        {hasTimebox && (
         <div>
           {isDone ? (
             <div
@@ -354,6 +362,7 @@ export function ScopeMapView({
             />
           )}
         </div>
+        )}
 
         <div className="rounded-lg border bg-card p-4">
           <HillHistory
@@ -374,8 +383,8 @@ export function ScopeMapView({
             cards={boardCards}
             scopeOptions={scopeGridItems.map((s) => ({ id: s.id, title: s.title, color: s.color }))}
             orgUsers={orgUsers}
-            view={pitch.view ?? 'kanban'}
-            onViewChange={hasTimebox ? onViewChange : undefined}
+            view="kanban"
+            onViewChange={onViewChange}
             onCardMove={isDone ? undefined : onCardMove}
             onCardEdit={
               !isDone && onTaskEdit ? (id, title) => onTaskEdit('', id, title) : undefined

@@ -20,10 +20,12 @@ accepted
 
 Two distinct ways a pitch is Kanban, settled after the first build:
 
-- **Kanban mode** is **derived from the timebox** (= appetite): no timebox ⇒ board-only, with no needle/hill/scope-map and **no view switcher**. This is the pure kanban pitch — flow work with no fixed clock. Not a stored flag; it falls out of `hasTimebox`, so it needs no new field and no creation-time choice.
-- **Kanban view** is the stored `view` toggle (`scope_map` | `kanban`) — but it only applies to **Shape-Up pitches** (those *with* a timebox), letting them *also* be shown as a board. The switcher renders only there. Crucially, the view **keeps the needle/hill** — it only swaps the surface *below* them (scope grid ↔ board). Hiding the needle/hill is a property of *mode*, not *view*.
+- **Kanban mode** is **derived from the timebox** (= appetite): no timebox ⇒ no needle and no Updates, and the pitch **defaults to the board**. This is the pure kanban pitch — flow work with no fixed clock. Not a stored flag; it falls out of `hasTimebox`, so it needs no new field and no creation-time choice.
+- **Kanban view** is the stored `view` toggle (`scope_map` | `kanban`). The switcher renders on **every** pitch. On a **Shape-Up pitch** (with a timebox) an unset view means Scope Map, and Kanban view **keeps the needle/hill** — it only swaps the surface *below* them (scope grid ↔ board). On a **Kanban-mode pitch** an unset view means the board, and Scope Map view shows the **hill and scope grid without a needle**: scopes still have hill progress, and placing them on the hill needs no clock. Hiding the needle is a property of *mode*, not *view*.
 
-So the needle/hill section renders when `hasTimebox`; the board renders when `showKanban = !hasTimebox || view === 'kanban'`; the scope grid when `!showKanban`. Trade-off accepted: a Shape-Up pitch that hasn't been given a timebox yet reads as Kanban mode until dates are set — benign, and consistent with "no appetite ⇒ not yet shaped."
+So the needle renders when `hasTimebox`; the hill when `hasTimebox || !showKanban`; the board when `showKanban = hasTimebox ? view === 'kanban' : view !== 'scope_map'`; the scope grid when `!showKanban`.
+
+Amended after use: v1 hid the hill and the switcher entirely in Kanban mode, so a pitch without a timebox could never show its scopes on the hill. That coupled "has no appetite" to "can't see scope progress", which people did not expect. The MCP `upsert_pitch` warning for `view: 'scope_map'` on a no-timebox pitch went with it. Trade-off accepted: a Shape-Up pitch that hasn't been given a timebox yet reads as Kanban mode until dates are set — benign, and consistent with "no appetite ⇒ not yet shaped."
 
 ## Card order is priority
 
