@@ -2779,7 +2779,9 @@ describe('movePitch', () => {
     })
     const items = (roomId: string, key: string) =>
       ((rooms[roomId].get(key) as LiveList<LiveObject<any>>)?.map((i) => i) ?? []) as LiveObject<any>[]
-    const ids = (roomId: string, key: string) => items(roomId, key).map((i) => i.get('id'))
+    // Lists may hold legacy plain records next to LiveObjects.
+    const ids = (roomId: string, key: string) =>
+      items(roomId, key).map((i: any) => (typeof i.get === 'function' ? i.get('id') : i.id))
     return { rooms, items, ids }
   }
 
@@ -2873,8 +2875,9 @@ describe('movePitch', () => {
   })
 
   it('creates a list the target room predates', async () => {
-    const { ids } = setupRooms({}, ['parkingItems', 'squads'])
+    const { ids } = setupRooms({}, ['pitches', 'parkingItems', 'squads'])
     await movePitch(SOURCE, TARGET, 'p1')
+    expect(ids(TARGET, 'pitches')).toEqual(['p1'])
     expect(ids(TARGET, 'parkingItems')).toEqual(['pk1'])
     expect(ids(TARGET, 'squads')).toHaveLength(1)
   })
@@ -2884,7 +2887,7 @@ describe('movePitch', () => {
     ;(rooms[SOURCE].get('parkingItems') as LiveList<any>).push({ id: 'pk-legacy', pitchId: 'p1', text: 'old' })
     await movePitch(SOURCE, TARGET, 'p1')
     expect(ids(TARGET, 'parkingItems')).toEqual(['pk1', 'pk-legacy'])
-    expect((rooms[SOURCE].get('parkingItems') as LiveList<any>).length).toBe(0)
+    expect(ids(SOURCE, 'parkingItems')).toEqual([])
   })
 
   it('throws when the pitch is not in the source cycle', async () => {

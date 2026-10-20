@@ -967,14 +967,13 @@ export async function movePitch(
   return { moved: true, id: pitchId, title }
 }
 
-// The cycle's lists as plain records, for the pure engine. @liveblocks/node's
-// LiveObject has toJSON() and NO toImmutable() — calling the latter left every
-// item a LiveObject with no `.id`, so every move failed "Pitch not found".
-// A plain object pushed by older code is already a record.
+// The cycle's lists as plain records, for the pure engine. A LiveObject (it has
+// `get`, like getField checks) becomes a record through toJSON() — @liveblocks/
+// node has no toImmutable(). A plain object pushed by older code already is one.
 function readCycleLists(root: any) {
   const read = (key: string) => {
     const list = root.get(key)
-    return list ? list.map((item: any) => (typeof item?.toJSON === 'function' ? item.toJSON() : item)) : []
+    return list ? list.map((item: any) => (typeof item?.get === 'function' ? item.toJSON() : item)) : []
   }
   return {
     pitches: read('pitches'),
@@ -990,7 +989,7 @@ function readCycleLists(root: any) {
 // record already there is left as is, so a retried move never duplicates. Returns
 // why the pitch cannot land, or null.
 function copyPitchBundle(root: any, bundle: PitchBundle): string | null {
-  const pitches = root.get('pitches')
+  const pitches = getOrCreateList(root, 'pitches')
   const existing = pitches.map((p: any) => ({ id: getField(p, 'id'), title: getField(p, 'title') }))
   const conflict = moveConflict(existing, bundle.pitch)
   if (conflict) return conflict
