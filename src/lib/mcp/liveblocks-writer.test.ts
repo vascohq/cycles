@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { LiveObject, LiveList } from '@liveblocks/node'
 
 vi.mock('@/lib/liveblocks', () => ({
   liveblocks: {
@@ -75,7 +76,6 @@ function makeMockItem(data: Record<string, unknown>): MockItem {
     delete: (key: string) => {
       delete store[key]
     },
-    toImmutable: () => ({ ...store }),
   }
 }
 
@@ -2752,23 +2752,37 @@ describe('movePitch', () => {
     squads: [{ id: 'sq1', name: 'Platform', color: '#111111' }],
   }
 
-  // Two rooms, each with its own lists; mutateStorage hands out the room's root.
-  function setupRooms(target: Partial<Record<(typeof LISTS)[number], MockItem[]>> = {}) {
-    const room = (data: Partial<Record<string, MockItem[]>>) =>
-      Object.fromEntries(LISTS.map((k) => [k, makeMockList(data[k] ?? [])]))
-    const rooms: Record<string, Record<string, ReturnType<typeof makeMockList>>> = {
-      [SOURCE]: room(
-        Object.fromEntries(LISTS.map((k) => [k, SOURCE_JSON[k].map((x) => makeMockItem({ ...x }))]))
-      ),
-      [TARGET]: room(target),
+  type Records = Partial<Record<(typeof LISTS)[number], Record<string, unknown>[]>>
+
+  // Two rooms built from REAL @liveblocks/node structures, not the mocks above.
+  // The move reads whole records off a live root, and a mock that offered a
+  // method the real LiveObject lacks (toImmutable) let a move that could never
+  // find its pitch pass every test and ship.
+  // `targetLacks`: lists the target room predates.
+  function setupRooms(target: Records = {}, targetLacks: string[] = []) {
+    const room = (data: Records, lacks: string[] = []) =>
+      new LiveObject(
+        Object.fromEntries(
+          LISTS.filter((k) => !lacks.includes(k)).map((k) => [
+            k,
+            new LiveList((data[k] ?? []).map((x) => new LiveObject({ ...x } as any))),
+          ])
+        )
+      )
+    const rooms: Record<string, LiveObject<any>> = {
+      [SOURCE]: room(structuredClone(SOURCE_JSON)),
+      [TARGET]: room(target, targetLacks),
     }
     mockGetRoom.mockResolvedValue({} as any)
     mockMutateStorage.mockImplementation(async (roomId, callback) => {
-      await callback({ root: { get: (key: string) => rooms[roomId][key] } } as any)
+      await callback({ root: rooms[roomId] } as any)
     })
-    const items = (roomId: string, key: string) => [...rooms[roomId][key]] as MockItem[]
-    const ids = (roomId: string, key: string) => items(roomId, key).map((i) => i.get('id'))
-    return { items, ids }
+    const items = (roomId: string, key: string) =>
+      ((rooms[roomId].get(key) as LiveList<LiveObject<any>>)?.map((i) => i) ?? []) as LiveObject<any>[]
+    // Lists may hold legacy plain records next to LiveObjects.
+    const ids = (roomId: string, key: string) =>
+      items(roomId, key).map((i: any) => (typeof i.get === 'function' ? i.get('id') : i.id))
+    return { rooms, items, ids }
   }
 
   it('moves the pitch and its whole subtree, leaving the rest of the source alone', async () => {
@@ -2814,7 +2828,7 @@ describe('movePitch', () => {
 
   it('reuses a target squad with the same name', async () => {
     const { items } = setupRooms({
-      squads: [makeMockItem({ id: 'sqX', name: 'platform', color: '#222222' })],
+      squads: [{ id: 'sqX', name: 'platform', color: '#222222' }],
     })
     await movePitch(SOURCE, TARGET, 'p1')
     expect(items(TARGET, 'squads')).toHaveLength(1)
@@ -2822,7 +2836,7 @@ describe('movePitch', () => {
   })
 
   it('refuses a title the target cycle already uses, and changes nothing', async () => {
-    const { ids } = setupRooms({ pitches: [makeMockItem({ id: 'px', title: 'Mission control' })] })
+    const { ids } = setupRooms({ pitches: [{ id: 'px', title: 'Mission control' }] })
     await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('already has a pitch named')
     expect(ids(TARGET, 'pitches')).toEqual(['px'])
     expect(ids(SOURCE, 'pitches')).toEqual(['p1', 'p2'])
@@ -2833,8 +2847,8 @@ describe('movePitch', () => {
   // copy those before it removes them — never delete what the target lacks.
   it('on retry, copies what the target lacks and duplicates nothing', async () => {
     const { ids, items } = setupRooms({
-      pitches: [makeMockItem({ id: 'p1', title: 'Mission Control', stage: 'shaping' })],
-      scopes: [makeMockItem({ id: 's1', pitchId: 'p1' })],
+      pitches: [{ id: 'p1', title: 'Mission Control', stage: 'shaping' }],
+      scopes: [{ id: 's1', pitchId: 'p1' }],
     })
     await movePitch(SOURCE, TARGET, 'p1')
     expect(ids(TARGET, 'pitches')).toEqual(['p1'])
@@ -2858,6 +2872,22 @@ describe('movePitch', () => {
     await expect(movePitch(SOURCE, TARGET, 'p1')).rejects.toThrow('Liveblocks unavailable')
     expect(ids(SOURCE, 'pitches')).toEqual(['p1', 'p2'])
     expect(ids(SOURCE, 'tasks')).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('creates a list the target room predates', async () => {
+    const { ids } = setupRooms({}, ['pitches', 'parkingItems', 'squads'])
+    await movePitch(SOURCE, TARGET, 'p1')
+    expect(ids(TARGET, 'pitches')).toEqual(['p1'])
+    expect(ids(TARGET, 'parkingItems')).toEqual(['pk1'])
+    expect(ids(TARGET, 'squads')).toHaveLength(1)
+  })
+
+  it('moves a record that older code pushed as a plain object', async () => {
+    const { rooms, ids } = setupRooms()
+    ;(rooms[SOURCE].get('parkingItems') as LiveList<any>).push({ id: 'pk-legacy', pitchId: 'p1', text: 'old' })
+    await movePitch(SOURCE, TARGET, 'p1')
+    expect(ids(TARGET, 'parkingItems')).toEqual(['pk1', 'pk-legacy'])
+    expect(ids(SOURCE, 'parkingItems')).toEqual([])
   })
 
   it('throws when the pitch is not in the source cycle', async () => {
