@@ -1399,7 +1399,7 @@ export function registerCyclesTools(server: any): void {
         .enum(['scope_map', 'kanban'])
         .optional()
         .describe(
-          'How the pitch is rendered (see ADR 0018): "scope_map" (scopes/hill/needle) or "kanban" (card board). Omit to leave unchanged; defaults to scope_map on create. IMPORTANT: this toggle only takes effect on pitches that HAVE a timebox. A pitch with no timebox_start/timebox_end is in Kanban MODE and always renders as a board regardless of view — setting view:"scope_map" on it stores the value but shows nothing (the response returns a `warning` in that case). To get a Scope Map, also set timebox_start and timebox_end.'
+          'How the pitch is rendered (see ADR 0018): "scope_map" (scopes/hill/needle) or "kanban" (card board). Omit to leave unchanged. When unset, a pitch with a timebox renders as scope_map and a pitch with no timebox_start/timebox_end (Kanban MODE) renders as kanban. A Kanban-mode pitch set to "scope_map" shows its scopes and hill but no needle or updates — those need a timebox.'
         ),
     },
     {

@@ -8,6 +8,7 @@ import {
   shouldShowCoreScopePrompt,
   areAllScopesDone,
   pageCelebration,
+  pitchSurfaces,
 } from './scope-map-helpers'
 import type { CycleScope, ScopeTask, ParkingItem } from '@/cycle-liveblocks.config'
 
@@ -225,5 +226,19 @@ describe('deriveTotalTaskProgress', () => {
   it('returns zero for pitch with no scopes', () => {
     const progress = deriveTotalTaskProgress([], tasks, 'p1')
     expect(progress).toEqual({ done: 0, total: 0 })
+  })
+})
+
+describe('pitchSurfaces', () => {
+  it.each([
+    // hasTimebox, view, showKanban, showHill
+    [true, undefined, false, true],
+    [true, 'scope_map', false, true],
+    [true, 'kanban', true, true],
+    [false, undefined, true, false],
+    [false, 'kanban', true, false],
+    [false, 'scope_map', false, true],
+  ] as const)('timebox=%s view=%s → board=%s hill=%s', (hasTimebox, view, showKanban, showHill) => {
+    expect(pitchSurfaces(hasTimebox, view)).toEqual({ showKanban, showHill })
   })
 })

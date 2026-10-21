@@ -3,6 +3,7 @@ import type {
   ScopeTask,
   ParkingItem,
   PitchUpdate,
+  PitchView,
 } from '@/cycle-liveblocks.config'
 import type { HillScope } from '@/components/hill-chart/hill-chart'
 import type { ScopeCardTask } from '@/components/scope-card/scope-card'
@@ -98,6 +99,20 @@ export function pageCelebration(
   if (needleProgress != null && needleProgress >= 1) return 'gold'
   if (allScopesDone) return 'color'
   return 'none'
+}
+
+// Which surfaces a pitch's page renders (see ADR 0018). The timebox decides
+// the mode and the stored `view` picks the surface; an unset view means Scope
+// Map on a Shape-Up pitch (has a timebox) and the board in Kanban mode (none).
+// - `showKanban` — the board, instead of the scope grid
+// - `showHill`   — the hill: always on a Shape-Up pitch (even viewed as a
+//                  board), and in Kanban mode only while viewed as a Scope Map
+export function pitchSurfaces(
+  hasTimebox: boolean,
+  view: PitchView | undefined
+): { showKanban: boolean; showHill: boolean } {
+  const showKanban = hasTimebox ? view === 'kanban' : view !== 'scope_map'
+  return { showKanban, showHill: hasTimebox || !showKanban }
 }
 
 export function deriveHillScopes(

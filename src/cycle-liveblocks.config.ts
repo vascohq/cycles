@@ -66,8 +66,9 @@ export type CyclePitch = {
   // Pointer to this pitch's Core Scope (see ADR 0012). Undefined = no core set;
   // a pointer to a since-deleted scope resolves to "no core" (dangling = unset).
   core_scope_id?: string
-  // How this pitch is rendered (see ADR 0018). Undefined = 'scope_map' (legacy
-  // pitches predate the field); switching is non-destructive.
+  // How this pitch is rendered (see ADR 0018). Undefined = 'scope_map' on a
+  // pitch with a timebox, 'kanban' on one without (resolve it with
+  // `pitchSurfaces`); switching is non-destructive.
   view?: PitchView
 }
 
