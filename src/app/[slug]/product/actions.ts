@@ -2,7 +2,7 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { revalidatePath } from 'next/cache'
-import { getProductMapStorage, readCycleWindows } from '@/lib/mcp/liveblocks-reader'
+import { getProductMapStorage, listCycleRooms } from '@/lib/mcp/liveblocks-reader'
 import { upsertPitch } from '@/lib/mcp/liveblocks-writer'
 import { isSharp, isUpcomingCycle, seedPitchFrame } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
@@ -37,7 +37,9 @@ export async function pitchRequest(input: {
     )
   }
 
-  const cycle = (await readCycleWindows(orgPrefix)).find((c) => c.slug === input.cycleSlug)
+  // listCycleRooms, not readCycleWindows: a Liveblocks failure must surface as
+  // itself, not as "there is no upcoming cycle".
+  const cycle = (await listCycleRooms(orgPrefix)).find((c) => c.slug === input.cycleSlug)
   if (!cycle || !isUpcomingCycle(cycle, getTeamToday(new Date()))) {
     throw new Error('Pitch into an upcoming cycle. Create the next cycle first if there is none.')
   }

@@ -3,6 +3,7 @@
 // returns the rendered map model. No React, no Liveblocks, no clock of its own,
 // the same shape as the cycle list engine.
 
+import { STAGES } from '@/lib/stage-engine'
 import type {
   Area,
   ProductRequest,
@@ -229,7 +230,7 @@ export function pinOutline(shapes: LinkedShape[]): PinOutline {
   // including one that already shipped. The request reads `released` at that
   // point, and a release this cycle is current investment, not "no work".
   if (shapes.some((s) => s.currentCycle)) return 'solid'
-  if (shapes.some((s) => s.stage === 'shaping')) return 'dashed'
+  if (shapes.some((s) => s.stage === 'framing' || s.stage === 'shaping')) return 'dashed'
   return 'none'
 }
 
@@ -295,7 +296,7 @@ function squadOf(squads: SquadSummary[], id?: string) {
 }
 
 function isShapeStage(value: unknown): value is ShapeStage {
-  return value === 'framing' || value === 'shaping' || value === 'building' || value === 'done'
+  return (STAGES as unknown[]).includes(value)
 }
 
 /**

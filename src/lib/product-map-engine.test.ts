@@ -883,6 +883,7 @@ describe('the engagement ring', () => {
 
   it('draws dashed while a linked shape is being shaped', () => {
     expect(pinOutline([makeShape({ stage: 'shaping', currentCycle: false })])).toBe('dashed')
+    expect(pinOutline([makeShape({ stage: 'framing', currentCycle: false, upcomingCycle: true })])).toBe('dashed')
   })
 
   it('draws solid while a linked shape runs in the cycle happening now', () => {

@@ -15,12 +15,17 @@ describe('STAGES', () => {
 })
 
 describe('newShapeStage', () => {
-  it('starts a new pitch in a build cycle at framing', () => {
-    expect(newShapeStage('build')).toBe('framing')
+  it('starts a new pitch in an upcoming build cycle at framing', () => {
+    expect(newShapeStage('build', true)).toBe('framing')
+  })
+
+  // A pitch added to a cycle that already started was bet on already.
+  it('starts a new pitch in a running build cycle at shaping', () => {
+    expect(newShapeStage('build', false)).toBe('shaping')
   })
 
   it('starts a cooldown shape at building', () => {
-    expect(newShapeStage('cooldown')).toBe('building')
+    expect(newShapeStage('cooldown', true)).toBe('building')
   })
 })
 

@@ -2095,15 +2095,43 @@ describe('upsert_pitch frames a new pitch from its requests', () => {
     expect(res.content[0].text).toContain('Request not found: "nope"')
   })
 
+  it('applies the same check and seed to a pitch created in a batch', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], requests: [request('f1'), request('f2', { appetite: '' })] })
+
+    const result = await handleBatch('org_test', 'q4-build', [
+      { tool: 'upsert_pitch', params: { title: 'Sharp', stage: 'framing', request_ids: ['f1'] } },
+      { tool: 'upsert_pitch', params: { title: 'Rough', stage: 'framing', request_ids: ['f2'] } },
+    ])
+
+    const data = JSON.parse(result.content[0].text) as { results: { ok?: boolean; error?: string }[] }
+    expect(data.results[0].ok).toBe(true)
+    expect(data.results[1].error).toContain('rough')
+    expect(mockUpsert).toHaveBeenCalledTimes(1)
+    expect(mockUpsert.mock.calls[0][1]).toMatchObject({ frame_appetite: '2 weeks', frame_problem: 'Problem f1' })
+  })
+
+  it('refuses an unknown request on an update too', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], requests: [request('f1')] })
+
+    const res = await handlerFor('upsert_pitch')(
+      { cycle_slug: 'q4-build', id: 'p1', title: 'T', stage: 'shaping', request_ids: ['f1', 'typo'] },
+      EXTRA
+    )
+
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain('Request not found: "typo"')
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
   it('seeds nothing on an update, because the pitch owns its frame', async () => {
     mockUpsert.mockResolvedValue({ created: false, id: 'p1' })
+    mockGetMap.mockResolvedValue({ areas: [], requests: [request('f1'), request('f3')] })
 
     await handlerFor('upsert_pitch')(
       { cycle_slug: 'q4-build', id: 'p1', title: 'T', stage: 'shaping', request_ids: ['f1', 'f3'] },
       EXTRA
     )
 
-    expect(mockGetMap).not.toHaveBeenCalled()
     expect(mockUpsert.mock.calls[0][1]).not.toHaveProperty('frame_outcomes')
   })
 })

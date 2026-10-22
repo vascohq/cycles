@@ -991,6 +991,11 @@ function Shapes({ pin }: { pin: RenderedPin }) {
           </Button>
         </div>
       )}
+      {pin.sharp && cycles.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          No upcoming cycle yet. Create the next cycle, then pitch this request into it.
+        </p>
+      )}
       {!pin.sharp && (
         <p className="text-xs text-muted-foreground">
           Give this request an appetite and an outcome before you pitch it. Nobody

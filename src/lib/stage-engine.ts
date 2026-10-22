@@ -5,11 +5,13 @@ import type { Stage } from '@/cycle-liveblocks.config'
 // is framing → shaping, and "Shape Go" is shaping → building.
 export const STAGES: Stage[] = ['framing', 'shaping', 'building', 'done']
 
-// Where a newly created pitch starts. A build cycle's pitch starts at
-// `framing`. A cooldown pitch starts at `building`, because cooldown work is
-// picked up already shaped.
-export function newShapeStage(cycleType: 'build' | 'cooldown'): Stage {
-  return cycleType === 'cooldown' ? 'building' : 'framing'
+// Where a newly created pitch starts. In an upcoming build cycle it starts at
+// `framing`, because it still waits for the betting table. In a build cycle
+// that already started it was bet on, so it starts at `shaping`. A cooldown
+// pitch starts at `building`, because cooldown work is picked up already shaped.
+export function newShapeStage(cycleType: 'build' | 'cooldown', upcoming: boolean): Stage {
+  if (cycleType === 'cooldown') return 'building'
+  return upcoming ? 'framing' : 'shaping'
 }
 
 // Normalize a stage read out of storage. Anything unrecognized reads as

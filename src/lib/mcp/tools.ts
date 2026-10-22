@@ -21,7 +21,7 @@ import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getSlackWebhookUrl } from '@/lib/calendar/org-integrations'
 import { diffHillTrail, noChangeStreaks, summarizeMovement } from '@/lib/hill-trail-engine'
 import { resolveOrigin } from './origin'
-import { productMapRoomId } from '@/product-map-liveblocks.config'
+import { productMapRoomId, type ProductRequest } from '@/product-map-liveblocks.config'
 import { getTeamToday } from '@/lib/team-time'
 import {
   REQUEST_KINDS,
@@ -559,14 +559,16 @@ type PitchFrameParams = {
   release_summary?: string
 }
 
+type MapReader = () => Promise<{ requests: ProductRequest[] }>
+
 /**
- * A NEW pitch carries sharp requests only, and copies its frame from them
- * (ADR 0032). Fields the caller wrote win over the seed. An update seeds
- * nothing, because after creation the pitch owns its frame.
+ * A pitch carries sharp requests only, on create and on update (ADR 0032). A
+ * NEW pitch also copies its frame from them, and fields the caller wrote win
+ * over that seed. An update seeds nothing, because the pitch owns its frame.
  */
-async function seedNewPitch<T extends PitchFrameParams>(orgId: string, params: T): Promise<T> {
-  if (params.id || !params.request_ids?.length) return params
-  const { requests } = await getProductMapStorage(orgId)
+async function framePitchFromRequests<T extends PitchFrameParams>(readMap: MapReader, params: T): Promise<T> {
+  if (!params.request_ids?.length) return params
+  const { requests } = await readMap()
   const carried = params.request_ids.map((id) => {
     const request = requests.find((r) => r.id === id)
     if (!request) throw new Error(`Request not found: "${id}"`)
@@ -577,6 +579,7 @@ async function seedNewPitch<T extends PitchFrameParams>(orgId: string, params: T
     }
     return request
   })
+  if (params.id) return params
   const seed = seedPitchFrame(carried)
   return {
     ...params,
@@ -590,9 +593,10 @@ async function seedNewPitch<T extends PitchFrameParams>(orgId: string, params: T
 async function prepareWriteParams(
   tool: string,
   params: WriteParams,
-  users: UsersProvider
+  users: UsersProvider,
+  readMap: MapReader
 ): Promise<WriteParams> {
-  if (tool === 'upsert_pitch') return preparePitchParams(params)
+  if (tool === 'upsert_pitch') return preparePitchParams(await framePitchFromRequests(readMap, params))
   if (tool === 'upsert_task' && params.assignee !== undefined) {
     const { assignee, ...rest } = params
     return { ...rest, assigneeId: await resolveAssigneeId(assignee, users) }
@@ -664,10 +668,13 @@ export async function handleBatch(
   // so caching only the result would let every op fire its own fetch first.
   let orgUsers: Promise<OrganizationUser[]> | null = null
   const users: UsersProvider = () => (orgUsers ??= getOrganizationUsers(orgId))
+  // Same memo for the Product Map, which every pitch op that carries requests reads.
+  let map: ReturnType<MapReader> | null = null
+  const readMap: MapReader = () => (map ??= getProductMapStorage(orgId))
   const prepared = await Promise.all(
     operations.map(async (op) => {
       try {
-        return { ok: true as const, params: await prepareWriteParams(op.tool, op.params, users) }
+        return { ok: true as const, params: await prepareWriteParams(op.tool, op.params, users, readMap) }
       } catch (err) {
         return { ok: false as const, error: (err as Error).message }
       }
@@ -1475,7 +1482,7 @@ export function registerCyclesTools(server: any): void {
       try {
         // Same normalization the batch path applies — one implementation, so the
         // two entry points can't drift.
-        const seeded = await seedNewPitch(resolved.org.id, params)
+        const seeded = await framePitchFromRequests(() => getProductMapStorage(resolved.org.id), params)
         const result = await upsertPitch(roomId, preparePitchParams(seeded) as typeof params)
         return jsonResult(result)
       } catch (err) {
