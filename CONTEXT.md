@@ -142,7 +142,7 @@ A short written answer to "where is this request, and what comes next?". An agen
 _Avoid_: Summary, status, digest
 
 **Release announcement**:
-The note that customers would read after the problem is solved. The team writes it as a draft when it requests the problem, long before anything ships. The draft says in the customer's words what changes for them, never how it was built. The request page marks it as a draft until the request is **released**. It is free text on the request, written in the request dialog or through `map_upsert_request`.
+The note that customers would read after the problem is solved. The team writes it as a draft when it captures the problem, long before anything ships. The draft says in the customer's words what changes for them, never how it was built. The request page marks it as a draft until the request is **released**. It is free text on the request, written in the request dialog or through `map_upsert_request`.
 _Avoid_: Changelog, release note (that is the Notion record of a shipped release), press release
 
 **Sharp**:
