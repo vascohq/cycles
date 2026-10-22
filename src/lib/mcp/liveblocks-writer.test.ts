@@ -365,7 +365,7 @@ describe('upsertPitch', () => {
       title: 'Mission Control',
       stage: 'shaping',
       frame_problem: 'No visibility',
-      frame_outcome: 'Dashboard',
+      frame_outcomes: [{ id: 'o1', text: 'Dashboard' }],
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
       emoji: '',
@@ -389,7 +389,7 @@ describe('upsertPitch', () => {
       title: 'New Title',
       stage: 'building',
       frame_problem: 'Updated',
-      frame_outcome: 'Updated',
+      frame_outcomes: [{ id: 'o1', text: 'Updated' }],
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
       emoji: '',
@@ -410,7 +410,7 @@ describe('upsertPitch', () => {
       title: 'Mission Control',
       stage: 'building',
       frame_problem: 'No visibility',
-      frame_outcome: 'Dashboard',
+      frame_outcomes: [{ id: 'o1', text: 'Dashboard' }],
       timebox_start: '2026-04-06',
       timebox_end: '2026-05-15',
       emoji: '🚀',
@@ -424,7 +424,7 @@ describe('upsertPitch', () => {
     expect(existing.get('timebox_start')).toBe('2026-04-06')
     expect(existing.get('timebox_end')).toBe('2026-05-15')
     expect(existing.get('frame_problem')).toBe('No visibility')
-    expect(existing.get('frame_outcome')).toBe('Dashboard')
+    expect(existing.get('frame_outcomes')).toEqual([{ id: 'o1', text: 'Dashboard' }])
     expect(existing.get('emoji')).toBe('🚀')
     expect(existing.get('notion_url')).toBe('https://notion.so/x')
   })
@@ -438,7 +438,7 @@ describe('upsertPitch', () => {
         title: 'X',
         stage: 'shaping',
         frame_problem: '',
-        frame_outcome: '',
+       
         timebox_start: '',
         timebox_end: '',
         emoji: '',
@@ -1360,7 +1360,7 @@ describe('upsertPitch squad assignment', () => {
     title: 'Mission Control',
     stage: 'shaping' as const,
     frame_problem: '',
-    frame_outcome: '',
+   
     timebox_start: '',
     timebox_end: '',
     emoji: '',
@@ -2466,53 +2466,97 @@ describe('writeBrief', () => {
   })
 })
 
-describe('upsertPitch request pointer', () => {
+describe('upsertPitch requests and frame', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const ROOM = 'org_1:cycle:2026-q3'
+  const OUTCOMES = [{ id: 'o1', text: 'A year of data exports' }]
 
-  it('stores the request the shape attacks', async () => {
+  it('stores the requests the pitch carries and its frame', async () => {
     const storage = setupStorage()
 
     await upsertPitch(ROOM, {
-      title: 'Fix silent imports',
-      stage: 'shaping',
-      frame_problem: 'Imports fail silently',
-      request_id: 'f1',
+      title: 'Fast exports',
+      stage: 'framing',
+      frame_problem: 'Exports time out',
+      frame_outcomes: OUTCOMES,
+      frame_appetite: '6 weeks',
+      release_summary: 'Exports now finish, whatever their size.',
+      release_note_url: 'https://www.notion.so/release',
+      request_ids: ['f1', 'f2'],
     })
 
     const pitch = storage.pitches.find(() => true)!
-    expect(pitch.get('request_id')).toBe('f1')
-    // The Frame as bet: a copy taken now, which the Product Map can never rewrite.
-    expect(pitch.get('frame_problem')).toBe('Imports fail silently')
+    expect(pitch.get('request_ids')).toEqual(['f1', 'f2'])
+    expect(pitch.get('stage')).toBe('framing')
+    expect(pitch.get('frame_problem')).toBe('Exports time out')
+    expect(pitch.get('frame_outcomes')).toEqual(OUTCOMES)
+    expect(pitch.get('frame_appetite')).toBe('6 weeks')
+    expect(pitch.get('release_summary')).toBe('Exports now finish, whatever their size.')
+    expect(pitch.get('release_note_url')).toBe('https://www.notion.so/release')
   })
 
-  it('leaves a shape created with no request without one', async () => {
+  it('leaves a pitch created with no request without one', async () => {
     const storage = setupStorage()
 
     await upsertPitch(ROOM, { title: 'Cooldown chores', stage: 'building' })
 
-    expect(storage.pitches.find(() => true)!.get('request_id')).toBeUndefined()
+    expect(storage.pitches.find(() => true)!.get('request_ids')).toBeUndefined()
   })
 
-  it('leaves the request pointer alone when the caller omits it (ADR 0011)', async () => {
+  it('leaves the requests and the frame alone when the caller omits them (ADR 0011)', async () => {
     const storage = setupStorage({
-      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', request_id: 'f1' })],
+      pitches: [
+        makeMockItem({
+          id: 'p1',
+          title: 'Old',
+          stage: 'framing',
+          request_ids: ['f1'],
+          frame_outcomes: OUTCOMES,
+          frame_appetite: '6 weeks',
+          release_summary: 'Summary',
+          release_note_url: 'https://www.notion.so/release',
+        }),
+      ],
     })
 
-    await upsertPitch(ROOM, { id: 'p1', title: 'Renamed', stage: 'building' })
+    await upsertPitch(ROOM, { id: 'p1', title: 'Renamed', stage: 'shaping' })
 
-    expect(storage.pitches.find(() => true)!.get('request_id')).toBe('f1')
+    const pitch = storage.pitches.find(() => true)!
+    expect(pitch.get('request_ids')).toEqual(['f1'])
+    expect(pitch.get('frame_outcomes')).toEqual(OUTCOMES)
+    expect(pitch.get('frame_appetite')).toBe('6 weeks')
+    expect(pitch.get('release_summary')).toBe('Summary')
+    expect(pitch.get('release_note_url')).toBe('https://www.notion.so/release')
   })
 
-  it('clears the request pointer on an empty string', async () => {
+  it('clears the requests on an empty list, and the text fields on an empty string', async () => {
     const storage = setupStorage({
-      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', request_id: 'f1' })],
+      pitches: [
+        makeMockItem({
+          id: 'p1',
+          title: 'Old',
+          stage: 'framing',
+          request_ids: ['f1'],
+          frame_appetite: '6 weeks',
+          release_note_url: 'https://www.notion.so/release',
+        }),
+      ],
     })
 
-    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', request_id: '' })
+    await upsertPitch(ROOM, {
+      id: 'p1',
+      title: 'Old',
+      stage: 'framing',
+      request_ids: [],
+      frame_appetite: '',
+      release_note_url: '',
+    })
 
-    expect(storage.pitches.find(() => true)!.get('request_id')).toBeUndefined()
+    const pitch = storage.pitches.find(() => true)!
+    expect(pitch.get('request_ids')).toBeUndefined()
+    expect(pitch.get('frame_appetite')).toBe('')
+    expect(pitch.get('release_note_url')).toBe('')
   })
 })
 

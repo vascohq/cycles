@@ -9,18 +9,14 @@ import {
 } from './stage-engine'
 
 describe('STAGES', () => {
-  it('runs shaping → building → done', () => {
-    expect(STAGES).toEqual(['shaping', 'building', 'done'])
-  })
-
-  it('has no framing stage — framing happens on the Product Map', () => {
-    expect(STAGES).not.toContain('framing')
+  it('runs framing → shaping → building → done', () => {
+    expect(STAGES).toEqual(['framing', 'shaping', 'building', 'done'])
   })
 })
 
 describe('newShapeStage', () => {
-  it('starts a new shape in a build cycle at shaping', () => {
-    expect(newShapeStage('build')).toBe('shaping')
+  it('starts a new pitch in a build cycle at framing', () => {
+    expect(newShapeStage('build')).toBe('framing')
   })
 
   it('starts a cooldown shape at building', () => {
@@ -29,11 +25,8 @@ describe('newShapeStage', () => {
 })
 
 describe('readStage', () => {
-  it('reads a stored framing value as shaping', () => {
-    expect(readStage('framing')).toBe('shaping')
-  })
-
   it('passes every current stage through unchanged', () => {
+    expect(readStage('framing')).toBe('framing')
     expect(readStage('shaping')).toBe('shaping')
     expect(readStage('building')).toBe('building')
     expect(readStage('done')).toBe('done')
@@ -48,6 +41,7 @@ describe('readStage', () => {
 
 describe('nextStage', () => {
   it('advances one step forward', () => {
+    expect(nextStage('framing')).toBe('shaping')
     expect(nextStage('shaping')).toBe('building')
     expect(nextStage('building')).toBe('done')
   })
@@ -61,10 +55,11 @@ describe('prevStage', () => {
   it('steps one stage backward', () => {
     expect(prevStage('done')).toBe('building')
     expect(prevStage('building')).toBe('shaping')
+    expect(prevStage('shaping')).toBe('framing')
   })
 
   it('returns null when already at the first stage', () => {
-    expect(prevStage('shaping')).toBeNull()
+    expect(prevStage('framing')).toBeNull()
   })
 })
 

@@ -18,6 +18,7 @@ import {
   candidateStatement,
   clusterForViewport,
   requestState,
+  seedPitchFrame,
   cyclesSinceWoken,
   gapList,
   inCooldown,
@@ -89,6 +90,7 @@ function makeShape(overrides: Partial<LinkedShape> = {}): LinkedShape {
     cycleSlug: '2026-q3',
     cycleTitle: 'Q3',
     currentCycle: true,
+    upcomingCycle: false,
     ...overrides,
   }
 }
@@ -477,6 +479,12 @@ describe('request state', () => {
       makeShape({ shapeId: 's2', stage: 'shaping', currentCycle: true }),
     ]
     expect(requestState(request, shapes)).toBe('in_flight')
+  })
+
+  it('reads pitched while its only pitch waits in an upcoming cycle', () => {
+    const request = makeRequest({ appetite: '2 weeks', outcomes: OUTCOMES })
+    const pitch = makeShape({ stage: 'framing', currentCycle: false, upcomingCycle: true })
+    expect(requestState(request, [pitch])).toBe('pitched')
   })
 
   it('reads resolved whatever the shapes say, because a person decided', () => {
@@ -901,13 +909,41 @@ describe('the engagement ring', () => {
 describe('reading the shapes out of the cycle rooms', () => {
   const cycle = CYCLES[1]
 
+  it('carries the release summary, so the request shows what shipped for it', () => {
+    const [shipped, silent] = linkedShapesFrom(
+      [
+        {
+          cycle,
+          shapes: [
+            { id: 's1', title: 'a', stage: 'done', request_ids: ['f1'], release_summary: 'Exports finish.' },
+            { id: 's2', title: 'b', stage: 'done', request_ids: ['f1'] },
+          ],
+        },
+      ],
+      '2026-03-01'
+    )
+    expect(shipped.releaseSummary).toBe('Exports finish.')
+    expect(silent.releaseSummary).toBeUndefined()
+  })
+
+  it('links a pitch to every request it carries', () => {
+    const shapes = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'Fast exports', stage: 'framing', request_ids: ['f1', 'f2'] }] }],
+      '2026-03-01'
+    )
+    expect(shapes.map((s) => [s.shapeId, s.requestId])).toEqual([
+      ['s1', 'f1'],
+      ['s1', 'f2'],
+    ])
+  })
+
   it('keeps only the shapes that point at a request', () => {
     const shapes = linkedShapesFrom(
       [
         {
           cycle,
           shapes: [
-            { id: 's1', title: 'Fix imports', stage: 'building', request_id: 'f1' },
+            { id: 's1', title: 'Fix imports', stage: 'building', request_ids: ['f1'] },
             { id: 's2', title: 'Something else', stage: 'building' },
           ],
         },
@@ -927,8 +963,8 @@ describe('reading the shapes out of the cycle rooms', () => {
           cycle,
           squads: [{ id: 'q1', name: 'Capture', color: '#8e4ec6' }],
           shapes: [
-            { id: 's1', title: 'a', stage: 'building', request_id: 'f1', squadId: 'q1', notion_url: 'https://notion.so/p' },
-            { id: 's2', title: 'b', stage: 'building', request_id: 'f1', squadId: 'gone', notion_url: '' },
+            { id: 's1', title: 'a', stage: 'building', request_ids: ['f1'], squadId: 'q1', notion_url: 'https://notion.so/p' },
+            { id: 's2', title: 'b', stage: 'building', request_ids: ['f1'], squadId: 'gone', notion_url: '' },
           ],
         },
       ],
@@ -942,30 +978,44 @@ describe('reading the shapes out of the cycle rooms', () => {
 
   it('names the cycle, so the request detail reads a title and not a slug', () => {
     const [shape] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', request_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', request_ids: ['f1'] }] }],
       '2026-03-01'
     )
     expect(shape.cycleTitle).toBe('Two')
   })
 
+  it('marks a pitch in a cycle that has not started as upcoming, and keeps it framing', () => {
+    const [waiting] = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', request_ids: ['f1'] }] }],
+      '2026-02-01'
+    )
+    const [running] = linkedShapesFrom(
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', request_ids: ['f1'] }] }],
+      '2026-03-01'
+    )
+    expect(waiting.upcomingCycle).toBe(true)
+    expect(waiting.stage).toBe('framing')
+    expect(running.upcomingCycle).toBe(false)
+  })
+
   it('marks a shape in the cycle running today as current', () => {
     const [inside] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', request_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', request_ids: ['f1'] }] }],
       '2026-03-01'
     )
     const [outside] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', request_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', request_ids: ['f1'] }] }],
       '2026-09-02'
     )
     expect(inside.currentCycle).toBe(true)
     expect(outside.currentCycle).toBe(false)
   })
 
-  // Stored data outlives the code that wrote it: a room written before ADR 0023
-  // still holds `framing`, and losing the shape over it would be worse.
-  it('reads a stored framing stage as shaping', () => {
+  // Stored data outlives the code that wrote it, and losing the pitch over an
+  // unreadable stage would be worse.
+  it('reads an unknown stage as shaping', () => {
     const [shape] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', request_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'pondering', request_ids: ['f1'] }] }],
       '2026-03-01'
     )
     expect(shape.stage).toBe('shaping')
@@ -1425,6 +1475,7 @@ describe('the zoom ladder', () => {
           cycleSlug: 'c1',
           cycleTitle: 'Cycle 1',
           currentCycle: true,
+          upcomingCycle: false,
         },
       ],
       today: '2026-09-03',
@@ -1624,5 +1675,47 @@ describe('related requests', () => {
   it('returns only the lists that change, on both sides', () => {
     const changes = relateRequests([request('a', ['b']), request('b', ['a']), request('c')], 'a', ['c'])
     expect(Object.fromEntries(changes)).toEqual({ a: ['c'], b: [], c: ['a'] })
+  })
+})
+
+describe('seeding a pitch from its requests', () => {
+  it('copies the outcomes of every request and takes the largest appetite', () => {
+    const seed = seedPitchFrame([
+      makeRequest({
+        problem: 'Exports time out',
+        appetite: '2 weeks',
+        outcomes: [{ id: 'o1', text: 'A year of data exports' }],
+      }),
+      makeRequest({
+        problem: 'Exports miss custom fields',
+        appetite: '6 weeks',
+        outcomes: [{ id: 'o2', text: 'Custom fields appear in the export' }],
+      }),
+      makeRequest({ problem: 'Export is slow', appetite: '3 days', outcomes: [] }),
+    ])
+    expect(seed.frame_outcomes).toEqual([
+      { id: 'o1', text: 'A year of data exports' },
+      { id: 'o2', text: 'Custom fields appear in the export' },
+    ])
+    expect(seed.frame_appetite).toBe('6 weeks')
+    expect(seed.frame_problem).toBe(
+      'Exports time out\nExports miss custom fields\nExport is slow'
+    )
+  })
+
+  it('carries the release draft of a request into the release summary', () => {
+    const seed = seedPitchFrame([
+      makeRequest({ announcement: '' }),
+      makeRequest({ announcement: 'Exports now finish, whatever their size.' }),
+    ])
+    expect(seed.release_summary).toBe('Exports now finish, whatever their size.')
+  })
+
+  it('keeps the first appetite when none can be compared', () => {
+    const seed = seedPitchFrame([
+      makeRequest({ appetite: 'a small batch' }),
+      makeRequest({ appetite: 'a big batch' }),
+    ])
+    expect(seed.frame_appetite).toBe('a small batch')
   })
 })

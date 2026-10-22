@@ -93,8 +93,8 @@ describe('resolvePitch', () => {
   const storage = {
     cycle: { name: 'Q2', type: 'build' as const, start_date: '', end_date: '' },
     pitches: [
-      { id: 'p1', title: 'Mission Control', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
-      { id: 'p2', title: 'Agentic Skills', stage: 'shaping' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
+      { id: 'p1', title: 'Mission Control', stage: 'building' as const, needle: null, frame_problem: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
+      { id: 'p2', title: 'Agentic Skills', stage: 'shaping' as const, needle: null, frame_problem: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
     ],
     scopes: [],
     tasks: [],
@@ -114,14 +114,21 @@ describe('resolvePitch', () => {
     expect(resolvePitch(storage, 'no-such-pitch')).toBeUndefined()
   })
 
-  // ADR 0023: rooms written before the stage change still hold `framing`.
-  // Nothing rewrites them, so the read surface normalizes on the way out.
-  it('reads a stored framing stage as shaping', () => {
-    const legacy = {
+  // ADR 0032: framing returned to the pitch, so a stored `framing` stage reads as is.
+  it('reads a stored framing stage as framing', () => {
+    const framing = {
       ...storage,
       pitches: [{ ...storage.pitches[0], stage: 'framing' }],
     } as unknown as typeof storage
-    expect(resolvePitch(legacy, 'p1')?.stage).toBe('shaping')
+    expect(resolvePitch(framing, 'p1')?.stage).toBe('framing')
+  })
+
+  it('reads an unknown stored stage as shaping', () => {
+    const unknown = {
+      ...storage,
+      pitches: [{ ...storage.pitches[0], stage: 'pondering' }],
+    } as unknown as typeof storage
+    expect(resolvePitch(unknown, 'p1')?.stage).toBe('shaping')
   })
 
   it('resolves a title with special characters via its cleaned slug', () => {
@@ -129,7 +136,7 @@ describe('resolvePitch', () => {
       ...storage,
       pitches: [
         ...storage.pitches,
-        { id: 'p3', title: 'Agentic Capabilities (Skills & Tools)', stage: 'building' as const, needle: null, frame_problem: '', frame_outcome: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
+        { id: 'p3', title: 'Agentic Capabilities (Skills & Tools)', stage: 'building' as const, needle: null, frame_problem: '', timebox_start: '', timebox_end: '', emoji: '', notion_url: '' },
       ],
     }
     expect(

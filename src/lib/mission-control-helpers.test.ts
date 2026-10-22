@@ -24,7 +24,7 @@ const pitches: CyclePitch[] = [
     stage: 'building',
     needle: { progress: 0.6, zone: 'on_track' },
     frame_problem: '',
-    frame_outcome: '',
+   
     timebox_start: '2025-01-06',
     timebox_end: '2025-02-14',
     emoji: '',
@@ -37,7 +37,7 @@ const pitches: CyclePitch[] = [
     stage: 'done',
     needle: { progress: 0.9, zone: 'on_track' },
     frame_problem: '',
-    frame_outcome: '',
+   
     timebox_start: '2025-01-06',
     timebox_end: '2025-02-14',
     emoji: '',

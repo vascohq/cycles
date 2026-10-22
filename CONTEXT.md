@@ -142,21 +142,21 @@ A short written answer to "where is this request, and what comes next?". An agen
 _Avoid_: Summary, status, digest
 
 **Release announcement**:
-The note that customers would read after the problem is solved. The team writes it as a draft when it captures the problem, long before anything ships. The draft says in the customer's words what changes for them, never how it was built. The request page marks it as a draft until the request is **released**. It is free text on the request, written in the request dialog or through `map_upsert_request`.
+The note that customers would read after the problem is solved. A request can hold a draft of it, in the customer's words, long before anything ships. When a **Pitch** is created from the request, the pitch copies the draft into its **Release summary**. After a pitch ships, the request page shows the release summary of that pitch. Until then it shows the request's own draft, marked as a draft.
 _Avoid_: Changelog, release note (that is the Notion record of a shipped release), press release
 
 **Sharp**:
-A request with a problem, an **Appetite** and at least one **Outcome**. A request that has fewer is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp request can be bet on**, so nobody bets on a request that never says what would change.
+A request with a problem, an **Appetite** and at least one **Outcome**. A request that has fewer is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp request can be pitched**, so no pitch starts from a request that never says what would change.
 _Avoid_: Framed, ready, validated, approved
 
 **Request state**:
 A request’s position in its life, derived from what it points at and never stored:
-`rough` (no appetite) → `candidate` (sharp, no **Pitch** yet) → `in_flight` (a pitch that is not `done`) → `released` (its pitch reached `done`) → `monitoring` (released and not resolved) → `resolved` (a person resolved it).
-Monitoring has no end condition. A released request that nobody wakes goes **Dormant** like any other.
+`rough` (no appetite or no outcome) → `candidate` (sharp, no **Pitch** yet) → `pitched` (a pitch waits in an upcoming cycle) → `in_flight` (a pitch in a cycle that has started, not `done`) → `released` (its pitch reached `done`) → `monitoring` (released and not resolved) → `resolved` (a person resolved it).
+A request with more than one pitch shows the furthest one, except that a pitch still in flight always wins. If the betting table deletes its only pitch, the request goes back to `candidate`. Monitoring has no end condition. A released request that nobody wakes goes **Dormant** like any other.
 _Avoid_: Status, stage (reserved for a **Pitch**), workflow state
 
 **Candidate**:
-A sharp request with no **Pitch** yet. A candidate is what the betting table bets on.
+A sharp request with no **Pitch** yet. A candidate is ready to be pitched.
 _Avoid_: Backlog item, proposal, ready
 
 **Candidate statement**:
@@ -230,7 +230,7 @@ The shaped bet, and the thing a cycle contains. Has a stage, a timebox, scopes, 
 _Avoid_: Shape (that is one part of a pitch), package (that is what a request does with its **Pointers**), project, epic, initiative, ticket
 
 **Frame**:
-The framing part of a **Pitch**: the full problem, reworked with research, and the outcome the pitch must reach. A **Request** holds a short summary. The frame says it with depth. "Frame Go" means the frame is complete.
+The framing part of a **Pitch**: the full problem, reworked with research (`frame_problem`), the outcomes the pitch must reach (`frame_outcomes`), and its appetite (`frame_appetite`). A **Request** holds a short summary. The frame says it with depth. A new pitch copies its frame from its requests: every outcome, the largest appetite, and the problem summaries. After that the pitch owns its frame, and a change to a request does not change it. "Frame Go" is the move from `framing` to `shaping` ([ADR 0032](docs/adr/0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md)).
 _Avoid_: Frame for the record on the Product Map (that is a **Request**)
 
 **Shape**:
@@ -238,12 +238,16 @@ The solution part of a **Pitch**, at a high level: its **Scopes**, and visuals o
 _Avoid_: Shape for the whole bet (that is a **Pitch**), spec, design
 
 **Stage**:
-A **Pitch**'s current lifecycle phase: `shaping`, `building`, `done`. Can move forward or backward. Cooldown pitches start at `building`. A pitch **auto-advances to `done`** when an update sets the **Needle** to 100% — posting a 100% update is the act of shipping. There is no `framing` stage: framing happens before a pitch exists (see [ADR 0023](docs/adr/0023-framing-leaves-the-shape.md)). `shaping` stays, because shaping work really does happen inside the cycle.
-_Avoid_: Status (ambiguous — see Flagged ambiguities), framing (not a stage)
+A **Pitch**'s current lifecycle phase: `framing`, `shaping`, `building`, `done`. Can move forward or backward. A new pitch starts at `framing`, in the upcoming cycle, where it waits for the betting table. A cooldown pitch starts at `building`. "Frame Go" is `framing` → `shaping`, and "Shape Go" is `shaping` → `building`. A pitch **auto-advances to `done`** when an update sets the **Needle** to 100% — posting a 100% update is the act of shipping (see [ADR 0032](docs/adr/0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md)).
+_Avoid_: Status (ambiguous — see Flagged ambiguities)
 
 **Frame as bet**:
-The problem text of a **Pitch**'s **Frame**, stored as `frame_problem`, with its outcome stored as free text in `frame_outcome`. The problem is copied from the **Request** when the bet is made. The request on the map keeps changing. This copy does not, so a past cycle always shows what the team committed to (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)). A pitch points home through `request_id`.
+The **Frame** of a **Pitch** as it stood when the bet was made. The pitch copies it from its requests when it is created, and the requests on the map keep changing. The copy does not, so a past cycle always shows what the team committed to (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)). A pitch points home through `request_ids`.
 _Avoid_: Request (that is the living record on the map), requirements, spec, PRD
+
+**Release summary**:
+Two or three sentences on a **Pitch**, in the customer's words, that say what changes for them. The full release note lives in Notion, and the pitch links to it through `release_note_url`.
+_Avoid_: Changelog, release note (that is the Notion page)
 
 **Timebox**:
 The fixed time boundary of a pitch. Has start and end dates — but is **optional**: a pitch may have no timebox, in which case its tape is hidden (never "Invalid Date") and it draws no bar on the **Pitch timeline**. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010). All of its math — days left, elapsed fill, "Week X of Y" — counts **business days**, not calendar days (see ADR 0013).
@@ -459,7 +463,7 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - A **Request** has one **Kind**, one **Type**, zero or one **Request owner**, zero or more **Reports**, and zero or more **Pointers**
 - A **Request**'s **Type** selects one **Playbook**; the playbook's expected **Pointers** minus the request's own give its **Gap list**
 - A **Request** has zero or one **Origin request** — the request whose **monitoring** surfaced it
-- A **Pitch** points at zero or one **Request**, and keeps a **Frame as bet** taken when the bet was made
+- A **Pitch** carries zero or more **Requests**, and keeps a **Frame as bet** taken when it was created
 - A **Request** can carry several **Pitches** over its life, each in its own **Cycle**
 - **Mission Control** renders its pitches as a **Pitch timeline** — per-pitch **Timebox** bars grouped by squad on the **Cycle window**'s shared scale; derived, never stored
 

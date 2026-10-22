@@ -99,7 +99,6 @@ function MissionControlWired({
           stage: newShapeStage(cycle.type),
           needle: null,
           frame_problem: '',
-          frame_outcome: '',
           timebox_start: cycle.start_date,
           timebox_end: cycle.end_date,
           emoji: '',

@@ -20,7 +20,7 @@ test.describe('Scope Map view assembly', () => {
 
     // Frame columns
     await expect(page.getByText('Problem')).toBeVisible()
-    await expect(page.getByText('Outcome')).toBeVisible()
+    await expect(page.getByText('Outcomes')).toBeVisible()
 
     // Scopes section
     await expect(page.getByRole('heading', { name: 'Scopes' })).toBeVisible()

@@ -37,8 +37,12 @@ export const FIXTURE: Omit<
     needle: { progress: 0.65, zone: 'on_track' },
     frame_problem:
       'Teams lack visibility into cycle progress. Weekly check-ins are meetings, not artifacts. No shared surface for tracking how pitches are going.',
-    frame_outcome:
-      'A self-updating dashboard where leadership and ICs see every pitch needle, hill chart, and scope status at a glance — no meetings needed.',
+    frame_outcomes: [
+      {
+        id: 'o1',
+        text: 'A self-updating dashboard where leadership and ICs see every pitch needle, hill chart, and scope status at a glance — no meetings needed.',
+      },
+    ],
     timebox_start: '2026-05-26',
     timebox_end: '2026-07-03',
     emoji: '🚀',

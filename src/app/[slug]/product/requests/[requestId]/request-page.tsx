@@ -260,7 +260,7 @@ function Track({ pin }: { pin: RenderedPin }) {
   const at = REQUEST_STATES.indexOf(pin.state)
   const current = pin.shapes.find((s) => s.stage !== 'done')
   return (
-    <ol className="grid grid-cols-6 gap-1" aria-label="Request state">
+    <ol className="grid grid-cols-7 gap-1" aria-label="Request state">
       {REQUEST_STATES.map((state, i) => (
         <li
           key={state}
@@ -275,7 +275,7 @@ function Track({ pin }: { pin: RenderedPin }) {
           >
             {i < at && <Check className="h-3 w-3" />}
             {STATE_LABELS[state]}
-            {i === at && state === 'in_flight' && current && ` · ${current.cycleTitle}`}
+            {i === at && (state === 'in_flight' || state === 'pitched') && current && ` · ${current.cycleTitle}`}
           </span>
         </li>
       ))}
@@ -366,7 +366,11 @@ const SHIPPED: RequestState[] = ['released', 'monitoring', 'resolved']
  * means before anybody builds anything.
  */
 function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void }) {
-  if (!pin.announcement) {
+  // Once a pitch ships, its release summary is what went out. Until then the
+  // request's own draft is all there is (ADR 0032).
+  const shipped = pin.shapes.find((s) => s.stage === 'done' && s.releaseSummary)?.releaseSummary
+  const text = shipped ?? pin.announcement
+  if (!text) {
     return (
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
         <Megaphone className="h-5 w-5 shrink-0" />
@@ -398,7 +402,7 @@ function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void
         )}
       </div>
       <Markdown breaks className="max-w-3xl text-base leading-relaxed">
-        {pin.announcement}
+        {text}
       </Markdown>
     </section>
   )

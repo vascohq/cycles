@@ -242,7 +242,10 @@ export async function upsertPitch(
     // to '' (on create). NEVER coerce an omitted field to '' before this point —
     // doing so silently wipes it on update (the timebox-nullification incident).
     frame_problem?: string
-    frame_outcome?: string
+    frame_outcomes?: { id: string; text: string }[]
+    frame_appetite?: string
+    release_summary?: string
+    release_note_url?: string
     timebox_start?: string
     timebox_end?: string
     emoji?: string
@@ -252,10 +255,10 @@ export async function upsertPitch(
     squad?: string
     // Pitch view (see ADR 0018). undefined = leave unchanged / default on create.
     view?: 'scope_map' | 'kanban'
-    // The Request on the Product Map this shape attacks (ADR 0022). '' clears it.
-    // Writing it never touches the request: the shape points at the request, not
-    // the reverse.
-    request_id?: string
+    // The Requests on the Product Map this pitch carries (ADR 0032). [] clears
+    // them. Writing them never touches a request: the pitch points at its
+    // requests, not the reverse.
+    request_ids?: string[]
   },
   injectedRoot?: any
 ): Promise<UpsertResult> {
@@ -283,14 +286,17 @@ export async function upsertPitch(
         stage: params.stage as CyclePitch['stage'],
         needle: null,
         frame_problem: params.frame_problem ?? '',
-        frame_outcome: params.frame_outcome ?? '',
+        ...(params.frame_outcomes ? { frame_outcomes: params.frame_outcomes } : {}),
+        ...(params.frame_appetite ? { frame_appetite: params.frame_appetite } : {}),
+        ...(params.release_summary ? { release_summary: params.release_summary } : {}),
+        ...(params.release_note_url ? { release_note_url: params.release_note_url } : {}),
         timebox_start: params.timebox_start ?? '',
         timebox_end: params.timebox_end ?? '',
         emoji: params.emoji ?? '',
         notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
         ...(params.view ? { view: params.view } : {}),
-        ...(params.request_id ? { request_id: params.request_id } : {}),
+        ...(params.request_ids?.length ? { request_ids: params.request_ids } : {}),
       }
       pitches.push(new LiveObject(pitch))
     } else {
@@ -305,13 +311,19 @@ export async function upsertPitch(
       // Liveblocks treating set(undefined) as a no-op) makes the contract explicit
       // and matches the squad handling below.
       if (params.frame_problem !== undefined) existing.set('frame_problem', params.frame_problem)
-      if (params.frame_outcome !== undefined) existing.set('frame_outcome', params.frame_outcome)
+      if (params.frame_outcomes !== undefined) existing.set('frame_outcomes', params.frame_outcomes)
+      if (params.frame_appetite !== undefined) existing.set('frame_appetite', params.frame_appetite)
+      if (params.release_summary !== undefined) existing.set('release_summary', params.release_summary)
+      if (params.release_note_url !== undefined) existing.set('release_note_url', params.release_note_url)
       if (params.timebox_start !== undefined) existing.set('timebox_start', params.timebox_start)
       if (params.timebox_end !== undefined) existing.set('timebox_end', params.timebox_end)
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       if (params.view !== undefined) existing.set('view', params.view)
-      setOrClear(existing, 'request_id', params.request_id)
+      if (params.request_ids !== undefined) {
+        if (params.request_ids.length) existing.set('request_ids', params.request_ids)
+        else existing.delete('request_ids')
+      }
       // squadId: null = clear (remove key), string = assign, undefined = leave.
       if (squadId === null) existing.delete('squadId')
       else if (squadId !== undefined) existing.set('squadId', squadId)
@@ -1753,7 +1765,7 @@ export async function resolveRequest(
  * Product Map: that is resolveRequest, which keeps the record (ADR 0026).
  *
  * Any request that named this one as its origin loses that pointer. Only this
- * room is cleaned: a Shape's `request_id` lives in a cycle room and can be left
+ * room is cleaned: a pitch's `request_ids` live in a cycle room and can be left
  * pointing at a request that is gone (ADR 0026, open question 2).
  */
 export async function deleteRequest(roomId: string, id: string): Promise<void> {

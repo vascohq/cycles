@@ -90,18 +90,26 @@ describe('migrating a cycle room from frames to requests', () => {
   const oldCycle = {
     cycle: { name: 'Cycle 12' },
     pitches: [
-      { id: 'p1', title: 'Fast exports', frame_problem: 'Exports time out', frame_outcome: '', frame_id: 'f1' },
+      { id: 'p1', title: 'Fast exports', frame_problem: 'Exports time out', frame_outcome: 'A year exports', frame_id: 'f1' },
       { id: 'p2', title: 'No frame', frame_problem: '', frame_outcome: '' },
+      { id: 'p3', title: 'Renamed once', frame_problem: '', frame_outcome: '', request_id: 'f3' },
     ],
     scopes: [{ id: 's1', pitchId: 'p1' }],
   }
 
-  it('points each pitch home to its request and keeps the frame it bet on', () => {
+  it('points each pitch at its list of requests and turns its outcome into a list', () => {
     const migrated = migrateCycleDocument(oldCycle)
 
     expect(migrated.pitches).toEqual([
-      { id: 'p1', title: 'Fast exports', frame_problem: 'Exports time out', frame_outcome: '', request_id: 'f1' },
-      { id: 'p2', title: 'No frame', frame_problem: '', frame_outcome: '' },
+      {
+        id: 'p1',
+        title: 'Fast exports',
+        frame_problem: 'Exports time out',
+        frame_outcomes: [{ id: 'p1-outcome', text: 'A year exports' }],
+        request_ids: ['f1'],
+      },
+      { id: 'p2', title: 'No frame', frame_problem: '', frame_outcomes: [] },
+      { id: 'p3', title: 'Renamed once', frame_problem: '', frame_outcomes: [], request_ids: ['f3'] },
     ])
     expect(migrated.cycle).toEqual(oldCycle.cycle)
     expect(migrated.scopes).toEqual(oldCycle.scopes)

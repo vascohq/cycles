@@ -28,6 +28,8 @@ import {
   REQUEST_TYPES,
   POINTER_KINDS,
   isDormant,
+  isSharp,
+  seedPitchFrame,
   withReportIds,
 } from '@/lib/product-map-engine'
 import type { Zone, Needle, CardStatus, Stage } from '@/cycle-liveblocks.config'
@@ -538,14 +540,51 @@ function preparePitchParams(params: WriteParams): WriteParams {
   // Only normalize a field that was actually supplied, so an omitted field is
   // never coerced to '' (ADR 0011).
   if (params.emoji !== undefined) prepared.emoji = normalizeEmoji(params.emoji)
-  // The batch path skips this tool's zod enum, so normalize here too: a caller
-  // passing the stage ADR 0023 removed gets `shaping`, never a stored `framing`.
+  // The batch path skips this tool's zod enum, so normalize here too: an
+  // unknown stage reads as `shaping`.
   if (params.stage !== undefined) prepared.stage = readStage(params.stage as string)
   if (params.notion_url !== undefined) {
     const notion = validateNotionUrl(params.notion_url)
     prepared.notion_url = notion.isValidUrl ? notion.value : ''
   }
   return prepared
+}
+
+type PitchFrameParams = {
+  id?: string
+  request_ids?: string[]
+  frame_problem?: string
+  frame_outcomes?: { id: string; text: string }[]
+  frame_appetite?: string
+  release_summary?: string
+}
+
+/**
+ * A NEW pitch carries sharp requests only, and copies its frame from them
+ * (ADR 0032). Fields the caller wrote win over the seed. An update seeds
+ * nothing, because after creation the pitch owns its frame.
+ */
+async function seedNewPitch<T extends PitchFrameParams>(orgId: string, params: T): Promise<T> {
+  if (params.id || !params.request_ids?.length) return params
+  const { requests } = await getProductMapStorage(orgId)
+  const carried = params.request_ids.map((id) => {
+    const request = requests.find((r) => r.id === id)
+    if (!request) throw new Error(`Request not found: "${id}"`)
+    if (!isSharp(request)) {
+      throw new Error(
+        `Request "${id}" is rough. A pitch carries sharp requests only: give it a problem, an appetite and an outcome first.`
+      )
+    }
+    return request
+  })
+  const seed = seedPitchFrame(carried)
+  return {
+    ...params,
+    frame_problem: params.frame_problem ?? seed.frame_problem,
+    frame_outcomes: params.frame_outcomes ?? seed.frame_outcomes,
+    frame_appetite: params.frame_appetite ?? seed.frame_appetite,
+    release_summary: params.release_summary ?? seed.release_summary,
+  }
 }
 
 async function prepareWriteParams(
@@ -1351,14 +1390,13 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_pitch',
-    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcome, timebox_start, timebox_end, emoji, notion_url, squad, request_id) is left unchanged — only fields you pass are overwritten. A pitch is a SHAPE: the work. The problem it attacks is a Request on the Product Map — pass "request_id" so the bet points at the problem, and copy the request\'s problem text into "frame_problem".',
+    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcomes, frame_appetite, release_summary, release_note_url, timebox_start, timebox_end, emoji, notion_url, squad, request_ids) is left unchanged — only fields you pass are overwritten. A pitch is the shaped bet. Its FRAME is the problem, reworked, and the outcomes it must reach. Its SHAPE is the scopes. The problems it attacks are Requests on the Product Map: pass "request_ids" when you create a pitch, and the pitch copies their problems, outcomes, largest appetite and release draft into its frame (fields you pass win). Only sharp requests can be pitched. A new pitch belongs in the upcoming cycle at the "framing" stage.',
     {
       ...orgArg,
       ...cycleSlugArg,
       id: z.string().optional().describe('Pitch id. Omit to create.'),
       title: z.string(),
-      // Derived from STAGES so the tool surface cannot drift from the engine
-      // (ADR 0023 removed `framing`, which this now rejects).
+      // Derived from STAGES so the tool surface cannot drift from the engine.
       stage: z.enum(STAGES as [Stage, ...Stage[]]),
       // On update, these are PARTIAL: omit to leave a field unchanged. They must
       // stay optional (not .default('')) — a default would coerce an omitted
@@ -1368,14 +1406,31 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe(
-          'The Frame as bet: a copy of the request\'s problem text taken when the bet was made. The request on the Product Map keeps changing; this copy never does, so a past cycle always shows what was committed to.'
+          'The full problem of the pitch\'s frame, reworked from its requests with research. Copied from the request summaries on create when omitted. Editing it never writes back to the Product Map.'
         ),
-      frame_outcome: z.string().optional(),
-      request_id: z
-        .string()
+      frame_outcomes: z
+        .array(z.object({ id: z.string(), text: z.string() }))
         .optional()
         .describe(
-          'The Request on the Product Map this shape attacks (map_list_requests names them). Only a SHARP request — one with both a problem and an appetite — should be bet on. Editing this shape never writes back to the Product Map. Pass "" to clear.'
+          'What the pitch must make true, one observable change per item. Passing this REPLACES the list. Copied from the requests on create when omitted.'
+        ),
+      frame_appetite: z
+        .string()
+        .optional()
+        .describe('The time the business will spend, for example "6 weeks". Copied from the largest request appetite on create when omitted.'),
+      release_summary: z
+        .string()
+        .optional()
+        .describe('Two or three sentences in the customer\'s words: what changes for them. Pass "" to clear.'),
+      release_note_url: z
+        .string()
+        .optional()
+        .describe('Link to the full release note in Notion. Pass "" to clear.'),
+      request_ids: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'The Requests on the Product Map this pitch carries (map_list_requests names them). Every one must be SHARP. Passing this REPLACES the list; pass [] to clear. Editing the pitch never writes back to the Product Map.'
         ),
       timebox_start: z.string().optional(),
       timebox_end: z.string().optional(),
@@ -1410,7 +1465,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; request_id?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcomes?: { id: string; text: string }[]; frame_appetite?: string; release_summary?: string; release_note_url?: string; request_ids?: string[]; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -1420,7 +1475,8 @@ export function registerCyclesTools(server: any): void {
       try {
         // Same normalization the batch path applies — one implementation, so the
         // two entry points can't drift.
-        const result = await upsertPitch(roomId, preparePitchParams(params) as typeof params)
+        const seeded = await seedNewPitch(resolved.org.id, params)
+        const result = await upsertPitch(roomId, preparePitchParams(seeded) as typeof params)
         return jsonResult(result)
       } catch (err) {
         return errorResult((err as Error).message)
@@ -2492,7 +2548,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_delete_request',
-    'Delete a request for good, because it should never have been on the Product Map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the Product Map: a problem somebody fixed gets map_resolve_request, which keeps the request and its record (ADR 0026). Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any request that named this one as its origin loses that pointer. A Shape that was bet on this request keeps a request_id pointing at nothing, so check the cycle before you delete a request that was ever bet on.',
+    'Delete a request for good, because it should never have been on the Product Map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the Product Map: a problem somebody fixed gets map_resolve_request, which keeps the request and its record (ADR 0026). Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any request that named this one as its origin loses that pointer. A pitch that carried this request keeps its id in request_ids, pointing at nothing, so check the cycle before you delete a request that was ever pitched.',
     {
       ...orgArg,
       request_id: z.string().describe('Request to delete. map_list_requests names them.'),

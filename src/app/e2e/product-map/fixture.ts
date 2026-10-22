@@ -191,6 +191,7 @@ export const SHAPES: LinkedShape[] = [
     cycleSlug: 'c3',
     cycleTitle: 'Cycle 3',
     currentCycle: true,
+    upcomingCycle: false,
   },
   {
     requestId: 'f9',
@@ -200,6 +201,7 @@ export const SHAPES: LinkedShape[] = [
     cycleSlug: 'c3',
     cycleTitle: 'Cycle 3',
     currentCycle: false,
+    upcomingCycle: false,
   },
 ]
 

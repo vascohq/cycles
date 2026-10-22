@@ -10,6 +10,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { Liveblocks, LiveList, LiveObject } from '@liveblocks/node'
 import {
   migrateCycleDocument,
+  migratePitch,
   migrateProductMapDocument,
 } from '../src/lib/migrations/frames-to-requests'
 
@@ -56,10 +57,12 @@ async function main() {
       // @liveblocks/node's LiveList has no toArray(); map() is the way to read it.
       const pitches: any[] = root.get('pitches')?.map((pitch: any) => pitch) ?? []
       for (const pitch of pitches) {
-        const requestId = pitch.get('frame_id')
-        if (requestId === undefined) continue
-        pitch.set('request_id', requestId)
-        pitch.delete('frame_id')
+        const before = pitch.toImmutable() as Record<string, unknown>
+        const after = migratePitch(before)
+        for (const key of Object.keys(before)) if (!(key in after)) pitch.delete(key)
+        for (const [key, value] of Object.entries(after)) {
+          if (JSON.stringify(before[key]) !== JSON.stringify(value)) pitch.set(key, value)
+        }
       }
     })
   }

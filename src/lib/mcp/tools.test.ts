@@ -86,8 +86,8 @@ const ORG_ID = 'org_test'
 const FIXTURE_STORAGE: StorageJson = {
   cycle: { name: 'Q2 Build', type: 'build', start_date: '2026-04-06', end_date: '2026-05-15' },
   pitches: [
-    { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcome: 'Dashboard', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '', squadId: 'sq1' },
-    { id: 'p2', title: 'MCP Server', stage: 'shaping', needle: null, frame_problem: '', frame_outcome: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
+    { id: 'p1', title: 'Mission Control', stage: 'building', needle: { progress: 0.6, zone: 'on_track' }, frame_problem: 'No visibility', frame_outcomes: [{ id: 'o1', text: 'Dashboard' }], timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '', squadId: 'sq1' },
+    { id: 'p2', title: 'MCP Server', stage: 'shaping', needle: null, frame_problem: '', timebox_start: '2026-04-06', timebox_end: '2026-05-15', emoji: '', notion_url: '' },
   ],
   squads: [{ id: 'sq1', name: 'Platform', color: '#3e63dd' }],
   scopes: [
@@ -532,7 +532,7 @@ describe('handleBatch', () => {
           title: 'New Pitch',
           stage: 'shaping',
           frame_problem: '',
-          frame_outcome: '',
+         
           timebox_start: '2026-04-06',
           timebox_end: '2026-05-15',
         },
@@ -632,7 +632,7 @@ describe('handleBatch', () => {
           title: 'Good Pitch',
           stage: 'shaping',
           frame_problem: '',
-          frame_outcome: '',
+         
           timebox_start: '',
           timebox_end: '',
         },
@@ -722,15 +722,20 @@ describe('handleBatch', () => {
     expect(mockUpsertTask).toHaveBeenCalledTimes(1)
   })
 
-  it('normalizes a legacy framing stage in a batched upsert_pitch', async () => {
-    // The batch path skips the tool's zod enum, so without this a caller could
-    // still write the stage ADR 0023 removed.
+  it('keeps the framing stage in a batched upsert_pitch, and normalizes an unknown one', async () => {
+    // The batch path skips the tool's zod enum, so the writer normalizes it.
     mockUpsertPitch.mockResolvedValue({ created: false, id: 'p1' })
 
     await handleBatch(ORG_ID, 'q2-build', [
       { tool: 'upsert_pitch', params: { id: 'p1', title: 'P', stage: 'framing' } },
+      { tool: 'upsert_pitch', params: { id: 'p1', title: 'P', stage: 'pondering' } },
     ])
 
+    expect(mockUpsertPitch).toHaveBeenCalledWith(
+      'org_test:cycle:q2-build',
+      expect.objectContaining({ stage: 'framing' }),
+      expect.anything()
+    )
     expect(mockUpsertPitch).toHaveBeenCalledWith(
       'org_test:cycle:q2-build',
       expect.objectContaining({ stage: 'shaping' }),
@@ -1901,13 +1906,18 @@ describe('upsert_pitch request pointer', () => {
     return captured
   }
 
-  it('takes an optional request_id, so a shape with no request stays valid', () => {
+  it('takes optional request_ids and frame fields, so a pitch with no request stays valid', () => {
     const schema = z.object(schemaFor('upsert_pitch'))
 
-    const base = { cycle_slug: '2026-q3', title: 'x', stage: 'shaping' as const }
+    const base = { cycle_slug: '2026-q3', title: 'x', stage: 'framing' as const }
 
-    expect(schema.parse(base).request_id).toBeUndefined()
-    expect(schema.parse({ ...base, request_id: 'f1' }).request_id).toBe('f1')
+    const bare = schema.parse(base)
+    expect(bare.request_ids).toBeUndefined()
+    expect(bare.frame_outcomes).toBeUndefined()
+    expect(bare.frame_appetite).toBeUndefined()
+    expect(bare.release_summary).toBeUndefined()
+    expect(bare.release_note_url).toBeUndefined()
+    expect(schema.parse({ ...base, request_ids: ['f1', 'f2'] }).request_ids).toEqual(['f1', 'f2'])
   })
 })
 
@@ -1979,5 +1989,121 @@ describe('map_update_report and map_delete_report', () => {
     const result = await handleDeleteReport(ORG_ID, { request_id: 'f1', report_id: 'r1' })
 
     expect(JSON.parse(result.content[0].text)).toEqual({ deleted: true, requestId: 'f1', reportCount: 3 })
+  })
+})
+
+describe('upsert_pitch frames a new pitch from its requests', () => {
+  function handlerFor(toolName: string) {
+    let handler: ((args: any, extra: any) => Promise<{ content: { text: string }[]; isError?: true }>) | undefined
+    registerCyclesTools({
+      tool(name: string, _d: string, _s: unknown, _a: unknown, fn: any) {
+        if (name === toolName) handler = fn
+      },
+    })
+    return handler!
+  }
+
+  const EXTRA = { authInfo: { extra: { memberships: [{ id: 'org_test', slug: 'vasco' }] } } }
+  const mockGetMap = vi.mocked(getProductMapStorage)
+  const mockUpsert = mockUpsertPitch
+  const request = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    kind: 'pain_point' as const,
+    type: 'ask' as const,
+    problem: `Problem ${id}`,
+    appetite: '2 weeks',
+    business_case: '',
+    reports: [],
+    pointers: [],
+    outcomes: [{ id: `o-${id}`, text: `Outcome ${id}` }],
+    last_woken: '2026-09-01',
+    resolved: false,
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUpsert.mockResolvedValue({ created: true, id: 'p1' })
+  })
+
+  it('copies the problems, outcomes, largest appetite and release draft of its requests', async () => {
+    mockGetMap.mockResolvedValue({
+      areas: [],
+      requests: [
+        request('f1', { announcement: 'Exports finish.' }),
+        request('f2', { appetite: '6 weeks' }),
+      ],
+    })
+
+    const res = await handlerFor('upsert_pitch')(
+      { cycle_slug: 'q4-build', title: 'Fast exports', stage: 'framing', request_ids: ['f1', 'f2'] },
+      EXTRA
+    )
+
+    expect(res.isError).toBeUndefined()
+    expect(mockUpsert).toHaveBeenCalledWith(
+      'org_test:cycle:q4-build',
+      expect.objectContaining({
+        request_ids: ['f1', 'f2'],
+        frame_problem: 'Problem f1\nProblem f2',
+        frame_outcomes: [
+          { id: 'o-f1', text: 'Outcome f1' },
+          { id: 'o-f2', text: 'Outcome f2' },
+        ],
+        frame_appetite: '6 weeks',
+        release_summary: 'Exports finish.',
+      })
+    )
+  })
+
+  it('keeps what the caller wrote over the seed', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], requests: [request('f1')] })
+
+    await handlerFor('upsert_pitch')(
+      { cycle_slug: 'q4-build', title: 'T', stage: 'framing', request_ids: ['f1'], frame_problem: 'Reworked' },
+      EXTRA
+    )
+
+    expect(mockUpsert).toHaveBeenCalledWith(
+      'org_test:cycle:q4-build',
+      expect.objectContaining({ frame_problem: 'Reworked', frame_appetite: '2 weeks' })
+    )
+  })
+
+  it('refuses to pitch a rough request, and writes nothing', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], requests: [request('f1', { appetite: '' })] })
+
+    const res = await handlerFor('upsert_pitch')(
+      { cycle_slug: 'q4-build', title: 'T', stage: 'framing', request_ids: ['f1'] },
+      EXTRA
+    )
+
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain('rough')
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('refuses a request that is not on the Product Map', async () => {
+    mockGetMap.mockResolvedValue({ areas: [], requests: [] })
+
+    const res = await handlerFor('upsert_pitch')(
+      { cycle_slug: 'q4-build', title: 'T', stage: 'framing', request_ids: ['nope'] },
+      EXTRA
+    )
+
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain('Request not found: "nope"')
+  })
+
+  it('seeds nothing on an update, because the pitch owns its frame', async () => {
+    mockUpsert.mockResolvedValue({ created: false, id: 'p1' })
+
+    await handlerFor('upsert_pitch')(
+      { cycle_slug: 'q4-build', id: 'p1', title: 'T', stage: 'shaping', request_ids: ['f1', 'f3'] },
+      EXTRA
+    )
+
+    expect(mockGetMap).not.toHaveBeenCalled()
+    expect(mockUpsert.mock.calls[0][1]).not.toHaveProperty('frame_outcomes')
   })
 })
