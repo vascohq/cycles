@@ -68,6 +68,18 @@ describe('migrating a Product Map room from frames to requests', () => {
     expect(migrateProductMapDocument(once)).toEqual(once)
   })
 
+  // Between the deploy and the migration, the app and the MCP can already
+  // write to a new `requests` list. Those requests must survive.
+  it('keeps the requests written before the migration ran', () => {
+    const captured = { ...oldProductMap.frames[1], id: 'r-new', type: 'bug' }
+    const mixed = { ...oldProductMap, requests: [captured] }
+
+    const migrated = migrateProductMapDocument(mixed)
+
+    expect((migrated.requests as { id: string }[]).map((r) => r.id)).toEqual(['f1', 'f2', 'r-new'])
+    expect(migrated).not.toHaveProperty('frames')
+  })
+
   it('leaves a room that never held a frame unchanged', () => {
     const empty = { areas: [] }
     expect(migrateProductMapDocument(empty)).toEqual(empty)

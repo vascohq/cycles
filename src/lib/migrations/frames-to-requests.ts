@@ -19,8 +19,10 @@ export function migrateRequest(frame: Doc): Doc {
 
 export function migrateProductMapDocument<T extends Doc>(doc: T): Doc {
   if (!Array.isArray(doc.frames)) return doc
-  const { frames, ...rest } = doc
-  return { ...rest, requests: (frames as Doc[]).map(migrateRequest) }
+  const { frames, requests, ...rest } = doc
+  // Requests written to the new list after the deploy stay, after the frames.
+  const written = Array.isArray(requests) ? (requests as Doc[]) : []
+  return { ...rest, requests: [...(frames as Doc[]).map(migrateRequest), ...written] }
 }
 
 export function migratePitch(pitch: Doc): Doc {

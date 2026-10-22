@@ -1660,6 +1660,26 @@ describe('upsertRequest', () => {
     expect(request.get('resolved')).toBe(false)
   })
 
+  // A room that still holds `frames` (not migrated yet) has no `requests` list.
+  // A capture must create the list, never throw on it.
+  it('creates the requests list on a room that has not been migrated yet', async () => {
+    mockGetRoom.mockResolvedValue({} as never)
+    const storage: Record<string, any> = { frames: makeMockList([]), areas: makeMockList([]) }
+    mockMutateStorage.mockImplementation(async (_roomId, callback) => {
+      const root = {
+        get: (key: string) => storage[key],
+        set: (key: string) => {
+          storage[key] = makeMockList([])
+        },
+      }
+      await callback({ root } as any)
+    })
+
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow exports' })
+
+    expect(storage.requests.find(() => true)!.get('problem')).toBe('Slow exports')
+  })
+
   // Every request wants an owner, and the area owner is the default the app
   // suggests — nothing more. The agent capture path gets the same deal the
   // in-app form gets (#221).

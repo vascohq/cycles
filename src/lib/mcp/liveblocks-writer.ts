@@ -1353,7 +1353,7 @@ export async function upsertRequest(
   await ensureProductMapRoom(roomId)
 
   await withRoot(roomId, undefined, (root: any) => {
-    const requests = root.get('requests')
+    const requests = getOrCreateList(root, 'requests')
 
     badRelated = relatedRequestsError(requests, id, params.related_request_ids)
     if (badRelated) return
@@ -1474,7 +1474,7 @@ export async function attachReport(
   const reportedOn = params.date?.trim() || today
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('requests').find((f: any) => getField(f, 'id') === params.requestId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1514,7 +1514,7 @@ async function changeReports(
   let missing: 'request' | 'report' | null = null
   let changed: RequestReport[] = []
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('requests').find((f: any) => getField(f, 'id') === requestId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === requestId)
     if (!existing) {
       missing = 'request'
       return
@@ -1610,7 +1610,7 @@ export async function linkPointer(
   let pointerCount = 0
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('requests').find((f: any) => getField(f, 'id') === params.requestId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1648,7 +1648,7 @@ export async function wakeRequest(
   let wokenOn = mentionedOn
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('requests').find((f: any) => getField(f, 'id') === params.requestId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1706,7 +1706,7 @@ export async function writeBrief(
   let notFound = false
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('requests').find((f: any) => getField(f, 'id') === params.requestId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1735,7 +1735,7 @@ export async function resolveRequest(
   let notFound = false
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('requests').find((f: any) => getField(f, 'id') === params.requestId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1760,7 +1760,7 @@ export async function deleteRequest(roomId: string, id: string): Promise<void> {
   let notFound = false
 
   await withRoot(roomId, undefined, (root: any) => {
-    const requests = root.get('requests')
+    const requests = getOrCreateList(root, 'requests')
     const idx = requests.findIndex((f: any) => getField(f, 'id') === id)
     if (idx === -1) {
       notFound = true
@@ -1808,7 +1808,7 @@ export async function deleteArea(roomId: string, id: string): Promise<void> {
       a.set('x', slot.x)
       a.set('y', slot.y)
     }
-    for (const f of root.get('requests')) {
+    for (const f of getOrCreateList(root, 'requests')) {
       if (getField(f, 'areaId') === id) f.delete('areaId')
     }
   })
