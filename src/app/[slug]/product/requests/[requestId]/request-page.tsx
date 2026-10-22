@@ -18,13 +18,13 @@ import {
   productMapInitialStorage,
   useProductMapStorage,
 } from '@/product-map-room-context'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, ProductRequest } from '@/product-map-liveblocks.config'
 import {
-  FRAME_STATES,
-  type FrameState,
+  REQUEST_STATES,
+  type RequestState,
   POINTER_KIND_LABELS,
   isMemberId,
-  renderFrame,
+  renderRequest,
   renderProductMap,
   type CycleWindow,
   type LinkedShape,
@@ -41,32 +41,32 @@ import { UserAvatar } from '@/components/scope-card/assignee-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   CyclesContext,
-  FrameDetail,
-  OpenFrameContext,
+  RequestDetail,
+  OpenRequestContext,
   areaOptions,
 } from '../../product-map'
-import { claudeChatHref, frameHref, useOpenFramePage } from '../../links'
+import { claudeChatHref, requestHref, useOpenRequestPage } from '../../links'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
-import { Crumbs, FrameCrumb } from '../../crumbs'
+import { Crumbs, RequestCrumb } from '../../crumbs'
 import { Missing } from '../../missing'
-import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
+import { KindIcon, TypeIcon } from '@/components/product-map/request-icons'
 import { TopBar } from '@/components/sidebar-layout'
 import { Markdown } from '@/components/ui/markdown'
 
 /**
- * The frame on a page of its own, so it has a URL somebody can share. It reads
- * the frame and never wakes it (ADR 0024). Editing stays in the frame dialog,
+ * The request on a page of its own, so it has a URL somebody can share. It reads
+ * the request and never wakes it (ADR 0024). Editing stays in the request dialog,
  * opened from here, so a field means the same thing on the map and on the page.
  */
-export function FramePage({
+export function RequestPage({
   roomId,
-  frameId,
+  requestId,
   organizationUsers,
   cycles,
   shapes,
 }: {
   roomId: string
-  frameId: string
+  requestId: string
   organizationUsers: OrganizationUser[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
@@ -78,61 +78,61 @@ export function FramePage({
         initialPresence={{}}
         initialStorage={productMapInitialStorage()}
       >
-        <ClientSideSuspense fallback={<FramePageSkeleton />}>
-          {() => <FramePageView frameId={frameId} cycles={cycles} shapes={shapes} />}
+        <ClientSideSuspense fallback={<RequestPageSkeleton />}>
+          {() => <RequestPageView requestId={requestId} cycles={cycles} shapes={shapes} />}
         </ClientSideSuspense>
       </ProductMapRoomProvider>
     </OrganizationUsersProvider>
   )
 }
 
-function FramePageView(props: { frameId: string; cycles: CycleWindow[]; shapes: LinkedShape[] }) {
+function RequestPageView(props: { requestId: string; cycles: CycleWindow[]; shapes: LinkedShape[] }) {
   // Guarded reads: a room whose root predates either list must still render.
-  const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
+  const requests = useProductMapStorage((root) => (root.requests ?? []) as unknown as ProductRequest[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
-  return <FrameLayout {...props} frames={frames} areas={areas} editable />
+  return <RequestLayout {...props} requests={requests} areas={areas} editable />
 }
 
 /**
  * The page itself, from plain data, so the e2e route can draw it from a fixture
- * with no room. `editable` mounts the frame dialog, which needs the room.
+ * with no room. `editable` mounts the request dialog, which needs the room.
  */
-export function FrameLayout({
-  frameId,
-  frames,
+export function RequestLayout({
+  requestId,
+  requests,
   areas,
   cycles,
   shapes,
   editable = false,
 }: {
-  frameId: string
-  frames: Frame[]
+  requestId: string
+  requests: ProductRequest[]
   areas: Area[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
   editable?: boolean
 }) {
-  const openFrame = useOpenFramePage()
+  const openRequest = useOpenRequestPage()
   const [editing, setEditing] = useState(false)
 
-  const input = { areas, frames, cycles, shapes, today: getTeamToday(new Date()) }
-  const pin = renderFrame(input, frameId)
+  const input = { areas, requests, cycles, shapes, today: getTeamToday(new Date()) }
+  const pin = renderRequest(input, requestId)
   const options = areaOptions(renderProductMap(input).areas)
 
   useEffect(() => {
-    if (pin) document.title = `${pin.problem || 'Frame'} | Cycles`
+    if (pin) document.title = `${pin.problem || 'Request'} | Cycles`
   }, [pin?.problem]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!pin) return <Missing what="frame" />
+  if (!pin) return <Missing what="request" />
 
   return (
-    <OpenFrameContext.Provider value={openFrame}>
+    <OpenRequestContext.Provider value={openRequest}>
       <CyclesContext.Provider value={cycles}>
         <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8">
           <TopBar
             title={
               <Crumbs areas={areas} areaId={pin.areaId}>
-                <FrameCrumb frames={frames} frameId={frameId} />
+                <RequestCrumb requests={requests} requestId={requestId} />
               </Crumbs>
             }
           />
@@ -152,14 +152,14 @@ export function FrameLayout({
             <Work pin={pin} />
           </div>
         </main>
-        {editing && <FrameDetail pin={pin} onClose={() => setEditing(false)} areas={options} />}
+        {editing && <RequestDetail pin={pin} onClose={() => setEditing(false)} areas={options} />}
       </CyclesContext.Provider>
-    </OpenFrameContext.Provider>
+    </OpenRequestContext.Provider>
   )
 }
 
-/** The frame's own buttons, beside its title (not in the top bar). */
-function FrameActions({ onEdit }: { onEdit?: () => void }) {
+/** The request's own buttons, beside its title (not in the top bar). */
+function RequestActions({ onEdit }: { onEdit?: () => void }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="flex shrink-0 items-center gap-2">
@@ -189,7 +189,7 @@ function FrameActions({ onEdit }: { onEdit?: () => void }) {
 function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
   const owner = useMember(pin.owner)
   const raiser = useMember(pin.raisedBy)
-  // A frame can be attacked by more than one shape; the squads are the people on it now.
+  // A request can be attacked by more than one shape; the squads are the people on it now.
   const squads = [
     ...new Map(pin.shapes.filter((s) => s.squad).map((s) => [s.squad!.name, s.squad!])).values(),
   ]
@@ -197,9 +197,9 @@ function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
     <div>
       <div className="flex items-start justify-between gap-4">
         <h1 className="max-w-3xl font-display text-3xl leading-tight">
-          {pin.problem || 'Untitled frame'}
+          {pin.problem || 'Untitled request'}
         </h1>
-        <FrameActions onEdit={onEdit} />
+        <RequestActions onEdit={onEdit} />
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
@@ -256,12 +256,12 @@ function Header({ pin, onEdit }: { pin: RenderedPin; onEdit?: () => void }) {
 }
 
 function Track({ pin }: { pin: RenderedPin }) {
-  // A frame's life, left to right. The page shows where it stands on it.
-  const at = FRAME_STATES.indexOf(pin.state)
+  // A request's life, left to right. The page shows where it stands on it.
+  const at = REQUEST_STATES.indexOf(pin.state)
   const current = pin.shapes.find((s) => s.stage !== 'done')
   return (
-    <ol className="grid grid-cols-6 gap-1" aria-label="Frame state">
-      {FRAME_STATES.map((state, i) => (
+    <ol className="grid grid-cols-6 gap-1" aria-label="Request state">
+      {REQUEST_STATES.map((state, i) => (
         <li
           key={state}
           className="flex flex-col gap-1.5"
@@ -286,10 +286,10 @@ function Track({ pin }: { pin: RenderedPin }) {
 /**
  * Nobody asks Paulo live from the page (ADR 0029). The page shows the last
  * brief he left, with its date. To get a fresh one, a person opens a new Claude
- * chat with /paulo and this frame already typed.
+ * chat with /paulo and this request already typed.
  */
-export function askPauloUrl(frameId: string, problem: string): string {
-  const prompt = `/paulo where are we on frame ${frameId} (“${problem}”)? Read its reports, pointers and shapes, then leave a fresh brief on the frame with map_write_brief. If it has no release announcement yet, draft one with map_upsert_frame.`
+export function askPauloUrl(requestId: string, problem: string): string {
+  const prompt = `/paulo where are we on request ${requestId} (“${problem}”)? Read its reports, pointers and shapes, then leave a fresh brief on the request with map_write_brief. If it has no release announcement yet, draft one with map_upsert_request.`
   return claudeChatHref(prompt)
 }
 
@@ -299,7 +299,7 @@ function Brief({ pin }: { pin: RenderedPin }) {
   const nextOwner = useMember(brief?.next_step_owner)
   const ask = (
     <a
-      href={askPauloUrl(pin.frameId, pin.problem)}
+      href={askPauloUrl(pin.requestId, pin.problem)}
       target="_blank"
       rel="noreferrer"
       className="flex shrink-0 items-center gap-1 self-start rounded-md border px-2 py-1 text-xs hover:bg-muted"
@@ -314,7 +314,7 @@ function Brief({ pin }: { pin: RenderedPin }) {
       <div className="flex items-center gap-3 rounded-xl border border-dashed bg-background p-4 text-sm text-muted-foreground">
         <Sparkles className="h-5 w-5 shrink-0" />
         <p className="flex-1">
-          No brief yet. Ask Paulo to read the frame and leave one: where it stands and the next
+          No brief yet. Ask Paulo to read the request and leave one: where it stands and the next
           step.
         </p>
         {ask}
@@ -358,11 +358,11 @@ function Brief({ pin }: { pin: RenderedPin }) {
 }
 
 /** Shipped, so the announcement is no longer a draft. */
-const SHIPPED: FrameState[] = ['released', 'monitoring', 'resolved']
+const SHIPPED: RequestState[] = ['released', 'monitoring', 'resolved']
 
 /**
  * The note customers would read once the problem is solved. Written
- * first, as a draft, so the frame says in the customer's words what solving it
+ * first, as a draft, so the request says in the customer's words what solving it
  * means before anybody builds anything.
  */
 function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void }) {
@@ -405,7 +405,7 @@ function Announcement({ pin, onWrite }: { pin: RenderedPin; onWrite?: () => void
 }
 
 function Framing({ pin }: { pin: RenderedPin }) {
-  const openFrame = useOpenFramePage()
+  const openRequest = useOpenRequestPage()
   const { slug } = useParams<{ slug: string }>()
   return (
     <Lane title="Framing" hint="What hurts, and what changes">
@@ -432,7 +432,7 @@ function Framing({ pin }: { pin: RenderedPin }) {
           Surfaced while monitoring{' '}
           <button
             type="button"
-            onClick={() => openFrame(pin.originChain[0].frameId)}
+            onClick={() => openRequest(pin.originChain[0].requestId)}
             className="text-foreground underline"
           >
             {pin.originChain[0].problem}
@@ -442,13 +442,13 @@ function Framing({ pin }: { pin: RenderedPin }) {
       {pin.related.length > 0 && (
         <>
           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Related frames
+            Related requests
           </p>
           <ul className="flex flex-col gap-1">
             {pin.related.map((r) => (
-              <li key={r.frameId}>
-                <Link href={frameHref(slug, r.frameId)} className="text-sm underline">
-                  {r.problem || 'Untitled frame'}
+              <li key={r.requestId}>
+                <Link href={requestHref(slug, r.requestId)} className="text-sm underline">
+                  {r.problem || 'Untitled request'}
                 </Link>
               </li>
             ))}
@@ -518,7 +518,7 @@ function Timeline({ pin, cycles }: { pin: RenderedPin; cycles: CycleWindow[] }) 
 
 function Work({ pin }: { pin: RenderedPin }) {
   const { slug } = useParams<{ slug: string }>()
-  // The pitch lives on the shape (its Notion link). A frame can also carry a
+  // The pitch lives on the shape (its Notion link). A request can also carry a
   // shaped writeup pointer, for a pitch written before any shape existed.
   const pitchUrl =
     pin.shapes.find((s) => s.notionUrl)?.notionUrl ??
@@ -633,7 +633,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 /** The page's own layout in grey, so nothing jumps when the room arrives. */
-function FramePageSkeleton() {
+function RequestPageSkeleton() {
   return (
     <main className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8" aria-busy="true">
       <div className="flex items-center justify-between">

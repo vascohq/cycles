@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amends [ADR 0016](0016-mission-control-pitch-timeline.md) where it renders a stage badge.
+Accepted. Amends [ADR 0016](0016-mission-control-pitch-timeline.md) where it renders a stage badge. Superseded by [ADR 0032](0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md): framing returns to the pitch.
 
 ## Context
 

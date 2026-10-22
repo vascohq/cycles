@@ -7,7 +7,7 @@ import {
   productMapInitialStorage,
   useProductMapStorage,
 } from '@/product-map-room-context'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, ProductRequest } from '@/product-map-liveblocks.config'
 import {
   descendantPins,
   flattenAreas,
@@ -17,24 +17,24 @@ import {
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
-import { freshnessOf } from '@/lib/frame-list'
+import { freshnessOf } from '@/lib/request-list'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
 import { OrganizationUsersProvider, useMember } from '@/components/organization-users-context'
 import { UserAvatar } from '@/components/scope-card/assignee-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FileInto, areaOptions } from '../../product-map'
-import { FilteredFrames } from '../../frame-filters'
+import { FilteredRequests } from '../../request-filters'
 import { MapWorkspace, WorkspaceSkeleton } from '../../map-workspace'
 import { AreaCrumb, Crumbs } from '../../crumbs'
 import { ChevronRight } from 'lucide-react'
 import { Missing } from '../../missing'
-import { UNMAPPED_AREA, useOpenFramePage } from '../../links'
+import { UNMAPPED_AREA, useOpenRequestPage } from '../../links'
 import { TopBar } from '@/components/sidebar-layout'
 
 /**
- * One area on a page of its own: its land, its sub-areas and every frame under
- * it as a filterable list. The breadcrumb on a frame page links here.
+ * One area on a page of its own: its land, its sub-areas and every request under
+ * it as a filterable list. The breadcrumb on a request page links here.
  */
 export function AreaPage({
   roomId,
@@ -70,9 +70,9 @@ export function AreaPage({
 
 function AreaPageView(props: { areaId: string; cycles: CycleWindow[]; shapes: LinkedShape[] }) {
   // Guarded reads: a room whose root predates either list must still render.
-  const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
+  const requests = useProductMapStorage((root) => (root.requests ?? []) as unknown as ProductRequest[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
-  return <AreaLayout {...props} frames={frames} areas={areas} editable />
+  return <AreaLayout {...props} requests={requests} areas={areas} editable />
 }
 
 /**
@@ -81,23 +81,23 @@ function AreaPageView(props: { areaId: string; cycles: CycleWindow[]; shapes: Li
  */
 export function AreaLayout({
   areaId,
-  frames,
+  requests,
   areas,
   cycles,
   shapes,
   editable = false,
 }: {
   areaId: string
-  frames: Frame[]
+  requests: ProductRequest[]
   areas: Area[]
   cycles: CycleWindow[]
   shapes: LinkedShape[]
   editable?: boolean
 }) {
-  const openFrame = useOpenFramePage()
+  const openRequest = useOpenRequestPage()
   const model = renderProductMap({
     areas,
-    frames,
+    requests,
     cycles,
     shapes,
     today: getTeamToday(new Date()),
@@ -115,7 +115,7 @@ export function AreaLayout({
 
   if (!unmapped && !area) return <Missing what="area" />
 
-  // A resolved frame is off the map and still on record here (ADR 0025); the
+  // A resolved request is off the map and still on record here (ADR 0025); the
   // list hides it until somebody filters for it.
   const pins = area
     ? [...descendantPins(area), ...resolvedUnder(area)]
@@ -141,7 +141,7 @@ export function AreaLayout({
         }
         areas={[area]}
         pins={pins}
-        onOpenFrame={openFrame}
+        onOpenRequest={openRequest}
       />
     )
   }
@@ -157,11 +157,11 @@ export function AreaLayout({
           <Stats pins={open} owner={null} />
         </div>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          The holding area for frames that belong to no area yet. Leaving one here is always valid.
-          File a frame into an area from its row.
+          The holding area for requests that belong to no area yet. Leaving one here is always valid.
+          File a request into an area from its row.
         </p>
       </div>
-      <FilteredFrames
+      <FilteredRequests
         pins={pins}
         areas={[]}
         action={editable ? (pin) => <FileInto pin={pin} options={options} /> : undefined}
@@ -179,7 +179,7 @@ function Stats({ pins, owner }: { pins: RenderedPin[]; owner: string | null }) {
   return (
     <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
       <span>
-        {pins.length} open {pins.length === 1 ? 'frame' : 'frames'}
+        {pins.length} open {pins.length === 1 ? 'request' : 'requests'}
       </span>
       <span>{hot} top of mind</span>
       <span>
@@ -188,7 +188,7 @@ function Stats({ pins, owner }: { pins: RenderedPin[]; owner: string | null }) {
       {member && (
         <span
           className="flex items-center gap-1.5"
-          title="The owner a new frame here gets by default"
+          title="The owner a new request here gets by default"
         >
           Area owner: <UserAvatar user={member} /> {member.name}
         </span>

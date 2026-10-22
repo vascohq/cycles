@@ -24,8 +24,8 @@ import { resolveOrigin } from './origin'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
 import { getTeamToday } from '@/lib/team-time'
 import {
-  FRAME_KINDS,
-  FRAME_TYPES,
+  REQUEST_KINDS,
+  REQUEST_TYPES,
   POINTER_KINDS,
   isDormant,
   withReportIds,
@@ -51,15 +51,15 @@ import {
   deleteSquad,
   openBatch,
   upsertArea,
-  upsertFrame,
+  upsertRequest,
   attachReport,
   updateReport,
   deleteReport,
   linkPointer,
-  wakeFrame,
+  wakeRequest,
   writeBrief,
-  resolveFrame,
-  deleteFrame,
+  resolveRequest,
+  deleteRequest,
   deleteArea,
 } from './liveblocks-writer'
 import {
@@ -706,29 +706,29 @@ export async function handleUpsertArea(
 }
 
 /**
- * List the frames on the Product Map. Awake frames only, unless the caller asks for
+ * List the requests on the Product Map. Awake requests only, unless the caller asks for
  * dormant ones AND names an area, a Type or who raised it. There is deliberately no unfiltered
  * dormant listing: an unfiltered list somebody grooms is a backlog (ADR 0024).
  */
-export async function handleListFrames(
+export async function handleListRequests(
   orgId: string,
   params: { area_id?: string; type?: string; raised_by?: string; include_dormant?: boolean } = {}
 ): Promise<ToolResult> {
-  // Who raised a frame narrows the list as much as an area does, so it counts.
+  // Who raised a request narrows the list as much as an area does, so it counts.
   const filtered = !!params.area_id || !!params.type || !!params.raised_by
   if (params.include_dormant && !filtered) {
     return errorResult(
-      'A dormant listing needs a filter. Pass "area_id", "type" or "raised_by" — there is no browsable list of dormant frames, by design.'
+      'A dormant listing needs a filter. Pass "area_id", "type" or "raised_by" — there is no browsable list of dormant requests, by design.'
     )
   }
 
-  const { frames } = await getProductMapStorage(orgId)
+  const { requests } = await getProductMapStorage(orgId)
   // Dormancy is derived from the cycle boundaries, so the cycle rooms have to
   // be read even though the Product Map itself names no cycle.
   const cycles = await readCycleWindows(orgId)
   const today = getTeamToday(new Date())
 
-  const answered = frames
+  const answered = requests
     .filter((f) => !params.area_id || f.areaId === params.area_id)
     .filter((f) => !params.type || f.type === params.type)
     .filter((f) => !params.raised_by || f.raised_by === params.raised_by)
@@ -740,19 +740,19 @@ export async function handleListFrames(
     }))
     .filter((f) => (params.include_dormant ? true : !f.dormant))
 
-  return jsonResult({ frames: answered })
+  return jsonResult({ requests: answered })
 }
 
-export async function handleWakeFrame(
+export async function handleWakeRequest(
   orgId: string,
-  params: { frame_id?: string; date?: string }
+  params: { request_id?: string; date?: string }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   try {
-    const result = await wakeFrame(productMapRoomId(orgId), {
-      frameId: params.frame_id,
+    const result = await wakeRequest(productMapRoomId(orgId), {
+      requestId: params.request_id,
       date: params.date,
     })
     return jsonResult(result)
@@ -764,7 +764,7 @@ export async function handleWakeFrame(
 export async function handleWriteBrief(
   orgId: string,
   params: {
-    frame_id?: string
+    request_id?: string
     headline?: string
     where_we_are?: string
     next_step?: string
@@ -773,12 +773,12 @@ export async function handleWriteBrief(
     written_by: string
   }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   try {
     const result = await writeBrief(productMapRoomId(orgId), {
-      frameId: params.frame_id,
+      requestId: params.request_id,
       headline: params.headline ?? '',
       whereWeAre: params.where_we_are ?? '',
       nextStep: params.next_step ?? '',
@@ -792,7 +792,7 @@ export async function handleWriteBrief(
   }
 }
 
-export async function handleUpsertFrame(
+export async function handleUpsertRequest(
   orgId: string,
   params: {
     id?: string
@@ -806,26 +806,26 @@ export async function handleUpsertFrame(
     area_id?: string
     owner?: string
     raised_by?: string
-    origin_frame_id?: string
-    related_frame_ids?: string[]
+    origin_request_id?: string
+    related_request_ids?: string[]
   }
 ): Promise<ToolResult> {
-  // Type decides the workflow, so a frame can never exist without one (ADR
+  // Type decides the workflow, so a request can never exist without one (ADR
   // 0025). There is no "unknown" Type to fall back on. A problem is the other
-  // half of a capture: a frame with no problem records nothing.
+  // half of a capture: a request with no problem records nothing.
   if (!params.id) {
     if (!params.type) {
       return errorResult(
-        `A new frame needs a "type" — it selects the playbook. One of: ${FRAME_TYPES.join(', ')}.`
+        `A new request needs a "type" — it selects the playbook. One of: ${REQUEST_TYPES.join(', ')}.`
       )
     }
     if (!params.problem?.trim()) {
-      return errorResult('A new frame needs a "problem" — one line saying what hurts.')
+      return errorResult('A new request needs a "problem" — one line saying what hurts.')
     }
   }
 
   try {
-    const result = await upsertFrame(productMapRoomId(orgId), {
+    const result = await upsertRequest(productMapRoomId(orgId), {
       id: params.id,
       kind: params.kind as never,
       type: params.type as never,
@@ -837,8 +837,8 @@ export async function handleUpsertFrame(
       areaId: params.area_id,
       owner: params.owner,
       raisedBy: params.raised_by,
-      originFrameId: params.origin_frame_id,
-      related_frame_ids: params.related_frame_ids,
+      originRequestId: params.origin_request_id,
+      related_request_ids: params.related_request_ids,
     })
     return jsonResult(result)
   } catch (err) {
@@ -849,7 +849,7 @@ export async function handleUpsertFrame(
 export async function handleAttachReport(
   orgId: string,
   params: {
-    frame_id?: string
+    request_id?: string
     text?: string
     source?: string
     capturer?: string
@@ -858,15 +858,15 @@ export async function handleAttachReport(
     date?: string
   }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   if (!params.text?.trim()) {
     return errorResult('A report needs "text" — one line saying what happened.')
   }
   try {
     const result = await attachReport(productMapRoomId(orgId), {
-      frameId: params.frame_id,
+      requestId: params.request_id,
       capturer: params.capturer!,
       source: params.source as never,
       customer: params.customer,
@@ -882,22 +882,22 @@ export async function handleAttachReport(
 
 export async function handleLinkPointer(
   orgId: string,
-  params: { frame_id?: string; url?: string; kind?: string; label?: string }
+  params: { request_id?: string; url?: string; kind?: string; label?: string }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   if (!params.url?.trim()) {
     return errorResult('A pointer needs a "url" — the artifact lives at the other end.')
   }
   if (!params.kind) {
     return errorResult(
-      `A pointer needs a "kind". One of: ${POINTER_KINDS.join(', ')}. There is no kind for a Shape: a shape points at its frame, not the reverse.`
+      `A pointer needs a "kind". One of: ${POINTER_KINDS.join(', ')}. There is no kind for a Shape: a shape points at its request, not the reverse.`
     )
   }
   try {
     const result = await linkPointer(productMapRoomId(orgId), {
-      frameId: params.frame_id,
+      requestId: params.request_id,
       url: params.url,
       kind: params.kind as never,
       label: params.label,
@@ -908,16 +908,16 @@ export async function handleLinkPointer(
   }
 }
 
-export async function handleResolveFrame(
+export async function handleResolveRequest(
   orgId: string,
-  params: { frame_id?: string; resolved?: boolean }
+  params: { request_id?: string; resolved?: boolean }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   try {
-    const result = await resolveFrame(productMapRoomId(orgId), {
-      frameId: params.frame_id,
+    const result = await resolveRequest(productMapRoomId(orgId), {
+      requestId: params.request_id,
       resolved: params.resolved,
     })
     return jsonResult(result)
@@ -926,13 +926,13 @@ export async function handleResolveFrame(
   }
 }
 
-/** The error for a report call that does not name its frame and its report. */
-function reportArgsError(params: { frame_id?: string; report_id?: string }): ToolResult | null {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+/** The error for a report call that does not name its request and its report. */
+function reportArgsError(params: { request_id?: string; report_id?: string }): ToolResult | null {
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   if (!params.report_id) {
-    return errorResult('Which report? Pass "report_id" — map_list_frames names them.')
+    return errorResult('Which report? Pass "report_id" — map_list_requests names them.')
   }
   return null
 }
@@ -940,7 +940,7 @@ function reportArgsError(params: { frame_id?: string; report_id?: string }): Too
 export async function handleUpdateReport(
   orgId: string,
   params: {
-    frame_id?: string
+    request_id?: string
     report_id?: string
     editor?: string
     text?: string
@@ -953,7 +953,7 @@ export async function handleUpdateReport(
   if (argsError) return argsError
   try {
     const result = await updateReport(productMapRoomId(orgId), {
-      frameId: params.frame_id!,
+      requestId: params.request_id!,
       reportId: params.report_id!,
       editor: params.editor!,
       text: params.text,
@@ -969,13 +969,13 @@ export async function handleUpdateReport(
 
 export async function handleDeleteReport(
   orgId: string,
-  params: { frame_id?: string; report_id?: string }
+  params: { request_id?: string; report_id?: string }
 ): Promise<ToolResult> {
   const argsError = reportArgsError(params)
   if (argsError) return argsError
   try {
     const result = await deleteReport(productMapRoomId(orgId), {
-      frameId: params.frame_id!,
+      requestId: params.request_id!,
       reportId: params.report_id!,
     })
     return jsonResult({ deleted: true, ...result })
@@ -984,16 +984,16 @@ export async function handleDeleteReport(
   }
 }
 
-export async function handleDeleteFrame(
+export async function handleDeleteRequest(
   orgId: string,
-  params: { frame_id?: string }
+  params: { request_id?: string }
 ): Promise<ToolResult> {
-  if (!params.frame_id) {
-    return errorResult('Which frame? Pass "frame_id" — map_list_frames names them.')
+  if (!params.request_id) {
+    return errorResult('Which request? Pass "request_id" — map_list_requests names them.')
   }
   try {
-    await deleteFrame(productMapRoomId(orgId), params.frame_id)
-    return jsonResult({ deleted: true, frameId: params.frame_id })
+    await deleteRequest(productMapRoomId(orgId), params.request_id)
+    return jsonResult({ deleted: true, requestId: params.request_id })
   } catch (err) {
     return errorResult((err as Error).message)
   }
@@ -1351,7 +1351,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'upsert_pitch',
-    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcome, timebox_start, timebox_end, emoji, notion_url, squad, frame_id) is left unchanged — only fields you pass are overwritten. A pitch is a SHAPE: the work. The problem it attacks is a Frame on the Product Map — pass "frame_id" so the bet points at the problem, and copy the frame\'s problem text into "frame_problem".',
+    'Create or update a pitch. IMPORTANT: before creating, call get_cycle to check for an existing pitch with the same name — if one exists, pass its id to update it instead of creating a duplicate. Omit id to create (returns generated id). Provide id to update. Updates are PARTIAL: any field you omit (frame_problem, frame_outcome, timebox_start, timebox_end, emoji, notion_url, squad, request_id) is left unchanged — only fields you pass are overwritten. A pitch is a SHAPE: the work. The problem it attacks is a Request on the Product Map — pass "request_id" so the bet points at the problem, and copy the request\'s problem text into "frame_problem".',
     {
       ...orgArg,
       ...cycleSlugArg,
@@ -1368,14 +1368,14 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe(
-          'The Frame as bet: a copy of the frame\'s problem text taken when the bet was made. The frame on the Product Map keeps changing; this copy never does, so a past cycle always shows what was committed to.'
+          'The Frame as bet: a copy of the request\'s problem text taken when the bet was made. The request on the Product Map keeps changing; this copy never does, so a past cycle always shows what was committed to.'
         ),
       frame_outcome: z.string().optional(),
-      frame_id: z
+      request_id: z
         .string()
         .optional()
         .describe(
-          'The Frame on the Product Map this shape attacks (map_list_frames names them). Only a SHARP frame — one with both a problem and an appetite — should be bet on. Editing this shape never writes back to the Product Map. Pass "" to clear.'
+          'The Request on the Product Map this shape attacks (map_list_requests names them). Only a SHARP request — one with both a problem and an appetite — should be bet on. Editing this shape never writes back to the Product Map. Pass "" to clear.'
         ),
       timebox_start: z.string().optional(),
       timebox_end: z.string().optional(),
@@ -1410,7 +1410,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; frame_id?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
+      { org, cycle_slug, ...params }: { org?: string; cycle_slug: string; id?: string; title: string; stage: string; frame_problem?: string; frame_outcome?: string; request_id?: string; timebox_start?: string; timebox_end?: string; emoji?: string; notion_url?: string; squad?: string; view?: 'scope_map' | 'kanban' },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -1955,7 +1955,7 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_upsert_area',
-    'Create a named area on the Product Map, or update one by id. A new area needs only a "name" — omit the position and it lands on the next free grid slot, and omit the outline and the app generates a shape. Pass an "outline" to draw the region\'s coastline yourself, which is how the map comes to look like the team\'s own product. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. To file a frame into an area, pass the area id to map_upsert_frame.',
+    'Create a named area on the Product Map, or update one by id. A new area needs only a "name" — omit the position and it lands on the next free grid slot, and omit the outline and the app generates a shape. Pass an "outline" to draw the region\'s coastline yourself, which is how the map comes to look like the team\'s own product. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. To file a request into an area, pass the area id to map_upsert_request.',
     {
       ...orgArg,
       // All optional with NO .default() — omitting a field must leave it
@@ -1993,7 +1993,7 @@ export function registerCyclesTools(server: any): void {
         .string()
         .optional()
         .describe(
-          'Clerk user id of the area owner — the suggested frame owner for this area, and nothing more. Pass "" to clear.'
+          'Clerk user id of the area owner — the suggested request owner for this area, and nothing more. Pass "" to clear.'
         ),
     },
     {
@@ -2028,25 +2028,25 @@ export function registerCyclesTools(server: any): void {
 
   defineTool(
     server,
-    'map_list_frames',
-    "List the frames on the organization's Product Map. A frame is one problem in the product: a bug, an idea, a request, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the Product Map holds problems, a cycle holds the bets. Awake frames only by default. To reach dormant frames — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter (\"area_id\", \"type\" or \"raised_by\"). There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
+    'map_list_requests',
+    "List the requests on the organization's Product Map. A request is one problem in the product: a bug, an idea, an ask, a security problem or an irritant. The Product Map is org-scoped and names no cycle — the Product Map holds problems, a cycle holds the bets. Awake requests only by default. To reach dormant requests — the ones nobody has mentioned for two cycles — pass \"include_dormant\" AND a filter (\"area_id\", \"type\" or \"raised_by\"). There is no unfiltered dormant listing, by design: an unfiltered list somebody grooms is a backlog. Filter by \"area_id\" or \"type\" to answer \"what could I pick up\".",
     {
       ...orgArg,
-      area_id: z.string().optional().describe('Only frames filed in this area.'),
+      area_id: z.string().optional().describe('Only requests filed in this area.'),
       type: z
-        .enum(FRAME_TYPES)
+        .enum(REQUEST_TYPES)
         .optional()
-        .describe('Only frames of this Type, e.g. "bug" for "what bugs could I take".'),
+        .describe('Only requests of this Type, e.g. "bug" for "what bugs could I take".'),
       raised_by: z
         .string()
         .optional()
-        .describe('Only frames raised by this person: a Clerk user id, or the exact free-text name.'),
+        .describe('Only requests raised by this person: a Clerk user id, or the exact free-text name.'),
       include_dormant: z
         .boolean()
         .optional()
-        .describe('Include sleeping frames. Needs "area_id", "type" or "raised_by" alongside it.'),
+        .describe('Include sleeping requests. Needs "area_id", "type" or "raised_by" alongside it.'),
     },
-    { title: 'List frames', readOnlyHint: true, openWorldHint: false },
+    { title: 'List requests', readOnlyHint: true, openWorldHint: false },
     async (
       {
         org,
@@ -2063,31 +2063,31 @@ export function registerCyclesTools(server: any): void {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
-      return handleListFrames(resolved.org.id, params)
+      return handleListRequests(resolved.org.id, params)
     }
   )
 
   defineTool(
     server,
-    'map_upsert_frame',
-    'Capture a new frame, or update an existing one by id. A new frame needs only a "problem" and a "type" — everything else is optional, so noticing a problem costs nothing. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. Reports, pointers and the wake clock are never touched here. A frame with no appetite stays rough until somebody sharpens it.',
+    'map_upsert_request',
+    'Capture a new request, or update an existing one by id. A new request needs only a "problem" and a "type" — everything else is optional, so noticing a problem costs nothing. Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear an optional field. Reports, pointers and the wake clock are never touched here. A request with no appetite stays rough until somebody sharpens it.',
     {
       ...orgArg,
       // All optional with NO .default() — omitting a field must leave it
       // unchanged, never coerce it away (ADR 0011).
-      id: z.string().optional().describe('Frame id. Omit to capture a new frame.'),
+      id: z.string().optional().describe('Request id. Omit to capture a new request.'),
       problem: z
         .string()
         .optional()
-        .describe('One line saying what hurts. Required when capturing a new frame.'),
+        .describe('One line saying what hurts. Required when capturing a new request.'),
       type: z
-        .enum(FRAME_TYPES)
+        .enum(REQUEST_TYPES)
         .optional()
         .describe(
-          'Where the problem came from and how it gets worked. Type selects the playbook. Required when capturing a new frame.'
+          'Where the problem came from and how it gets worked. Type selects the playbook. Required when capturing a new request.'
         ),
       kind: z
-        .enum(FRAME_KINDS)
+        .enum(REQUEST_KINDS)
         .optional()
         .describe(
           'How much it hurts, and the pin color on the Product Map. Defaults to "pain_point" on capture.'
@@ -2095,7 +2095,7 @@ export function registerCyclesTools(server: any): void {
       appetite: z
         .string()
         .optional()
-        .describe('The time the business will spend, e.g. "6 weeks". A frame with an appetite and a problem is sharp.'),
+        .describe('The time the business will spend, e.g. "6 weeks". A request with an appetite and a problem is sharp.'),
       business_case: z
         .string()
         .optional()
@@ -2110,32 +2110,32 @@ export function registerCyclesTools(server: any): void {
         .array(z.string())
         .optional()
         .describe(
-          'What must be true afterwards, one line each. Each outcome states a change in the world that a reader can check after the fact — "a failed import tells the importer why", never "the user can filter the table". Never invent a metric: if nothing is instrumented, write the observable change and stop. A frame needs at least one outcome to be sharp. Passing this REPLACES the whole list; omit it to leave the outcomes alone, and pass [] to clear them.'
+          'What must be true afterwards, one line each. Each outcome states a change in the world that a reader can check after the fact — "a failed import tells the importer why", never "the user can filter the table". Never invent a metric: if nothing is instrumented, write the observable change and stop. A request needs at least one outcome to be sharp. Passing this REPLACES the whole list; omit it to leave the outcomes alone, and pass [] to clear them.'
         ),
       area_id: z
         .string()
         .optional()
-        .describe('Area to file the frame in. Omit to leave it Unmapped, which is always valid. Pass "" to unfile it.'),
-      owner: z.string().optional().describe('Clerk user id of the frame owner. Pass "" to clear.'),
+        .describe('Area to file the request in. Omit to leave it Unmapped, which is always valid. Pass "" to unfile it.'),
+      owner: z.string().optional().describe('Clerk user id of the request owner. Pass "" to clear.'),
       raised_by: z
         .string()
         .optional()
         .describe(
           'Who raised the problem: the Clerk user id of a member, or a free-text name for somebody outside the app. Not the capturer, and never defaulted: leave it out when you do not know. Pass "" to clear.'
         ),
-      origin_frame_id: z
+      origin_request_id: z
         .string()
         .optional()
-        .describe('The frame whose monitoring surfaced this one. Pass "" to clear.'),
-      related_frame_ids: z
+        .describe('The request whose monitoring surfaced this one. Pass "" to clear.'),
+      related_request_ids: z
         .array(z.string())
         .optional()
         .describe(
-          'Every frame related to this one, for example two problems one solution would close. The relation goes both ways: both frames list each other, and removing a frame here removes the link from both. Passing this REPLACES the whole set; omit it to leave the relations alone, and pass [] to clear them. A duplicate is not related: delete it with map_delete_frame.'
+          'Every request related to this one, for example two problems one solution would close. The relation goes both ways: both requests list each other, and removing a request here removes the link from both. Passing this REPLACES the whole set; omit it to leave the relations alone, and pass [] to clear them. A duplicate is not related: delete it with map_delete_request.'
         ),
     },
     {
-      title: 'Capture or update a frame',
+      title: 'Capture or update a request',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
@@ -2158,25 +2158,25 @@ export function registerCyclesTools(server: any): void {
         area_id?: string
         owner?: string
         raised_by?: string
-        origin_frame_id?: string
-        related_frame_ids?: string[]
+        origin_request_id?: string
+        related_request_ids?: string[]
       },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
-      return handleUpsertFrame(resolved.org.id, params)
+      return handleUpsertRequest(resolved.org.id, params)
     }
   )
 
   defineTool(
     server,
     'map_attach_report',
-    'Record one report of a problem happening on an existing frame. Use this instead of capturing a duplicate frame — the report count is what makes widespread pain look bigger on the Product Map. A report from a customer takes "source": "customer" and can name the customer. Attaching a report WAKES the frame and touches nothing else on it.',
+    'Record one report of a problem happening on an existing request. Use this instead of capturing a duplicate request — the report count is what makes widespread pain look bigger on the Product Map. A report from a customer takes "source": "customer" and can name the customer. Attaching a report WAKES the request and touches nothing else on it.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame this report belongs to.'),
+      request_id: z.string().describe('The request this report belongs to.'),
       text: z.string().describe('One line saying what happened.'),
       source: z
         .enum(['internal', 'customer'])
@@ -2203,7 +2203,7 @@ export function registerCyclesTools(server: any): void {
         ),
     },
     {
-      title: 'Attach a report to a frame',
+      title: 'Attach a report to a request',
       readOnlyHint: false,
       destructiveHint: false,
       // NOT idempotent: two identical calls record two reports, because two
@@ -2217,7 +2217,7 @@ export function registerCyclesTools(server: any): void {
         ...params
       }: {
         org?: string
-        frame_id?: string
+        request_id?: string
         text?: string
         source?: string
         capturer?: string
@@ -2230,7 +2230,7 @@ export function registerCyclesTools(server: any): void {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
-      // Nothing reaches a frame unmediated: a report always names who recorded
+      // Nothing reaches a request unmediated: a report always names who recorded
       // it. An agent may name itself; otherwise the calling user is on the hook.
       return handleAttachReport(resolved.org.id, {
         ...params,
@@ -2242,11 +2242,11 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_update_report',
-    'Correct a report that is badly written or wrong. Use this, never map_attach_report, to fix a report: a second report counts as the problem happening again (ADR 0030). Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear the link or the customer. The date and the capturer never change. An edit marks the report as edited, does not wake the frame and does not change the report count.',
+    'Correct a report that is badly written or wrong. Use this, never map_attach_report, to fix a report: a second report counts as the problem happening again (ADR 0030). Updates are PARTIAL: any field you omit is left unchanged, and pass "" to clear the link or the customer. The date and the capturer never change. An edit marks the report as edited, does not wake the request and does not change the report count.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame that holds the report.'),
-      report_id: z.string().describe('The report to correct. map_list_frames names them.'),
+      request_id: z.string().describe('The request that holds the report.'),
+      report_id: z.string().describe('The report to correct. map_list_requests names them.'),
       text: z.string().optional().describe('One line saying what happened.'),
       source: z
         .enum(['internal', 'customer'])
@@ -2282,7 +2282,7 @@ export function registerCyclesTools(server: any): void {
         ...params
       }: {
         org?: string
-        frame_id?: string
+        request_id?: string
         report_id?: string
         text?: string
         source?: string
@@ -2305,11 +2305,11 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_delete_report',
-    'Delete a report that was recorded in error: on the wrong frame, a test, or a duplicate of another report. The report count goes down by one. The frame stays awake as it is: the freshness clock does not rewind. To fix the wording of a report, use map_update_report instead. No tool puts a deleted report back.',
+    'Delete a report that was recorded in error: on the wrong request, a test, or a duplicate of another report. The report count goes down by one. The request stays awake as it is: the freshness clock does not rewind. To fix the wording of a report, use map_update_report instead. No tool puts a deleted report back.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame that holds the report.'),
-      report_id: z.string().describe('The report to delete. map_list_frames names them.'),
+      request_id: z.string().describe('The request that holds the report.'),
+      report_id: z.string().describe('The report to delete. map_list_requests names them.'),
     },
     {
       title: 'Delete a report',
@@ -2319,7 +2319,7 @@ export function registerCyclesTools(server: any): void {
       openWorldHint: false,
     },
     async (
-      { org, ...params }: { org?: string; frame_id?: string; report_id?: string },
+      { org, ...params }: { org?: string; request_id?: string; report_id?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -2332,15 +2332,15 @@ export function registerCyclesTools(server: any): void {
   defineTool(
     server,
     'map_link_pointer',
-    'Attach an outbound link to a frame: a GitHub issue, a wayfinder map, a research artifact, the shaped writeup, a pull request, or the conversation it came from. The artifact stays where it lives — a frame packages pointers and never imports, syncs or mirrors. There is NO kind for a Shape: a shape points at its frame, not the reverse. This touches nothing else on the frame, and it does not wake it.',
+    'Attach an outbound link to a request: a GitHub issue, a wayfinder map, a research artifact, the shaped writeup, a pull request, or the conversation it came from. The artifact stays where it lives — a request packages pointers and never imports, syncs or mirrors. There is NO kind for a Shape: a shape points at its request, not the reverse. This touches nothing else on the request, and it does not wake it.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame this pointer belongs to.'),
+      request_id: z.string().describe('The request this pointer belongs to.'),
       url: z.string().describe('Where the artifact lives.'),
       kind: z
         .enum(POINTER_KINDS)
         .describe(
-          "What is at the other end. The frame's Type decides which kinds its playbook expects, and the ones it lacks are its gap list — a prompt, never a gate."
+          "What is at the other end. The request's Type decides which kinds its playbook expects, and the ones it lacks are its gap list — a prompt, never a gate."
         ),
       label: z
         .string()
@@ -2348,7 +2348,7 @@ export function registerCyclesTools(server: any): void {
         .describe('What to call the link. Defaults to the name of its kind.'),
     },
     {
-      title: 'Link a pointer to a frame',
+      title: 'Link a pointer to a request',
       readOnlyHint: false,
       destructiveHint: false,
       // NOT idempotent: two calls with the same url file the link twice.
@@ -2359,7 +2359,7 @@ export function registerCyclesTools(server: any): void {
       {
         org,
         ...params
-      }: { org?: string; frame_id?: string; url?: string; kind?: string; label?: string },
+      }: { org?: string; request_id?: string; url?: string; kind?: string; label?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
@@ -2371,47 +2371,47 @@ export function registerCyclesTools(server: any): void {
 
   defineTool(
     server,
-    'map_wake_frame',
-    'Reset a frame\'s freshness clock, because somebody talked about the problem. Call this after a betting table or a call when a frame came up in the notes — it is how the Product Map follows the conversation without anybody grooming a list. A frame nobody wakes for two cycles goes dormant and leaves the Product Map view, keeping every field. This writes ONE field and can never erase a frame. If you have evidence of the problem happening, use map_attach_report instead: that records the evidence AND wakes the frame.',
+    'map_wake_request',
+    'Reset a request\'s freshness clock, because somebody talked about the problem. Call this after a betting table or a call when a request came up in the notes — it is how the Product Map follows the conversation without anybody grooming a list. A request nobody wakes for two cycles goes dormant and leaves the Product Map view, keeping every field. This writes ONE field and can never erase a request. If you have evidence of the problem happening, use map_attach_report instead: that records the evidence AND wakes the request.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame that came up.'),
+      request_id: z.string().describe('The request that came up.'),
       date: z
         .string()
         .optional()
         .describe('ISO date (YYYY-MM-DD) of the mention. Defaults to today.'),
     },
     {
-      title: 'Wake a frame',
+      title: 'Wake a request',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
     },
     async (
-      { org, ...params }: { org?: string; frame_id?: string; date?: string },
+      { org, ...params }: { org?: string; request_id?: string; date?: string },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
-      return handleWakeFrame(resolved.org.id, params)
+      return handleWakeRequest(resolved.org.id, params)
     }
   )
 
   defineTool(
     server,
     'map_write_brief',
-    'Leave a brief on a frame: one headline saying where it stands, a short "where we are", and the ONE next step that moves it to its next state. The frame page shows the last brief with its date, and nobody can ask for one live, so write it from what is on record: read the frame with map_list_frames, its shapes with get_pitch, and its reports and pointers. State numbers you read and never invent one. This REPLACES the whole brief, so pass every line you want kept. It writes one field and does not wake the frame.',
+    'Leave a brief on a request: one headline saying where it stands, a short "where we are", and the ONE next step that moves it to its next state. The request page shows the last brief with its date, and nobody can ask for one live, so write it from what is on record: read the request with map_list_requests, its shapes with get_pitch, and its reports and pointers. State numbers you read and never invent one. This REPLACES the whole brief, so pass every line you want kept. It writes one field and does not wake the request.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame this brief describes.'),
-      headline: z.string().describe('One line: where the frame stands, in plain words.'),
+      request_id: z.string().describe('The request this brief describes.'),
+      headline: z.string().describe('One line: where the request stands, in plain words.'),
       where_we_are: z
         .string()
         .optional()
         .describe('Two or three sentences: the shape and its cycle, the evidence, what changed lately.'),
-      next_step: z.string().describe('The one move that gets the frame to its next state.'),
+      next_step: z.string().describe('The one move that gets the request to its next state.'),
       next_step_owner: z
         .string()
         .optional()
@@ -2426,7 +2426,7 @@ export function registerCyclesTools(server: any): void {
         .describe('Your own agent name, e.g. "paulo". Defaults to the calling user.'),
     },
     {
-      title: 'Leave a brief on a frame',
+      title: 'Leave a brief on a request',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
@@ -2438,7 +2438,7 @@ export function registerCyclesTools(server: any): void {
         ...params
       }: {
         org?: string
-        frame_id?: string
+        request_id?: string
         headline?: string
         where_we_are?: string
         next_step?: string
@@ -2460,62 +2460,62 @@ export function registerCyclesTools(server: any): void {
 
   defineTool(
     server,
-    'map_resolve_frame',
-    'Resolve a frame, because the problem is gone. Do this ONLY when a person has decided it — shipping a shape never resolves a frame on its own, and nothing resolves on a timer. A released frame stays in monitoring until somebody resolves it. This writes one field and changes nothing else: the frame leaves the Product Map view, keeps everything, and stays on record with the shapes that resolved it. If monitoring turned up a quality or an adoption problem, do NOT reopen this frame — capture a NEW one with map_upsert_frame and pass "origin_frame_id", so each problem gets its own appetite.',
+    'map_resolve_request',
+    'Resolve a request, because the problem is gone. Do this ONLY when a person has decided it — shipping a shape never resolves a request on its own, and nothing resolves on a timer. A released request stays in monitoring until somebody resolves it. This writes one field and changes nothing else: the request leaves the Product Map view, keeps everything, and stays on record with the shapes that resolved it. If monitoring turned up a quality or an adoption problem, do NOT reopen this request — capture a NEW one with map_upsert_request and pass "origin_request_id", so each problem gets its own appetite.',
     {
       ...orgArg,
-      frame_id: z.string().describe('The frame whose problem is gone.'),
+      request_id: z.string().describe('The request whose problem is gone.'),
       resolved: z
         .boolean()
         .optional()
-        .describe('Defaults to true. Pass false to put a frame back on the Product Map.'),
+        .describe('Defaults to true. Pass false to put a request back on the Product Map.'),
     },
     {
-      title: 'Resolve a frame',
+      title: 'Resolve a request',
       readOnlyHint: false,
-      // It takes a frame off the Product Map view. Nothing is deleted, and it reverses.
+      // It takes a request off the Product Map view. Nothing is deleted, and it reverses.
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },
     async (
-      { org, ...params }: { org?: string; frame_id?: string; resolved?: boolean },
+      { org, ...params }: { org?: string; request_id?: string; resolved?: boolean },
       extra: ToolExtra
     ) => {
       const memberships = getMemberships(extra)
       const resolvedOrg = resolveOrg(memberships, org)
       if (!resolvedOrg.ok) return errorResult(resolvedOrg.error)
-      return handleResolveFrame(resolvedOrg.org.id, params)
+      return handleResolveRequest(resolvedOrg.org.id, params)
     }
   )
 
   defineTool(
     server,
-    'map_delete_frame',
-    'Delete a frame for good, because it should never have been on the Product Map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the Product Map: a problem somebody fixed gets map_resolve_frame, which keeps the frame and its record (ADR 0026). Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any frame that named this one as its origin loses that pointer. A Shape that was bet on this frame keeps a frame_id pointing at nothing, so check the cycle before you delete a frame that was ever bet on.',
+    'map_delete_request',
+    'Delete a request for good, because it should never have been on the Product Map — a duplicate, a test, a mistake. This is NOT how a solved problem leaves the Product Map: a problem somebody fixed gets map_resolve_request, which keeps the request and its record (ADR 0026). Deleting erases the problem, its reports and its pointers, and no tool puts it back. Any request that named this one as its origin loses that pointer. A Shape that was bet on this request keeps a request_id pointing at nothing, so check the cycle before you delete a request that was ever bet on.',
     {
       ...orgArg,
-      frame_id: z.string().describe('Frame to delete. map_list_frames names them.'),
+      request_id: z.string().describe('Request to delete. map_list_requests names them.'),
     },
     {
-      title: 'Delete a frame',
+      title: 'Delete a request',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ org, ...params }: { org?: string; frame_id?: string }, extra: ToolExtra) => {
+    async ({ org, ...params }: { org?: string; request_id?: string }, extra: ToolExtra) => {
       const memberships = getMemberships(extra)
       const resolved = resolveOrg(memberships, org)
       if (!resolved.ok) return errorResult(resolved.error)
-      return handleDeleteFrame(resolved.org.id, params)
+      return handleDeleteRequest(resolved.org.id, params)
     }
   )
 
   defineTool(
     server,
     'map_delete_area',
-    'Delete an area of the Product Map. Nothing inside it is deleted: its frames go back to Unmapped and its sub-areas lift to the top level, so losing the place never loses the problems (ADR 0026). Each lifted sub-area also takes a free grid slot, because its old position only made sense at its old depth. Rename with map_upsert_area instead when the region still exists under another name.',
+    'Delete an area of the Product Map. Nothing inside it is deleted: its requests go back to Unmapped and its sub-areas lift to the top level, so losing the place never loses the problems (ADR 0026). Each lifted sub-area also takes a free grid slot, because its old position only made sense at its old depth. Rename with map_upsert_area instead when the region still exists under another name.',
     {
       ...orgArg,
       area_id: z.string().describe('Area to delete. map_list_areas names them.'),

@@ -52,3 +52,4 @@ storybook-static
 # claude code (personal overrides and worktrees; .claude/settings.json is shared)
 /.claude/settings.local.json
 /.claude/worktrees/
+migration-backup/

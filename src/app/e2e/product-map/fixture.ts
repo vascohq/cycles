@@ -1,6 +1,6 @@
 import { generateRing } from '@/lib/product-map-geometry'
 import type { CycleWindow, LinkedShape } from '@/lib/product-map-engine'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, ProductRequest } from '@/product-map-liveblocks.config'
 import type { OrganizationUser } from '@/lib/users'
 
 /**
@@ -75,14 +75,14 @@ export const AREAS: Area[] = [
   })),
 ]
 
-function frame(
+function request(
   id: string,
   areaId: string,
-  kind: Frame['kind'],
-  type: Frame['type'],
+  kind: ProductRequest['kind'],
+  type: ProductRequest['type'],
   problem: string,
   options: { reports?: number; customers?: number; appetite?: string; woken?: string } = {}
-): Frame {
+): ProductRequest {
   const internal = options.reports ?? 1
   const customers = options.customers ?? 0
   return {
@@ -115,63 +115,63 @@ function frame(
   }
 }
 
-export const FRAMES: Frame[] = [
-  frame('f1', 'slack', 'brand_burn', 'bug', 'Capture from Slack loses the thread link', {
+export const REQUESTS: ProductRequest[] = [
+  request('f1', 'slack', 'brand_burn', 'bug', 'Capture from Slack loses the thread link', {
     reports: 3,
     customers: 4,
     appetite: 'Two weeks',
   }),
-  frame('f2', 'email', 'pain_point', 'request', 'Email digests arrive at 3am in APAC', {
+  request('f2', 'email', 'pain_point', 'ask', 'Email digests arrive at 3am in APAC', {
     customers: 2,
   }),
-  frame('f3', 'crm-write', 'pain_point', 'bug', 'Write-back silently drops custom fields', {
+  request('f3', 'crm-write', 'pain_point', 'bug', 'Write-back silently drops custom fields', {
     reports: 2,
     customers: 3,
   }),
-  frame('f4', 'artifacts', 'unlock_win', 'idea', 'Share an artifact without a seat', {
+  request('f4', 'artifacts', 'unlock_win', 'idea', 'Share an artifact without a seat', {
     appetite: 'Six weeks',
   }),
-  frame('f5', 'dashboards', 'pain_point', 'irritant', 'Dashboard filters reset on reload', {
+  request('f5', 'dashboards', 'pain_point', 'irritant', 'Dashboard filters reset on reload', {
     reports: 4,
   }),
-  frame('f6', 'fo-agents', 'brand_burn', 'security', 'Agent can read another org’s context', {
+  request('f6', 'fo-agents', 'brand_burn', 'security', 'Agent can read another org’s context', {
     appetite: 'Whatever it takes',
   }),
-  frame('f7', 'mcp', 'pain_point', 'bug', 'Batch writes drop the assignee', { reports: 2 }),
-  frame('f8', 'marketplace', 'unlock_win', 'idea', 'Publish a connector without us', {}),
-  frame('f9', 'onboarding', 'brand_burn', 'request', 'First run needs a warehouse before anything works', {
+  request('f7', 'mcp', 'pain_point', 'bug', 'Batch writes drop the assignee', { reports: 2 }),
+  request('f8', 'marketplace', 'unlock_win', 'idea', 'Publish a connector without us', {}),
+  request('f9', 'onboarding', 'brand_burn', 'ask', 'First run needs a warehouse before anything works', {
     customers: 5,
     appetite: 'Six weeks',
   }),
-  frame('f10', 'agent-engine', 'pain_point', 'bug', 'Long runs time out with no partial result', {
+  request('f10', 'agent-engine', 'pain_point', 'bug', 'Long runs time out with no partial result', {
     reports: 3,
   }),
-  frame('f11', 'plan-engine', 'pain_point', 'irritant', 'Plan edits need a full recalculation', {}),
-  frame('f12', 'metric-engine', 'brand_burn', 'bug', 'Two metrics disagree on the same month', {
+  request('f11', 'plan-engine', 'pain_point', 'irritant', 'Plan edits need a full recalculation', {}),
+  request('f12', 'metric-engine', 'brand_burn', 'bug', 'Two metrics disagree on the same month', {
     reports: 2,
     customers: 3,
   }),
-  frame('f13', 'context', 'unlock_win', 'idea', 'Let the team correct the context graph', {}),
-  frame('f14', 'foundation', 'pain_point', 'bug', 'Reconciliation hides which source won', {}),
-  frame('f15', 'c-crm', 'pain_point', 'bug', 'Salesforce sync stalls on deleted records', {
+  request('f13', 'context', 'unlock_win', 'idea', 'Let the team correct the context graph', {}),
+  request('f14', 'foundation', 'pain_point', 'bug', 'Reconciliation hides which source won', {}),
+  request('f15', 'c-crm', 'pain_point', 'bug', 'Salesforce sync stalls on deleted records', {
     customers: 2,
   }),
-  frame('f16', 'c-billing', 'brand_burn', 'bug', 'Stripe refunds counted as revenue', {
+  request('f16', 'c-billing', 'brand_burn', 'bug', 'Stripe refunds counted as revenue', {
     reports: 2,
     customers: 4,
   }),
-  frame('f17', 'c-warehouse', 'pain_point', 'request', 'Snowflake key-pair auth unsupported', {
+  request('f17', 'c-warehouse', 'pain_point', 'ask', 'Snowflake key-pair auth unsupported', {
     customers: 3,
   }),
-  frame('f18', 'c-calls', 'unlock_win', 'idea', 'Mine calls for product problems', {}),
-  frame('f19', 'c-product', 'pain_point', 'irritant', 'Amplitude backfill has to be manual', {}),
+  request('f18', 'c-calls', 'unlock_win', 'idea', 'Mine calls for product problems', {}),
+  request('f19', 'c-product', 'pain_point', 'irritant', 'Amplitude backfill has to be manual', {}),
   // Woken long ago, so freshness has something to fade.
-  frame('f20', 'c-contracts', 'pain_point', 'bug', 'Contract dates parse in the wrong locale', {
+  request('f20', 'c-contracts', 'pain_point', 'bug', 'Contract dates parse in the wrong locale', {
     woken: '2026-05-02',
   }),
   // No area: the Unmapped tray must have something in it.
   {
-    ...frame('f21', '', 'pain_point', 'idea', 'Somebody should own the glossary', {}),
+    ...request('f21', '', 'pain_point', 'idea', 'Somebody should own the glossary', {}),
     areaId: undefined,
   },
 ]
@@ -184,7 +184,7 @@ export const CYCLES: CycleWindow[] = [
 
 export const SHAPES: LinkedShape[] = [
   {
-    frameId: 'f1',
+    requestId: 'f1',
     shapeId: 's1',
     title: 'Slack capture, properly',
     stage: 'building',
@@ -193,7 +193,7 @@ export const SHAPES: LinkedShape[] = [
     currentCycle: true,
   },
   {
-    frameId: 'f9',
+    requestId: 'f9',
     shapeId: 's2',
     title: 'A first run that works empty',
     stage: 'shaping',
@@ -205,7 +205,7 @@ export const SHAPES: LinkedShape[] = [
 
 export const TODAY = '2026-09-03'
 
-/** The members the fixture frames name. */
+/** The members the fixture requests name. */
 export const USERS: OrganizationUser[] = [
   { userId: 'user_1', name: 'Sam Rivers', email: 'sam@example.test', initials: 'SR', hasImage: false, imageUrl: '' },
   { userId: 'user_2', name: 'Alex Moreau', email: 'alex@example.test', initials: 'AM', hasImage: false, imageUrl: '' },

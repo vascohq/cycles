@@ -107,7 +107,7 @@ export function inRing([px, py]: Point, points: Ring): boolean {
   return inside
 }
 
-/** FNV-1a. A frame id in, a stable 32-bit number out. */
+/** FNV-1a. A request id in, a stable 32-bit number out. */
 export function hash(text: string): number {
   let h = 0x811c9dc5
   for (let i = 0; i < text.length; i++) {
@@ -118,20 +118,20 @@ export function hash(text: string): number {
 }
 
 /**
- * Where one frame's pin sits inside its area. Derived from the frame id ALONE, so
- * a pin lands on the same spot forever and capturing a frame never moves the
+ * Where one request's pin sits inside its area. Derived from the request id ALONE, so
+ * a pin lands on the same spot forever and capturing a request never moves the
  * others. That promise is worth more here than even spacing.
  *
  * ponytail: rejection sampling, so two pins can land on top of each other. The
  * halos are translucent, so a collision reads as heat rather than as a bug. If
  * dense areas ever look wrong, relax the points against each other in id order —
- * and accept that pins then shift when a frame arrives.
+ * and accept that pins then shift when a request arrives.
  */
-export function pinPosition(frameId: string, points: Ring): Point {
+export function pinPosition(requestId: string, points: Ring): Point {
   const box = ringBounds(points)
   if (!box || points.length < 3) return centroid(points)
 
-  let h = hash(frameId)
+  let h = hash(requestId)
   // Inset, so a pin never straddles the coastline it belongs inside.
   const pad = 0.12
   for (let attempt = 0; attempt < 24; attempt++) {

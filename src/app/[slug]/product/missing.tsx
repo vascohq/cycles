@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
-/** A frame or an area page whose id names nothing in the room. */
-export function Missing({ what }: { what: 'frame' | 'area' }) {
+/** A request or an area page whose id names nothing in the room. */
+export function Missing({ what }: { what: 'request' | 'area' }) {
   const { slug } = useParams<{ slug: string }>()
   return (
     <main className="mx-auto flex max-w-xl flex-col items-center gap-3 px-6 py-24 text-center">

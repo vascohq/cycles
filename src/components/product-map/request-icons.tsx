@@ -11,22 +11,22 @@ import {
 } from 'lucide-react'
 
 import { KIND_COLORS } from '@/lib/product-map-engine'
-import type { FrameKind, FrameType } from '@/product-map-liveblocks.config'
+import type { RequestKind, RequestType } from '@/product-map-liveblocks.config'
 
 /**
  * One icon per Type, for lists, pickers and tooltips. Never on the land itself:
  * a pin carries four channels and Type is not one of them (ADR 0025).
  */
-export const TYPE_ICONS: Record<FrameType, LucideIcon> = {
+export const TYPE_ICONS: Record<RequestType, LucideIcon> = {
   bug: Bug,
   idea: Lightbulb,
-  request: MessageSquareQuote,
+  ask: MessageSquareQuote,
   security: ShieldAlert,
   irritant: Annoyed,
 }
 
 /**
- * The Type as an icon, in the Kind's color. A rough frame draws faint, the way
+ * The Type as an icon, in the Kind's color. A rough request draws faint, the way
  * a rough pin draws hollow, so it never looks like agreed work.
  */
 export function TypeIcon({
@@ -36,7 +36,7 @@ export function TypeIcon({
   label,
   className = '',
 }: {
-  type: FrameType
+  type: RequestType
   color: string
   sharp?: boolean
   label: string
@@ -53,7 +53,7 @@ export function TypeIcon({
 }
 
 /** One icon per Kind, always in the Kind's own color. */
-export const KIND_ICONS: Record<FrameKind, LucideIcon> = {
+export const KIND_ICONS: Record<RequestKind, LucideIcon> = {
   brand_burn: Flame,
   pain_point: HeartCrack,
   unlock_win: LockOpen,
@@ -64,7 +64,7 @@ export function KindIcon({
   label,
   className = '',
 }: {
-  kind: FrameKind
+  kind: RequestKind
   label: string
   className?: string
 }) {

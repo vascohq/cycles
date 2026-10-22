@@ -12,10 +12,10 @@ import {
   type RenderedPin,
 } from '@/lib/product-map-engine'
 import { unionBounds, type Bounds, type Point } from '@/lib/product-map-geometry'
-import { listFrames } from '@/lib/frame-list'
+import { listRequests } from '@/lib/request-list'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, LocateFixed, Maximize, Minimize } from 'lucide-react'
-import { KindIcon, TypeIcon } from '@/components/product-map/frame-icons'
+import { KindIcon, TypeIcon } from '@/components/product-map/request-icons'
 import { KIND_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import {
   Tooltip,
@@ -52,11 +52,11 @@ type View = { x: number; y: number; w: number; h: number }
 
 export function MapCanvas({
   areas,
-  onOpenFrame,
+  onOpenRequest,
   className,
 }: {
   areas: RenderedArea[]
-  onOpenFrame: (frameId: string) => void
+  onOpenRequest: (requestId: string) => void
   /** Overrides the canvas height, for a page that lays the map out its own way. */
   className?: string
 }) {
@@ -287,7 +287,7 @@ export function MapCanvas({
         Absolutely positioned, so the SVG is OUT OF FLOW. An SVG carries an
         intrinsic size from its viewBox, and inside a shrink-to-fit parent that
         closes a loop: host width -> viewBox -> SVG intrinsic width -> host
-        width. It never settles — the canvas shrinks about a pixel per frame,
+        width. It never settles — the canvas shrinks about a pixel per request,
         forever, and nothing on the page ever stops moving.
       */}
       <svg
@@ -304,7 +304,7 @@ export function MapCanvas({
             The merged silhouette. Blur fuses neighbouring children, the alpha
             matrix hardens that haze back into one shape, and erode-then-composite
             leaves the coastline as a ring rather than a fill — areas are never
-            colored by their frames.
+            colored by their requests.
           */}
           <Coast id="coast-island" blur={13} threshold={0.3} close={9} erode={2.2} k={k} />
           <Coast
@@ -349,7 +349,7 @@ export function MapCanvas({
             // never disagree about how much is wrong in one place.
             node.area.pins
               .filter((pin) => pin.passesLens)
-              .map((pin) => <Pin key={pin.frameId} pin={pin} k={k} onOpen={onOpenFrame} />)
+              .map((pin) => <Pin key={pin.requestId} pin={pin} k={k} onOpen={onOpenRequest} />)
           ) : (
             <Bubble
               key={`b-${node.areaId}`}
@@ -357,7 +357,7 @@ export function MapCanvas({
               k={k}
               onOpen={() => setView(fit(boundsOf(areas, node.areaId)))}
               pins={pinsUnder(areas, node.areaId)}
-              onOpenFrame={onOpenFrame}
+              onOpenRequest={onOpenRequest}
             />
           )
         )}
@@ -577,8 +577,8 @@ function AreaShape({ area, k, scale }: { area: RenderedArea; k: number; scale: n
 }
 
 /**
- * A mark on the land has to be reachable without a mouse. The frame panels are
- * the fuller keyboard surface, but a pin is the ONLY route to a mapped frame now
+ * A mark on the land has to be reachable without a mouse. The request panels are
+ * the fuller keyboard surface, but a pin is the ONLY route to a mapped request now
  * that the pill rows are gone, so it is a real button: focusable, and activated
  * by Enter or Space.
  */
@@ -598,7 +598,7 @@ function Pin({
 }: {
   pin: RenderedPin
   k: number
-  onOpen: (frameId: string) => void
+  onOpen: (requestId: string) => void
 }) {
   if (!pin.at) return null
   const [x, y] = pin.at
@@ -615,9 +615,9 @@ function Pin({
         <g
           onClick={(e) => {
             e.stopPropagation()
-            onOpen(pin.frameId)
+            onOpen(pin.requestId)
           }}
-          onKeyDown={activate(() => onOpen(pin.frameId))}
+          onKeyDown={activate(() => onOpen(pin.requestId))}
           className="cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
           opacity={pin.opacity}
           role="button"
@@ -643,12 +643,12 @@ function Pin({
         </g>
       </TooltipTrigger>
       <TooltipPortal>
-        {/* The tooltip opens the frame too, the same as a row in a bubble's
+        {/* The tooltip opens the request too, the same as a row in a bubble's
             list. aria-label keeps Radix's hidden copy from duplicating the button. */}
         <TooltipContent side="top" className="max-w-[260px] p-1" aria-label={pin.problem}>
           <button
             type="button"
-            onClick={() => onOpen(pin.frameId)}
+            onClick={() => onOpen(pin.requestId)}
             className="flex w-full flex-col rounded px-1.5 py-1 text-left hover:bg-muted"
           >
             <span className="flex items-start gap-1.5 text-xs font-medium leading-snug">
@@ -679,14 +679,14 @@ function Bubble({
   k,
   onOpen,
   pins,
-  onOpenFrame,
+  onOpenRequest,
 }: {
   node: Extract<CanvasNode, { kind: 'bubble' }>
   k: number
   onOpen: () => void
-  /** The frames under the bubble, freshest first. */
+  /** The requests under the bubble, freshest first. */
   pins: RenderedPin[]
-  onOpenFrame: (frameId: string) => void
+  onOpenRequest: (requestId: string) => void
 }) {
   const [x, y] = node.at
   const r = 19 * k
@@ -704,7 +704,7 @@ function Bubble({
           opacity={node.opacity}
           role="button"
           tabIndex={0}
-          aria-label={`${node.name}, ${node.count} frames. Zoom in.`}
+          aria-label={`${node.name}, ${node.count} requests. Zoom in.`}
         >
           <circle cx={x} cy={y} r={r * 1.45} fill={node.color} opacity={0.16} />
           <circle cx={x} cy={y} r={r} fill={node.color} />
@@ -747,14 +747,14 @@ function Bubble({
         <TooltipContent
           side="top"
           className="w-[300px] px-2.5 py-2"
-          aria-label={`${node.name}, ${node.count} frames`}
+          aria-label={`${node.name}, ${node.count} requests`}
         >
           <p className="text-xs font-medium leading-snug">{node.name}</p>
           <p className="text-[11px] leading-snug text-muted-foreground">
-            {node.count === 1 ? '1 frame' : `${node.count} frames`} · worst is{' '}
+            {node.count === 1 ? '1 request' : `${node.count} requests`} · worst is{' '}
             {WORST_WORDS[node.color] ?? 'a problem'} · click to zoom in
           </p>
-          <BubbleList pins={pins} onOpenFrame={onOpenFrame} />
+          <BubbleList pins={pins} onOpenRequest={onOpenRequest} />
         </TooltipContent>
       </TooltipPortal>
     </Tooltip>
@@ -764,15 +764,15 @@ function Bubble({
 const BUBBLE_PAGE = 5
 
 /**
- * The frames inside a bubble, five at a time. The tooltip stays open while the
+ * The requests inside a bubble, five at a time. The tooltip stays open while the
  * pointer is on it, so a person can page through and open one without zooming.
  */
 function BubbleList({
   pins,
-  onOpenFrame,
+  onOpenRequest,
 }: {
   pins: RenderedPin[]
-  onOpenFrame: (frameId: string) => void
+  onOpenRequest: (requestId: string) => void
 }) {
   const [page, setPage] = useState(0)
   if (pins.length === 0) return null
@@ -782,10 +782,10 @@ function BubbleList({
     <div className="mt-2 border-t pt-1.5">
       <ul className="flex flex-col">
         {shown.map((pin) => (
-          <li key={pin.frameId}>
+          <li key={pin.requestId}>
             <button
               type="button"
-              onClick={() => onOpenFrame(pin.frameId)}
+              onClick={() => onOpenRequest(pin.requestId)}
               className="flex w-full items-start gap-1.5 rounded px-1 py-1 text-left text-xs hover:bg-muted"
             >
               <TypeIcon
@@ -806,7 +806,7 @@ function BubbleList({
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            aria-label="Previous frames"
+            aria-label="Previous requests"
             className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -818,7 +818,7 @@ function BubbleList({
             type="button"
             onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
             disabled={page === pages - 1}
-            aria-label="Next frames"
+            aria-label="Next requests"
             className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
           >
             <ChevronRight className="h-3.5 w-3.5" />
@@ -829,10 +829,10 @@ function BubbleList({
   )
 }
 
-/** The awake frames under an area anywhere in the tree, freshest first. */
+/** The awake requests under an area anywhere in the tree, freshest first. */
 function pinsUnder(areas: RenderedArea[], areaId: string): RenderedPin[] {
   const area = flattenAreas(areas).find((a) => a.area.areaId === areaId)?.area
-  return area ? listFrames(descendantPins(area).filter((p) => p.passesLens), {}) : []
+  return area ? listRequests(descendantPins(area).filter((p) => p.passesLens), {}) : []
 }
 
 /** Where every area in the tree writes its name. */

@@ -1,17 +1,17 @@
-// Pure engine for the Product Map. It takes the frames and the team's "today"
+// Pure engine for the Product Map. It takes the requests and the team's "today"
 // (ISO date string, resolved in the team timezone — see team-time.ts) and
 // returns the rendered map model. No React, no Liveblocks, no clock of its own,
 // the same shape as the cycle list engine.
 
 import type {
   Area,
-  Frame,
-  FrameBrief,
-  FrameKind,
-  FrameOutcome,
-  FramePointer,
-  FrameReport,
-  FrameType,
+  ProductRequest,
+  RequestBrief,
+  RequestKind,
+  RequestOutcome,
+  RequestPointer,
+  RequestReport,
+  RequestType,
   PointerKind,
 } from '@/product-map-liveblocks.config'
 
@@ -28,33 +28,33 @@ import {
 } from './product-map-geometry'
 
 // Kind is how much a problem hurts. It is the only axis with a color on the Product Map.
-export const FRAME_KINDS = ['brand_burn', 'pain_point', 'unlock_win'] as const
+export const REQUEST_KINDS = ['brand_burn', 'pain_point', 'unlock_win'] as const
 
 // Type is where a problem came from and how it gets worked. Type selects the
 // playbook (ADR 0025), and it gets NO visual channel on the Product Map.
-export const FRAME_TYPES = ['bug', 'idea', 'request', 'security', 'irritant'] as const
+export const REQUEST_TYPES = ['bug', 'idea', 'ask', 'security', 'irritant'] as const
 
 // A pin's color is its Kind, and nothing else. Hues are taken from the scope
 // palette so the two surfaces stay in one visual family: red burns, amber
 // hurts, green is a win waiting to be unlocked.
-export const KIND_COLORS: Record<FrameKind, string> = {
+export const KIND_COLORS: Record<RequestKind, string> = {
   brand_burn: '#e5484d',
   pain_point: '#ffb224',
   unlock_win: '#30a46c',
 }
 
-export const DEFAULT_KIND: FrameKind = 'pain_point'
+export const DEFAULT_KIND: RequestKind = 'pain_point'
 
-export function isFrameKind(value: unknown): value is FrameKind {
-  return (FRAME_KINDS as readonly unknown[]).includes(value)
+export function isRequestKind(value: unknown): value is RequestKind {
+  return (REQUEST_KINDS as readonly unknown[]).includes(value)
 }
 
-export function isFrameType(value: unknown): value is FrameType {
-  return (FRAME_TYPES as readonly unknown[]).includes(value)
+export function isRequestType(value: unknown): value is RequestType {
+  return (REQUEST_TYPES as readonly unknown[]).includes(value)
 }
 
 /**
- * A frame's position in its life. Derived from what the frame points at and
+ * A request's position in its life. Derived from what the request points at and
  * never stored, so it can never drift from the truth (ADR 0025):
  *
  * `rough` (no appetite) → `candidate` (sharp, no Shape yet) → `in_flight` (a
@@ -62,7 +62,7 @@ export function isFrameType(value: unknown): value is FrameType {
  * `monitoring` (released, and nobody has resolved it) → `resolved` (a person
  * decided the problem is gone).
  */
-export type FrameState =
+export type RequestState =
   | 'rough'
   | 'candidate'
   | 'in_flight'
@@ -70,8 +70,8 @@ export type FrameState =
   | 'monitoring'
   | 'resolved'
 
-/** Every Frame state, in the order a frame lives through them. */
-export const FRAME_STATES: readonly FrameState[] = [
+/** Every Request state, in the order a request lives through them. */
+export const REQUEST_STATES: readonly RequestState[] = [
   'rough',
   'candidate',
   'in_flight',
@@ -84,12 +84,12 @@ export const FRAME_STATES: readonly FrameState[] = [
 export type ShapeStage = 'shaping' | 'building' | 'done'
 
 /**
- * A Shape that points home to a frame. Passed in, because a frame never stores
+ * A Shape that points home to a request. Passed in, because a request never stores
  * its shape list — the list is read from the cycle rooms (ADR 0022). The engine
  * takes summaries so it stays free of Liveblocks.
  */
 export type LinkedShape = {
-  frameId: string
+  requestId: string
   shapeId: string
   title: string
   stage: ShapeStage
@@ -103,71 +103,71 @@ export type LinkedShape = {
   notionUrl?: string
 }
 
-/** One link in a frame's origin chain: the frame whose monitoring surfaced it. */
-export type OriginLink = { frameId: string; problem: string }
+/** One link in a request's origin chain: the request whose monitoring surfaced it. */
+export type OriginLink = { requestId: string; problem: string }
 
 /**
- * The chain of origin frames behind this one, nearest first.
+ * The chain of origin requests behind this one, nearest first.
  *
  * A quality or adoption problem found while monitoring a release becomes a NEW
- * frame with a pointer back, never a reopening of the old one (ADR 0025). The
+ * request with a pointer back, never a reopening of the old one (ADR 0025). The
  * chain is what makes "which releases create follow-on pain" visible, and
  * nobody maintains it: the pointer is set once, at capture.
  */
-export function originChain(frame: Frame, frames: Frame[]): OriginLink[] {
-  const byId = new Map(frames.map((f) => [f.id, f]))
+export function originChain(request: ProductRequest, requests: ProductRequest[]): OriginLink[] {
+  const byId = new Map(requests.map((f) => [f.id, f]))
   const chain: OriginLink[] = []
   // A chain that loops back on itself would spin forever, and bad data is not a
   // reason to hang the Product Map.
-  const seen = new Set<string>([frame.id])
-  let current = frame.originFrameId
+  const seen = new Set<string>([request.id])
+  let current = request.originRequestId
   while (current && !seen.has(current)) {
     seen.add(current)
     const origin = byId.get(current)
     if (!origin) break
-    chain.push({ frameId: origin.id, problem: origin.problem })
-    current = origin.originFrameId
+    chain.push({ requestId: origin.id, problem: origin.problem })
+    current = origin.originRequestId
   }
   return chain
 }
 
-/** A frame related to this one, shown by its current problem line. */
-export type RelatedLink = { frameId: string; problem: string }
+/** A request related to this one, shown by its current problem line. */
+export type RelatedLink = { requestId: string; problem: string }
 
 /**
- * The frames related to this one. The relation goes both ways, so a frame
- * named on either side counts, and a frame that no longer exists drops out.
+ * The requests related to this one. The relation goes both ways, so a request
+ * named on either side counts, and a request that no longer exists drops out.
  */
-export function relatedFrames(frame: Frame, frames: Frame[]): RelatedLink[] {
-  const ids = new Set(frame.related_frame_ids ?? [])
-  for (const f of frames) if (f.related_frame_ids?.includes(frame.id)) ids.add(f.id)
-  ids.delete(frame.id)
-  return frames.filter((f) => ids.has(f.id)).map((f) => ({ frameId: f.id, problem: f.problem }))
+export function relatedRequests(request: ProductRequest, requests: ProductRequest[]): RelatedLink[] {
+  const ids = new Set(request.related_request_ids ?? [])
+  for (const f of requests) if (f.related_request_ids?.includes(request.id)) ids.add(f.id)
+  ids.delete(request.id)
+  return requests.filter((f) => ids.has(f.id)).map((f) => ({ requestId: f.id, problem: f.problem }))
 }
 
 /**
- * The related lists that make `frameId` related to exactly `ids`, on both
- * sides. Only the frames whose list changes come back, keyed by frame id; an
- * empty list means the field goes away. Refusing an unknown id or the frame's
+ * The related lists that make `requestId` related to exactly `ids`, on both
+ * sides. Only the requests whose list changes come back, keyed by request id; an
+ * empty list means the field goes away. Refusing an unknown id or the request's
  * own id is the caller's job.
  */
-export function relateFrames(
-  frames: Pick<Frame, 'id' | 'related_frame_ids'>[],
-  frameId: string,
+export function relateRequests(
+  requests: Pick<ProductRequest, 'id' | 'related_request_ids'>[],
+  requestId: string,
   ids: string[]
 ): Map<string, string[]> {
   const want = new Set(ids)
   const changes = new Map<string, string[]>()
-  for (const f of frames) {
-    const current = f.related_frame_ids ?? []
+  for (const f of requests) {
+    const current = f.related_request_ids ?? []
     const next =
-      f.id === frameId
+      f.id === requestId
         ? [...want]
         : want.has(f.id)
-          ? current.includes(frameId)
+          ? current.includes(requestId)
             ? current
-            : [...current, frameId]
-          : current.filter((id) => id !== frameId)
+            : [...current, requestId]
+          : current.filter((id) => id !== requestId)
     if (next.length !== current.length || next.some((id, i) => id !== current[i])) {
       changes.set(f.id, next)
     }
@@ -175,37 +175,37 @@ export function relateFrames(
   return changes
 }
 
-/** A stored frame the relation is written to: a LiveObject, in the app or on the server. */
-type RelatableFrame = {
-  get(key: 'id' | 'related_frame_ids'): unknown
-  set(key: 'related_frame_ids', value: string[]): void
-  delete(key: 'related_frame_ids'): void
+/** A stored request the relation is written to: a LiveObject, in the app or on the server. */
+type RelatableRequest = {
+  get(key: 'id' | 'related_request_ids'): unknown
+  set(key: 'related_request_ids', value: string[]): void
+  delete(key: 'related_request_ids'): void
 }
 
 /**
- * Write the relation of `frameId` to exactly `ids` onto the stored frames, on
+ * Write the relation of `requestId` to exactly `ids` onto the stored requests, on
  * both sides. An empty list removes the field. The app, the MCP writer and a
- * frame delete all write through here, so the two sides never drift apart.
+ * request delete all write through here, so the two sides never drift apart.
  */
 export function storeRelated(
-  frames: Iterable<RelatableFrame>,
-  frameId: string,
+  requests: Iterable<RelatableRequest>,
+  requestId: string,
   ids: string[]
 ): void {
-  const list = [...frames]
-  const changes = relateFrames(
+  const list = [...requests]
+  const changes = relateRequests(
     list.map((f) => ({
       id: f.get('id') as string,
-      related_frame_ids: f.get('related_frame_ids') as string[] | undefined,
+      related_request_ids: f.get('related_request_ids') as string[] | undefined,
     })),
-    frameId,
+    requestId,
     ids
   )
   for (const f of list) {
     const next = changes.get(f.get('id') as string)
     if (!next) continue
-    if (next.length) f.set('related_frame_ids', next)
-    else f.delete('related_frame_ids')
+    if (next.length) f.set('related_request_ids', next)
+    else f.delete('related_request_ids')
   }
 }
 
@@ -220,7 +220,7 @@ export type PinOutline = 'none' | 'dashed' | 'solid'
 
 export function pinOutline(shapes: LinkedShape[]): PinOutline {
   // A shape in the cycle happening now is the loudest signal, so it wins —
-  // including one that already shipped. The frame reads `released` at that
+  // including one that already shipped. The request reads `released` at that
   // point, and a release this cycle is current investment, not "no work".
   if (shapes.some((s) => s.currentCycle)) return 'solid'
   if (shapes.some((s) => s.stage === 'shaping')) return 'dashed'
@@ -228,9 +228,9 @@ export function pinOutline(shapes: LinkedShape[]): PinOutline {
 }
 
 /**
- * The shapes that attacked a frame, read from the cycle rooms. A frame never
- * stores its shape list: a shape points at its frame, not the reverse (ADR
- * 0022). Shapes with no frame are dropped — they attack nothing on the Product Map.
+ * The shapes that attacked a request, read from the cycle rooms. A request never
+ * stores its shape list: a shape points at its request, not the reverse (ADR
+ * 0022). Shapes with no request are dropped — they attack nothing on the Product Map.
  */
 export function linkedShapesFrom(
   rooms: {
@@ -239,7 +239,7 @@ export function linkedShapesFrom(
       id: string
       title: string
       stage: string
-      frame_id?: string
+      request_id?: string
       squadId?: string
       notion_url?: string
     }[]
@@ -254,9 +254,9 @@ export function linkedShapesFrom(
       today >= cycle.start_date &&
       today <= cycle.end_date
     return shapes
-      .filter((shape) => !!shape.frame_id)
+      .filter((shape) => !!shape.request_id)
       .map((shape) => ({
-        frameId: shape.frame_id as string,
+        requestId: shape.request_id as string,
         shapeId: shape.id,
         title: shape.title,
         // A room written before ADR 0023 can still hold a `framing` stage, and
@@ -284,58 +284,58 @@ function isShapeStage(value: unknown): value is ShapeStage {
 }
 
 /**
- * A frame is **sharp** when it has a problem, an appetite and at least one
+ * A request is **sharp** when it has a problem, an appetite and at least one
  * outcome. Derived, never a stored flag, the same way the cycle phase is
- * date-derived (ADR 0015). Only a sharp frame can be bet on, so nobody bets on
- * a frame that never says what would change.
+ * date-derived (ADR 0015). Only a sharp request can be bet on, so nobody bets on
+ * a request that never says what would change.
  */
-export function isSharp(frame: Pick<Frame, 'problem' | 'appetite' | 'outcomes'>): boolean {
+export function isSharp(request: Pick<ProductRequest, 'problem' | 'appetite' | 'outcomes'>): boolean {
   return (
-    text(frame.problem) !== '' && text(frame.appetite) !== '' && statedOutcomes(frame).length > 0
+    text(request.problem) !== '' && text(request.appetite) !== '' && statedOutcomes(request).length > 0
   )
 }
 
 /**
- * A frame's outcomes, ignoring the blank ones. Frames captured before outcomes
+ * A request's outcomes, ignoring the blank ones. Requests captured before outcomes
  * existed carry no such field at all, so the list is read defensively — the
  * same reason `text` exists.
  */
-export function statedOutcomes(frame: Pick<Frame, 'outcomes'>): FrameOutcome[] {
-  return (frame.outcomes ?? []).filter((outcome) => text(outcome?.text) !== '')
+export function statedOutcomes(request: Pick<ProductRequest, 'outcomes'>): RequestOutcome[] {
+  return (request.outcomes ?? []).filter((outcome) => text(outcome?.text) !== '')
 }
 
 /**
- * The sentence the Product Map shows under a sharp frame. The app builds it from the
- * problem and the appetite, so nobody types it. null for a rough frame: there
+ * The sentence the Product Map shows under a sharp request. The app builds it from the
+ * problem and the appetite, so nobody types it. null for a rough request: there
  * is no commitment to state until an appetite exists.
  */
 export function candidateStatement(
-  frame: Pick<Frame, 'problem' | 'appetite' | 'outcomes'>
+  request: Pick<ProductRequest, 'problem' | 'appetite' | 'outcomes'>
 ): string | null {
-  if (!isSharp(frame)) return null
-  return `If we can shape this into something doable in ${text(frame.appetite)}, that is meaningful to us.`
+  if (!isSharp(request)) return null
+  return `If we can shape this into something doable in ${text(request.appetite)}, that is meaningful to us.`
 }
 
 /**
- * A frame's state, from its appetite, its linked shapes and the resolved flag.
+ * A request's state, from its appetite, its linked shapes and the resolved flag.
  * Nothing here is stored.
  */
-export function frameState(
-  frame: Pick<Frame, 'problem' | 'appetite' | 'outcomes' | 'resolved'>,
+export function requestState(
+  request: Pick<ProductRequest, 'problem' | 'appetite' | 'outcomes' | 'resolved'>,
   shapes: LinkedShape[] = []
-): FrameState {
+): RequestState {
   // A person's decision outranks every derivation. Nothing resolves on a timer.
-  if (frame.resolved) return 'resolved'
+  if (request.resolved) return 'resolved'
   if (shapes.length > 0) {
     // One shape still moving means work is in flight, even beside an older
-    // release: a frame can be attacked again years later (ADR 0022).
+    // release: a request can be attacked again years later (ADR 0022).
     if (shapes.some((s) => s.stage !== 'done')) return 'in_flight'
     // Every shape is done. `released` while the release is this cycle's news;
     // `monitoring` once it is not. Monitoring has no end condition, so only a
-    // person moves a frame on from here (ADR 0025).
+    // person moves a request on from here (ADR 0025).
     return shapes.some((s) => s.currentCycle) ? 'released' : 'monitoring'
   }
-  return isSharp(frame) ? 'candidate' : 'rough'
+  return isSharp(request) ? 'candidate' : 'rough'
 }
 
 /** Stored strings outlive the code that wrote them, so read them defensively. */
@@ -350,7 +350,7 @@ function text(value: string | undefined): string {
  */
 export type CycleWindow = {
   slug: string
-  /** What the cycle is called, so the frame detail names it rather than its slug. */
+  /** What the cycle is called, so the request detail names it rather than its slug. */
   title: string
   type: 'build' | 'cooldown'
   /** ISO dates (YYYY-MM-DD), or '' when the cycle is undated. */
@@ -365,7 +365,7 @@ export type CycleWindow = {
 export type FreshnessConfig = {
   /** Cycles without a wake before a pin starts to fade. */
   dimAfterCycles: number
-  /** Cycles without a wake before the sweep puts the frame to sleep. */
+  /** Cycles without a wake before the sweep puts the request to sleep. */
   dormantAfterCycles: number
   /** Most dormant candidates the end-of-cycle review will show. */
   reviewQueueCap: number
@@ -383,8 +383,8 @@ export const FALLBACK_CYCLE_DAYS = 42
 export const MIN_OPACITY = 0.35
 
 /**
- * Completed cycles since the frame was last woken. A cycle counts once it has
- * ended, which is why a frame's dormancy can only change at a cycle boundary.
+ * Completed cycles since the request was last woken. A cycle counts once it has
+ * ended, which is why a request's dormancy can only change at a cycle boundary.
  */
 export function cyclesSinceWoken(
   lastWoken: string,
@@ -400,7 +400,7 @@ export function cyclesSinceWoken(
 }
 
 /**
- * Only build cycles age a frame. A cooldown is its own room in this app, so
+ * Only build cycles age a request. A cooldown is its own room in this app, so
  * counting both would make "no wake for two cycles" fire after one build cycle
  * and its cooldown — half the window ADR 0024 asks for. The same reason keeps
  * cooldowns out of the average cycle length that drives dimming.
@@ -410,9 +410,9 @@ function buildCycles(cycles: CycleWindow[]): CycleWindow[] {
 }
 
 /**
- * True when the sweep would put this frame to sleep. One rule, shared by the
- * rendered map and by `map_list_frames`, so the two can never disagree about
- * which frames are asleep.
+ * True when the sweep would put this request to sleep. One rule, shared by the
+ * rendered map and by `map_list_requests`, so the two can never disagree about
+ * which requests are asleep.
  */
 export function isDormant(
   lastWoken: string,
@@ -463,12 +463,12 @@ export function inCooldown(cycles: CycleWindow[], today: string): boolean {
 }
 
 /**
- * The kinds of artifact a frame can point at. A frame holds ONLY pointers — the
+ * The kinds of artifact a request can point at. A request holds ONLY pointers — the
  * artifacts live in GitHub, in Notion or in a wayfinder map and stay there, so
  * the Product Map never becomes a second copy that drifts.
  *
- * There is deliberately no kind for a Shape. A shape points at its frame, not
- * the reverse, so a frame's shape list is read from the cycle rooms (ADR 0022).
+ * There is deliberately no kind for a Shape. A shape points at its request, not
+ * the reverse, so a request's shape list is read from the cycle rooms (ADR 0022).
  */
 export const POINTER_KINDS = [
   'issue',
@@ -500,20 +500,20 @@ export const POINTER_KIND_LABELS: Record<PointerKind, string> = {
 }
 
 /**
- * Type selects the playbook, and a playbook names the pointer kinds its frames
+ * Type selects the playbook, and a playbook names the pointer kinds its requests
  * expect (ADR 0025). This is routing, not decoration: a bug expects less than
  * an idea, because a small fix should not carry Shape Up ceremony.
  *
- * The expected set minus the frame's own pointers is its **Gap list**. A gap
+ * The expected set minus the request's own pointers is its **Gap list**. A gap
  * blocks NOTHING. It is a prompt, never a gate.
  */
-export const PLAYBOOKS: Record<FrameType, { expects: readonly PointerKind[] }> = {
+export const PLAYBOOKS: Record<RequestType, { expects: readonly PointerKind[] }> = {
   // Reproduce it, fix it, point at the fix. No shaping ceremony.
   bug: { expects: ['issue', 'pull_request'] },
   // A feature runs Shape Up: read first, shape it, then build it.
   idea: { expects: ['research', 'shaped_doc', 'pull_request'] },
-  // A request starts in a conversation, and it still has to be shaped.
-  request: { expects: ['conversation', 'shaped_doc'] },
+  // An ask starts in a conversation, and it still has to be shaped.
+  ask: { expects: ['conversation', 'shaped_doc'] },
   // One pull request per service is how these actually get fixed. The gap list
   // cannot count services — there is no service model — so it asks for the
   // first pull request and the playbook prose carries the rest.
@@ -522,18 +522,18 @@ export const PLAYBOOKS: Record<FrameType, { expects: readonly PointerKind[] }> =
   irritant: { expects: [] },
 }
 
-/** The pointer kinds a frame's playbook expects and the frame does not have. */
-export function gapList(frame: Pick<Frame, 'type' | 'pointers'>): PointerKind[] {
-  const playbook = PLAYBOOKS[frame.type]
+/** The pointer kinds a request's playbook expects and the request does not have. */
+export function gapList(request: Pick<ProductRequest, 'type' | 'pointers'>): PointerKind[] {
+  const playbook = PLAYBOOKS[request.type]
   // A Type with no playbook would be a bug, not a reason to throw at read time.
   if (!playbook) return []
-  const have = new Set((frame.pointers ?? []).map((p) => p.kind))
+  const have = new Set((request.pointers ?? []).map((p) => p.kind))
   return playbook.expects.filter((kind) => !have.has(kind))
 }
 
 /**
- * Which reports count towards a pin's size. A frame has ONE freshness clock;
- * the lens only filters what feeds the size. A frame hot with customers and
+ * Which reports count towards a pin's size. A request has ONE freshness clock;
+ * the lens only filters what feeds the size. A request hot with customers and
  * cold internally is the most useful thing the Product Map can show.
  */
 export const HEAT_LENSES = ['all', 'internal', 'customer'] as const
@@ -556,14 +556,14 @@ export function isMemberId(raisedBy: string): boolean {
 /**
  * Every report with an id. A report written before ids existed has none stored,
  * so it gets one derived from its capturer, date and text, and nothing needs
- * migrating. The first correction on a frame stores the ids, so they never move
+ * migrating. The first correction on a request stores the ids, so they never move
  * after that. Identical old reports take a numbered suffix, so each one can be
  * addressed on its own.
  */
 /** A report whose id is known, stored or derived. */
-export type IdentifiedReport = FrameReport & { id: string }
+export type IdentifiedReport = RequestReport & { id: string }
 
-export function withReportIds(reports: FrameReport[]): IdentifiedReport[] {
+export function withReportIds(reports: RequestReport[]): IdentifiedReport[] {
   const used = new Set(reports.flatMap((r) => (r.id ? [r.id] : [])))
   return reports.map((r) => {
     if (r.id) return { ...r, id: r.id }
@@ -580,7 +580,7 @@ export type ReportPatch = {
   text?: string
   link?: string
   customer?: string
-  source?: FrameReport['source']
+  source?: RequestReport['source']
 }
 
 /**
@@ -590,13 +590,13 @@ export type ReportPatch = {
  * moves after the first correction.
  */
 export function correctReport(
-  reports: FrameReport[],
+  reports: RequestReport[],
   reportId: string,
   patch: ReportPatch,
   editor: string,
   today: string
-): FrameReport[] | null {
-  const all: FrameReport[] = withReportIds(reports)
+): RequestReport[] | null {
+  const all: RequestReport[] = withReportIds(reports)
   const idx = all.findIndex((r) => r.id === reportId)
   if (idx === -1) return null
   const before = all[idx]
@@ -619,13 +619,13 @@ export function correctReport(
 }
 
 /** The reports without the one recorded in error, or null when no report has that id. */
-export function removeReport(reports: FrameReport[], reportId: string): FrameReport[] | null {
+export function removeReport(reports: RequestReport[], reportId: string): RequestReport[] | null {
   const all = withReportIds(reports)
   const kept = all.filter((r) => r.id !== reportId)
   return kept.length === all.length ? null : kept
 }
 
-// ponytail: 32-bit FNV-1a. Ids only need to differ within one frame's reports.
+// ponytail: 32-bit FNV-1a. Ids only need to differ within one request's reports.
 function fnv1a(text: string): string {
   let hash = 0x811c9dc5
   for (let i = 0; i < text.length; i++) {
@@ -635,16 +635,16 @@ function fnv1a(text: string): string {
   return (hash >>> 0).toString(36)
 }
 
-/** How many of a frame's reports the lens lets through. */
-export function reportCount(frame: Pick<Frame, 'reports'>, lens: HeatLens): number {
-  const reports = frame.reports ?? []
+/** How many of a request's reports the lens lets through. */
+export function reportCount(request: Pick<ProductRequest, 'reports'>, lens: HeatLens): number {
+  const reports = request.reports ?? []
   if (lens === 'all') return reports.length
   return reports.filter((r) => r.source === lens).length
 }
 
 // Size is the report count, so widespread pain looks bigger. Growth is by
 // square root: ten reports must read as louder than one, not as ten dots wide,
-// and the cap stops one shouty frame swallowing its area.
+// and the cap stops one shouty request swallowing its area.
 export const PIN_MIN_SIZE = 10
 export const PIN_MAX_SIZE = 28
 const PIN_SIZE_PER_ROOT = 6
@@ -656,41 +656,41 @@ export function pinSize(count: number): number {
 }
 
 /**
- * Everything the Product Map and the frame detail draw for one frame. The **Pin** proper
- * is only the marker; the rest of these fields are the frame's own text, carried
+ * Everything the Product Map and the request detail draw for one request. The **Pin** proper
+ * is only the marker; the rest of these fields are the request's own text, carried
  * here so the view derives nothing for itself.
  */
 export type RenderedPin = {
-  frameId: string
+  requestId: string
   areaId: string
-  kind: FrameKind
-  type: FrameType
+  kind: RequestKind
+  type: RequestType
   problem: string
   appetite: string
   businessCase: string
   /** The draft release announcement, or '' when nobody wrote one. */
   announcement: string
-  /** The last brief somebody left on the frame, or null before the first. */
-  brief: FrameBrief | null
+  /** The last brief somebody left on the request, or null before the first. */
+  brief: RequestBrief | null
   /** What must be true afterwards. Blank lines never reach here. */
-  outcomes: FrameOutcome[]
-  /** Clerk user id of the frame owner, or null when nobody holds it. */
+  outcomes: RequestOutcome[]
+  /** Clerk user id of the request owner, or null when nobody holds it. */
   owner: string | null
   /** Who raised the problem: a Clerk user id or a free-text name. Null when unknown. */
   raisedBy: string | null
   /** Color is the Kind. The other three pin channels arrive with their tickets. */
   color: string
-  /** Every report on the frame, unfiltered — the detail shows the evidence. */
+  /** Every report on the request, unfiltered — the detail shows the evidence. */
   reports: IdentifiedReport[]
-  /** The outbound links this frame packages. No artifact is ever stored. */
-  pointers: FramePointer[]
-  /** What the playbook expects and the frame lacks. A prompt, never a gate. */
+  /** The outbound links this request packages. No artifact is ever stored. */
+  pointers: RequestPointer[]
+  /** What the playbook expects and the request lacks. A prompt, never a gate. */
   gaps: PointerKind[]
   /** Reports that pass the active heat lens. Size reads this, nothing else. */
   reportCount: number
   /**
-   * Whether this frame survives the active heat lens. Always true under `all`,
-   * INCLUDING a frame nobody has reported yet — a fresh capture must not vanish.
+   * Whether this request survives the active heat lens. Always true under `all`,
+   * INCLUDING a request nobody has reported yet — a fresh capture must not vanish.
    * Under `internal` or `customer` it takes at least one report from that side,
    * so switching the lens visibly shrinks the areas only the other side is
    * complaining about. That contrast is the point of the lens.
@@ -700,24 +700,24 @@ export type RenderedPin = {
   size: number
   /** A problem, an appetite AND an outcome. A rough pin must never look like agreed work. */
   sharp: boolean
-  state: FrameState
+  state: RequestState
   /** Engagement, the fourth pin channel: read from the linked shapes' stages. */
   outline: PinOutline
-  /** Every shape that attacked this frame, with its cycle. Never stored. */
+  /** Every shape that attacked this request, with its cycle. Never stored. */
   shapes: LinkedShape[]
   /**
    * Somebody has bet on this before. The Product Map shows a MARK and no number: past
    * investment must never read as priority (ADR 0024).
    */
   worked: boolean
-  /** The frames whose monitoring surfaced this one, nearest first. */
+  /** The requests whose monitoring surfaced this one, nearest first. */
   originChain: OriginLink[]
-  /** The frames related to this one, read from both sides. */
+  /** The requests related to this one, read from both sides. */
   related: RelatedLink[]
-  /** Built from the problem and the appetite. null for a rough frame. */
+  /** Built from the problem and the appetite. null for a rough request. */
   candidateStatement: string | null
   /**
-   * Whole days between the frame's last wake and today. null when the frame has
+   * Whole days between the request's last wake and today. null when the request has
    * never been woken or carries an unreadable date.
    */
   daysSinceWoken: number | null
@@ -728,14 +728,14 @@ export type RenderedPin = {
   /** Fading, but still on the Product Map. */
   dim: boolean
   /**
-   * Nobody has woken it for the sleep threshold. A dormant frame leaves the Product Map
+   * Nobody has woken it for the sleep threshold. A dormant request leaves the Product Map
    * view and keeps every field and every report (ADR 0024).
    */
   dormant: boolean
   /**
-   * Where the pin sits, in world space. Derived from the frame id alone, so a pin
-   * lands on the same spot forever and capturing a frame never moves the others.
-   * null for an Unmapped frame, which has no land to sit on and lives in the tray.
+   * Where the pin sits, in world space. Derived from the request id alone, so a pin
+   * lands on the same spot forever and capturing a request never moves the others.
+   * null for an Unmapped request, which has no land to sit on and lives in the tray.
    */
   at: Point | null
 }
@@ -757,7 +757,7 @@ const SUB_AREA_SCALE = 0.7
  */
 export type AreaLevel = 'area' | 'island' | 'archipelago'
 
-/** A region of the product, drawn from its coastline. Never colored by its frames. */
+/** A region of the product, drawn from its coastline. Never colored by its requests. */
 export type RenderedArea = {
   areaId: string
   name: string
@@ -773,11 +773,11 @@ export type RenderedArea = {
   /** The box round this area AND its children, which is what the zoom ladder measures. */
   bounds: Bounds
   level: AreaLevel
-  /** The suggested Frame owner for this area, and nothing more. */
+  /** The suggested Request owner for this area, and nothing more. */
   owner: string | null
   pins: RenderedPin[]
   /**
-   * The frames this area's team resolved. They are off the Product Map and still on
+   * The requests this area's team resolved. They are off the Product Map and still on
    * record here, with the shapes that resolved them (ADR 0025).
    */
   resolved: RenderedPin[]
@@ -785,22 +785,22 @@ export type RenderedArea = {
 }
 
 export type ProductMapModel = {
-  /** Awake pins only. A dormant frame is not on the Product Map (ADR 0024). */
+  /** Awake pins only. A dormant request is not on the Product Map (ADR 0024). */
   pins: RenderedPin[]
   areas: RenderedArea[]
-  /** Frames that belong to no area. Unmapped is always a valid result. */
+  /** Requests that belong to no area. Unmapped is always a valid result. */
   unmapped: RenderedPin[]
-  /** Resolved frames that belonged to no area, kept on record under Unmapped. */
+  /** Resolved requests that belonged to no area, kept on record under Unmapped. */
   unmappedResolved: RenderedPin[]
   /**
-   * Frames a person resolved. Off the Product Map, never deleted, and still readable so
+   * Requests a person resolved. Off the Product Map, never deleted, and still readable so
    * the Product Map does not lie about what the team knows.
    */
   resolved: RenderedPin[]
   /**
-   * The sweep's review queue: frames that just went to sleep, capped, and shown
+   * The sweep's review queue: requests that just went to sleep, capped, and shown
    * only during cooldown. It exists so a wake the transcript missed is
-   * recoverable. There is deliberately NO browsable list of dormant frames —
+   * recoverable. There is deliberately NO browsable list of dormant requests —
    * reaching one takes a filtered query, and that friction is the feature.
    */
   dormantReview: RenderedPin[]
@@ -809,9 +809,9 @@ export type ProductMapModel = {
 export function renderProductMap(input: {
   /** Optional: a room root that predates the areas list still renders. */
   areas?: Area[]
-  frames: Frame[]
+  requests: ProductRequest[]
   today: string
-  /** Shapes that point home to a frame, read from the cycle rooms (ADR 0022). */
+  /** Shapes that point home to a request, read from the cycle rooms (ADR 0022). */
   shapes?: LinkedShape[]
   /** Which reports count towards pin size. Defaults to all of them. */
   lens?: HeatLens
@@ -824,26 +824,26 @@ export function renderProductMap(input: {
   const lens = input.lens ?? DEFAULT_LENS
   const cycles = input.cycles ?? []
   const config = { ...DEFAULT_FRESHNESS, ...input.freshness }
-  const shapesByFrame = groupShapesByFrame(input.shapes ?? [])
-  const rendered = input.frames.map((f) =>
+  const shapesByRequest = groupShapesByRequest(input.shapes ?? [])
+  const rendered = input.requests.map((f) =>
     renderPin(
       f,
       input.today,
-      shapesByFrame.get(f.id) ?? [],
+      shapesByRequest.get(f.id) ?? [],
       lens,
       cycles,
       config,
-      input.frames
+      input.requests
     )
   )
 
-  // A resolved frame leaves the Product Map, because a person decided the problem is
+  // A resolved request leaves the Product Map, because a person decided the problem is
   // gone. It is never deleted: it stays on its area, with the shapes that
   // resolved it.
   const resolved = rendered.filter((p) => p.state === 'resolved')
   const live = rendered.filter((p) => p.state !== 'resolved')
 
-  // A dormant frame leaves the view too. Past investment gets no say in this:
+  // A dormant request leaves the view too. Past investment gets no say in this:
   // sunk cost must never set priority (ADR 0024).
   const pins = live.filter((p) => !p.dormant)
   const asleep = live.filter((p) => p.dormant)
@@ -854,7 +854,7 @@ export function renderProductMap(input: {
     : []
 
   const known = new Set(areas.map((a) => a.id))
-  // A dangling area id is not a home, so the frame falls to Unmapped rather
+  // A dangling area id is not a home, so the request falls to Unmapped rather
   // than vanishing with the area that used to hold it.
   const home = (pin: RenderedPin) => (known.has(pin.areaId) ? pin.areaId : '')
   const pinsByArea = groupBy(pins, home)
@@ -864,8 +864,8 @@ export function renderProductMap(input: {
     pins,
     areas: buildAreaTree(areas, pinsByArea, resolvedByArea),
     unmapped: pinsByArea.get('') ?? [],
-    // Unmapped is a home like any other, so a frame resolved there stays on
-    // record there. Otherwise resolving an Unmapped frame would erase it from
+    // Unmapped is a home like any other, so a request resolved there stays on
+    // record there. Otherwise resolving an Unmapped request would erase it from
     // the view, which is the one thing Resolve must never do.
     unmappedResolved: resolvedByArea.get('') ?? [],
     resolved,
@@ -874,24 +874,24 @@ export function renderProductMap(input: {
 }
 
 /**
- * One frame, whatever its state. The frame page has a URL, so it must open a
- * frame the map no longer shows — dormant or resolved — and opening it never
- * wakes it (ADR 0024). null when no frame has that id.
+ * One request, whatever its state. The request page has a URL, so it must open a
+ * request the map no longer shows — dormant or resolved — and opening it never
+ * wakes it (ADR 0024). null when no request has that id.
  */
-export function renderFrame(
+export function renderRequest(
   input: Parameters<typeof renderProductMap>[0],
-  frameId: string
+  requestId: string
 ): RenderedPin | null {
-  const frame = input.frames.find((f) => f.id === frameId)
-  if (!frame) return null
+  const request = input.requests.find((f) => f.id === requestId)
+  if (!request) return null
   return renderPin(
-    frame,
+    request,
     input.today,
-    (input.shapes ?? []).filter((s) => s.frameId === frameId),
+    (input.shapes ?? []).filter((s) => s.requestId === requestId),
     input.lens ?? DEFAULT_LENS,
     input.cycles ?? [],
     { ...DEFAULT_FRESHNESS, ...input.freshness },
-    input.frames
+    input.requests
   )
 }
 
@@ -940,7 +940,7 @@ function buildAreaTree(
     // Assigned here rather than in renderPin, because a pin's spot depends on the
     // coastline it sits inside. These are the same objects the flat `pins` list
     // holds, so both surfaces agree on where a pin is.
-    for (const pin of pins) pin.at = pinPosition(pin.frameId, ring)
+    for (const pin of pins) pin.at = pinPosition(pin.requestId, ring)
 
     return {
       areaId: area.id,
@@ -1020,7 +1020,7 @@ function areaLevel(children: RenderedArea[]): AreaLevel {
 }
 
 /** Kind, worst first. A bubble takes the worst Kind it holds, never an average. */
-const KIND_SEVERITY: Record<FrameKind, number> = {
+const KIND_SEVERITY: Record<RequestKind, number> = {
   brand_burn: 3,
   pain_point: 2,
   unlock_win: 1,
@@ -1034,13 +1034,13 @@ export type CanvasNode =
       areaId: string
       name: string
       at: Point
-      /** How many frames are asleep under this bubble. Never a report count. */
+      /** How many requests are asleep under this bubble. Never a report count. */
       count: number
       /** The worst Kind inside. */
       color: string
-      /** From the FRESHEST frame inside: a bubble never looks deader than its liveliest problem. */
+      /** From the FRESHEST request inside: a bubble never looks deader than its liveliest problem. */
       opacity: number
-      /** Set if ANY frame inside has work on it, because that is what a zoomed-out reader wants. */
+      /** Set if ANY request inside has work on it, because that is what a zoomed-out reader wants. */
       outline: PinOutline
     }
 
@@ -1055,7 +1055,7 @@ export const SPLIT_AT_PX = 200
  * retune as the map grows.
  *
  * Kept out of `renderProductMap` on purpose: this is the only thing that depends
- * on the viewport, which changes on every frame of a pinch, and the rest of the
+ * on the viewport, which changes on every request of a pinch, and the rest of the
  * model does not need recomputing that often.
  */
 export function clusterForViewport(
@@ -1066,7 +1066,7 @@ export function clusterForViewport(
   const nodes: CanvasNode[] = []
   const walk = (area: RenderedArea) => {
     const onScreen = Math.hypot(area.bounds.width, area.bounds.height) * scale
-    // A bubble has to stand for MORE THAN ONE frame. A bubble reading "1" hides a
+    // A bubble has to stand for MORE THAN ONE request. A bubble reading "1" hides a
     // pin behind a number and tells the reader nothing they could not already
     // see — and a pin holds its size on screen, so it stays legible however far
     // out the map is zoomed.
@@ -1085,7 +1085,7 @@ export function clusterForViewport(
 
 function bubbleFor(area: RenderedArea): CanvasNode {
   const pins = descendantPins(area).filter((p) => p.passesLens)
-  const worst = pins.reduce<FrameKind>(
+  const worst = pins.reduce<RequestKind>(
     (acc, pin) => (KIND_SEVERITY[pin.kind] > KIND_SEVERITY[acc] ? pin.kind : acc),
     'unlock_win'
   )
@@ -1119,7 +1119,7 @@ export function descendantPins(area: RenderedArea): RenderedPin[] {
 }
 
 /**
- * How many awake frames under an area survive the lens. Cheaper than building
+ * How many awake requests under an area survive the lens. Cheaper than building
  * the list to measure it.
  */
 function countPins(area: RenderedArea): number {
@@ -1130,65 +1130,65 @@ function countPins(area: RenderedArea): number {
 }
 
 function renderPin(
-  frame: Frame,
+  request: ProductRequest,
   today: string,
   shapes: LinkedShape[],
   lens: HeatLens,
   cycles: CycleWindow[],
   config: FreshnessConfig,
-  allFrames: Frame[]
+  allRequests: ProductRequest[]
 ): RenderedPin {
-  const kind = isFrameKind(frame.kind) ? frame.kind : DEFAULT_KIND
-  const count = reportCount(frame, lens)
-  const days = daysBetween(frame.last_woken, today)
-  const elapsed = cyclesSinceWoken(frame.last_woken, cycles, today)
+  const kind = isRequestKind(request.kind) ? request.kind : DEFAULT_KIND
+  const count = reportCount(request, lens)
+  const days = daysBetween(request.last_woken, today)
+  const elapsed = cyclesSinceWoken(request.last_woken, cycles, today)
   return {
-    frameId: frame.id,
-    areaId: frame.areaId ?? '',
+    requestId: request.id,
+    areaId: request.areaId ?? '',
     kind,
-    type: frame.type,
-    problem: frame.problem,
-    appetite: frame.appetite ?? '',
-    businessCase: frame.business_case ?? '',
-    announcement: frame.announcement ?? '',
-    brief: frame.brief ?? null,
-    outcomes: statedOutcomes(frame),
-    owner: frame.owner ?? null,
-    raisedBy: frame.raised_by ?? null,
+    type: request.type,
+    problem: request.problem,
+    appetite: request.appetite ?? '',
+    businessCase: request.business_case ?? '',
+    announcement: request.announcement ?? '',
+    brief: request.brief ?? null,
+    outcomes: statedOutcomes(request),
+    owner: request.owner ?? null,
+    raisedBy: request.raised_by ?? null,
     color: KIND_COLORS[kind],
-    reports: withReportIds(frame.reports ?? []),
-    pointers: frame.pointers ?? [],
-    gaps: gapList(frame),
+    reports: withReportIds(request.reports ?? []),
+    pointers: request.pointers ?? [],
+    gaps: gapList(request),
     reportCount: count,
     passesLens: lens === 'all' || count > 0,
     size: pinSize(count),
-    sharp: isSharp(frame),
-    state: frameState(frame, shapes),
+    sharp: isSharp(request),
+    state: requestState(request, shapes),
     outline: pinOutline(shapes),
     shapes,
     worked: shapes.length > 0,
-    originChain: originChain(frame, allFrames),
-    related: relatedFrames(frame, allFrames),
-    candidateStatement: candidateStatement(frame),
+    originChain: originChain(request, allRequests),
+    related: relatedRequests(request, allRequests),
+    candidateStatement: candidateStatement(request),
     daysSinceWoken: days,
     cyclesSinceWoken: elapsed,
     opacity: pinOpacity(days, cycles, config),
     dim: elapsed >= config.dimAfterCycles && elapsed < config.dormantAfterCycles,
     dormant: elapsed >= config.dormantAfterCycles,
     // Filled in when the area tree is built, because a pin's spot depends on the
-    // coastline it sits inside. An Unmapped frame keeps null and lives in the tray.
+    // coastline it sits inside. An Unmapped request keeps null and lives in the tray.
     at: null,
   }
 }
 
-function groupShapesByFrame(shapes: LinkedShape[]): Map<string, LinkedShape[]> {
-  const byFrame = new Map<string, LinkedShape[]>()
+function groupShapesByRequest(shapes: LinkedShape[]): Map<string, LinkedShape[]> {
+  const byRequest = new Map<string, LinkedShape[]>()
   for (const shape of shapes) {
-    const bucket = byFrame.get(shape.frameId)
+    const bucket = byRequest.get(shape.requestId)
     if (bucket) bucket.push(shape)
-    else byFrame.set(shape.frameId, [shape])
+    else byRequest.set(shape.requestId, [shape])
   }
-  return byFrame
+  return byRequest
 }
 
 /** Whole days from `from` to `to`, both ISO calendar dates. null if either is unreadable. */

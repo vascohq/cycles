@@ -12,15 +12,15 @@ vi.mock('./product-map', () => ({
   ProductMap: () => null,
 }))
 
-// The page reads the org's members so the frame detail can name a Frame owner.
+// The page reads the org's members so the request detail can name a Request owner.
 // Clerk is stubbed here: this file is about routing, not about membership.
 vi.mock('@/lib/users', () => ({
   getOrganizationUsers: vi.fn(async () => []),
 }))
 
 // The page reads the cycle BOUNDARIES, because freshness is counted in cycles,
-// and each cycle room, because a frame's shape list is never stored on the
-// frame. Stubbed so this file needs no Liveblocks credentials.
+// and each cycle room, because a request's shape list is never stored on the
+// request. Stubbed so this file needs no Liveblocks credentials.
 vi.mock('@/lib/mcp/liveblocks-reader', () => ({
   readCycleWindows: vi.fn(async () => []),
   getCycleStorage: vi.fn(async () => ({ pitches: [] })),
@@ -61,7 +61,7 @@ describe('ProductMapPage', () => {
     expect(mockRedirect).not.toHaveBeenCalled()
   })
 
-  it('hands the frame detail the org members, so an owner reads as a name', async () => {
+  it('hands the request detail the org members, so an owner reads as a name', async () => {
     const element: any = await ProductMapPage(params('my-org'))
     expect(element.props.organizationUsers).toEqual([])
   })
@@ -73,9 +73,9 @@ describe('ProductMapPage', () => {
     expect(element.props.cycles).toEqual([])
   })
 
-  // A frame never stores its shape list, so the page reads the cycle rooms
+  // A request never stores its shape list, so the page reads the cycle rooms
   // (ADR 0022).
-  it('hands over the shapes that point at a frame', async () => {
+  it('hands over the shapes that point at a request', async () => {
     vi.mocked(readCycleWindows).mockResolvedValueOnce([
       {
         slug: '2026-q3',
@@ -87,15 +87,15 @@ describe('ProductMapPage', () => {
     ])
     vi.mocked(getCycleStorage).mockResolvedValueOnce({
       pitches: [
-        { id: 'p1', title: 'Fix imports', stage: 'building', frame_id: 'f1' },
-        { id: 'p2', title: 'No frame here', stage: 'building' },
+        { id: 'p1', title: 'Fix imports', stage: 'building', request_id: 'f1' },
+        { id: 'p2', title: 'No request here', stage: 'building' },
       ],
     } as never)
 
     const element: any = await ProductMapPage(params('my-org'))
 
     expect(element.props.shapes).toHaveLength(1)
-    expect(element.props.shapes[0].frameId).toBe('f1')
+    expect(element.props.shapes[0].requestId).toBe('f1')
   })
 
   // The reader is what fails soft (see liveblocks-reader.test.ts); the page's

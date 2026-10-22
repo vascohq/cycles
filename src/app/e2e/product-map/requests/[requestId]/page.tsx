@@ -3,31 +3,31 @@
 import { useParams } from 'next/navigation'
 
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
-import { FrameLayout } from '@/app/[slug]/product/frames/[frameId]/frame-page'
-import type { Frame } from '@/product-map-liveblocks.config'
+import { RequestLayout } from '@/app/[slug]/product/requests/[requestId]/request-page'
+import type { ProductRequest } from '@/product-map-liveblocks.config'
 
-import { AREAS, CYCLES, FRAMES, SHAPES, USERS } from '../../fixture'
+import { AREAS, CYCLES, REQUESTS, SHAPES, USERS } from '../../fixture'
 
 
-// One frame with a full record, so the page has every section to draw. Kept
+// One request with a full record, so the page has every section to draw. Kept
 // here, not in the shared fixture, because the map spec reads that one.
-const F1: Partial<Frame> = {
+const F1: Partial<ProductRequest> = {
   owner: 'user_1',
   raised_by: 'Jane at Northwind',
-  related_frame_ids: ['f2'],
+  related_request_ids: ['f2'],
   business_case: [
     '**Context:** most reports reach the map from Slack.',
     '**Problem:** without the thread, nobody can read the conversation.',
     '',
     '**How to reproduce**',
     '1. Capture a report from a Slack message.',
-    '2. Open the frame. The report has no `permalink`.',
+    '2. Open the request. The report has no `permalink`.',
     '',
     'See [the capture guide](https://example.test/capture).',
   ].join('\n'),
   outcomes: [{ id: 'o1', text: 'A report captured from Slack always opens the thread it came from.' }],
   announcement:
-    'Every report you capture from Slack now links back to its thread. Open a frame and you are one click from the conversation.',
+    'Every report you capture from Slack now links back to its thread. Open a request and you are one click from the conversation.',
   pointers: [{ kind: 'issue', label: 'Slack capture drops the permalink', url: 'https://example.test/issue/1' }],
   brief: {
     headline: 'The fix is being built this cycle.',
@@ -39,21 +39,21 @@ const F1: Partial<Frame> = {
     written_on: '2026-09-02',
   },
 }
-const FRAMES_WITH_RECORD = FRAMES.map((f) => (f.id === 'f1' ? { ...f, ...F1 } : f))
+const REQUESTS_WITH_RECORD = REQUESTS.map((f) => (f.id === 'f1' ? { ...f, ...F1 } : f))
 const SHAPES_WITH_SQUAD = SHAPES.map((s) =>
   s.shapeId === 's1'
     ? { ...s, squad: { name: 'Capture squad', color: '#8e4ec6' }, notionUrl: 'https://notion.test/pitch' }
     : s
 )
 
-/** The frame page against fixture data. No Liveblocks, no Clerk, no editing. */
-export default function FramePageE2E() {
-  const { frameId } = useParams<{ frameId: string }>()
+/** The request page against fixture data. No Liveblocks, no Clerk, no editing. */
+export default function RequestPageE2E() {
+  const { requestId } = useParams<{ requestId: string }>()
   return (
     <OrganizationUsersProvider organizationUsers={USERS}>
-      <FrameLayout
-        frameId={frameId}
-        frames={FRAMES_WITH_RECORD}
+      <RequestLayout
+        requestId={requestId}
+        requests={REQUESTS_WITH_RECORD}
         areas={AREAS}
         cycles={CYCLES}
         shapes={SHAPES_WITH_SQUAD}

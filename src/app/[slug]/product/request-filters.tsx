@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { useOrganizationUsers } from '@/components/organization-users-context'
-import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
+import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/request-icons'
 import { FilterDropdown } from '@/components/filter-dropdown'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
@@ -26,21 +26,21 @@ import {
   FRESHNESS_LEVELS,
   NO_OWNER,
   UNMAPPED_AREA,
-  listFrames,
-  type FrameFilters,
-} from '@/lib/frame-list'
+  listRequests,
+  type RequestFilters,
+} from '@/lib/request-list'
 import {
-  FRAME_KINDS,
-  FRAME_TYPES,
+  REQUEST_KINDS,
+  REQUEST_TYPES,
   KIND_COLORS,
-  FRAME_STATES,
+  REQUEST_STATES,
   flattenAreas,
   isMemberId,
   type RenderedArea,
   type RenderedPin,
 } from '@/lib/product-map-engine'
 
-import { FrameList } from './frame-list'
+import { RequestList } from './request-list'
 import {
   FRESHNESS_LABELS,
   KIND_LABELS,
@@ -50,17 +50,17 @@ import {
 import { areaHref } from './links'
 
 /**
- * The frame filters, read from and written to the URL, so a filtered view is a
+ * The request filters, read from and written to the URL, so a filtered view is a
  * link somebody can share. One set of filters shapes both the list and the map.
  * A caller needs a Suspense boundary above it, because it reads the URL.
  */
-export function useFrameFilters() {
+export function useRequestFilters() {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
   const filters = Object.fromEntries(
     FILTER_KEYS.flatMap((key) => (params.get(key) ? [[key, params.get(key)]] : []))
-  ) as FrameFilters
+  ) as RequestFilters
 
   function set(key: (typeof FILTER_KEYS)[number], value: string | null) {
     const next = new URLSearchParams(params.toString())
@@ -78,15 +78,15 @@ export function useFrameFilters() {
   }
 }
 
-/** The frames that pass the filters, in order, and their ids for the map. */
-export function useFilteredFrames(pins: RenderedPin[], areas: RenderedArea[]) {
-  const { filters } = useFrameFilters()
-  const shown = listFrames(
+/** The requests that pass the filters, in order, and their ids for the map. */
+export function useFilteredRequests(pins: RenderedPin[], areas: RenderedArea[]) {
+  const { filters } = useRequestFilters()
+  const shown = listRequests(
     pins,
     filters,
     filters.area ? areaIdsUnder(areas, filters.area) : undefined
   )
-  return { shown, keep: new Set(shown.map((p) => p.frameId)) }
+  return { shown, keep: new Set(shown.map((p) => p.requestId)) }
 }
 
 /**
@@ -101,14 +101,14 @@ export function FilterBar({
   withUnmapped = false,
 }: {
   areas: RenderedArea[]
-  /** Every frame before the filters. Feeds the free-text names in Raised by. */
+  /** Every request before the filters. Feeds the free-text names in Raised by. */
   pins: RenderedPin[]
   withUnmapped?: boolean
 }) {
-  const { filters, set, clear, active } = useFrameFilters()
+  const { filters, set, clear, active } = useRequestFilters()
   const users = useOrganizationUsers()
   // Somebody outside the app has no member entry, so the names come from the
-  // frames themselves. A Clerk id that is no longer a member is left out.
+  // requests themselves. A Clerk id that is no longer a member is left out.
   const outsiders = [
     ...new Set(
       pins.flatMap((p) => (p.raisedBy && !isMemberId(p.raisedBy) ? [p.raisedBy] : []))
@@ -138,7 +138,7 @@ export function FilterBar({
         icon={Flame}
         value={filters.kind}
         onChange={(v) => set('kind', v)}
-        options={FRAME_KINDS.map((k) => ({
+        options={REQUEST_KINDS.map((k) => ({
           value: k,
           label: KIND_LABELS[k],
           icon: KIND_ICONS[k],
@@ -150,14 +150,14 @@ export function FilterBar({
         icon={Shapes}
         value={filters.type}
         onChange={(v) => set('type', v)}
-        options={FRAME_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t], icon: TYPE_ICONS[t] }))}
+        options={REQUEST_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t], icon: TYPE_ICONS[t] }))}
       />
       <Filter
         label="State"
         icon={CircleDot}
         value={filters.state}
         onChange={(v) => set('state', v)}
-        options={FRAME_STATES.map((s) => ({ value: s, label: STATE_LABELS[s] }))}
+        options={REQUEST_STATES.map((s) => ({ value: s, label: STATE_LABELS[s] }))}
       />
       <Filter
         label="Owner"
@@ -220,13 +220,13 @@ export function FilterBar({
  * The filter bar above the list, for a page with no map to float it over: the
  * Unmapped page, and a map with no land yet.
  */
-type FilteredFramesProps = {
+type FilteredRequestsProps = {
   pins: RenderedPin[]
   areas: RenderedArea[]
   action?: (pin: RenderedPin) => React.ReactNode
 }
 
-export function FilteredFrames(props: FilteredFramesProps) {
+export function FilteredRequests(props: FilteredRequestsProps) {
   return (
     <Suspense>
       <Stacked {...props} />
@@ -234,12 +234,12 @@ export function FilteredFrames(props: FilteredFramesProps) {
   )
 }
 
-function Stacked({ pins, areas, action }: FilteredFramesProps) {
-  const { shown } = useFilteredFrames(pins, areas)
+function Stacked({ pins, areas, action }: FilteredRequestsProps) {
+  const { shown } = useFilteredRequests(pins, areas)
   return (
     <div className="flex flex-col gap-3">
       <FilterBar areas={areas} pins={pins} />
-      <FrameList pins={shown} areas={areas} action={action} />
+      <RequestList pins={shown} areas={areas} action={action} />
     </div>
   )
 }

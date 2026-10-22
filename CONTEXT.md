@@ -1,6 +1,6 @@
 # Cycles
 
-Cycles is a Shape Up project management tool. Teams work in fixed time-boxed cycles, shape pitches with clear problem/outcome frames, break work into vertical-slice scopes, and move the needle each week to communicate how things are going.
+Cycles is a Shape Up project management tool. Teams work in fixed time-boxed cycles, write pitches with a clear problem and outcomes, break work into vertical-slice scopes, and move the needle each week to communicate how things are going.
 
 ## Language
 
@@ -43,32 +43,32 @@ belongs on the map beside the burns, and it competes for the same bets.
 
 Three goals:
 
-1. **Anyone captures anything, in one line.** A bug, an idea, a request, a
-   security problem, an irritant, a win to unlock: each one needs a **Frame**.
+1. **Anyone captures anything, in one line.** A bug, an idea, an ask, a
+   security problem, an irritant, a win to unlock: each one needs a **Request**.
    There is no second inbox for the inputs that do not fit.
 2. **An agent does the reading.** An agent on a schedule reads the betting
    table notes, the customer conversations and the sales calls, then reports
    what it finds onto the map through MCP. Every part of the model is writable
    that way, so the map fills itself.
-3. **The map forgets on its own.** A **Report** is one mention. A frame nobody
+3. **The map forgets on its own.** A **Report** is one mention. A request nobody
    mentions for two cycles goes **dormant** and leaves the view. Nothing is
    deleted, and one mention wakes it. Nobody grooms the map, so it never
    becomes a backlog.
 
 **Product Map**:
-A picture of the product as land. **Areas** are drawn as regions, and each **Frame** appears on one as a **Pin**. The Product Map holds problems. A **Cycle** holds the bets. There is one Product Map per organization. It needs no cycle and it outlives every cycle (see [ADR 0021](docs/adr/0021-product-map-is-org-scoped.md)).
+A picture of the product as land. **Areas** are drawn as regions, and each **Request** appears on one as a **Pin**. The Product Map holds problems. A **Cycle** holds the bets. There is one Product Map per organization. It needs no cycle and it outlives every cycle (see [ADR 0021](docs/adr/0021-product-map-is-org-scoped.md)).
 _Avoid_: Roadmap, backlog, board. Never write "map" alone — this app also has a **Scope Map**, and the agent harness has a wayfinder map.
 
-**Frame**:
-The unit of capture and the central object of the Product Map. One frame is one problem. **Every type of input needs a frame**: a bug, an idea, a request, a security problem, an irritant, a win to unlock. A frame holds a problem, an **Appetite**, a business case, a **Kind**, a **Type**, a **Frame owner**, **Reports**, and **Pointers**. A frame is not a piece of work. Work is a **Shape** in a cycle that points home to the frame. A frame outlives the work done against it.
-_Avoid_: Pin (that is only how a frame is drawn), ticket, issue, card, backlog item, task, candidate (that is one **Frame state**)
+**Request**:
+The unit of capture and the central object of the Product Map. One request is one problem, as it came in. **Every type of input needs a request**: a bug, an idea, an ask, a security problem, an irritant, a win to unlock. A request holds a short summary of the problem, an **Appetite**, its **Outcomes**, a business case, a **Kind**, a **Type**, a **Request owner**, **Reports**, and **Pointers**. A request is raw intake. The careful statement of the problem is the **Frame** of a **Pitch**. A request is not a piece of work. Work is a **Pitch** in a cycle that points home to the request. A request outlives the work done against it (see [ADR 0032](docs/adr/0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md)).
+_Avoid_: Frame (that is part of a **Pitch**), Pin (that is only how a request is drawn), ticket, issue, card, backlog item, task, candidate (that is one **Request state**)
 
 **Pin**:
-How a frame is drawn on the Product Map. A pin is a marker and holds no data of its own. It carries four channels and no more: color is **Kind**, size is the report count under the active **Heat lens**, opacity is freshness, and outline is engagement.
-_Avoid_: Using "pin" for the record — the record is a **Frame**
+How a request is drawn on the Product Map. A pin is a marker and holds no data of its own. It carries four channels and no more: color is **Kind**, size is the report count under the active **Heat lens**, opacity is freshness, and outline is engagement.
+_Avoid_: Using "pin" for the record — the record is a **Request**
 
 **Area**:
-A named region of the product on the Product Map, for example Integrations or Billing. An area can contain sub-areas. An agent draws the coastline of an area as a ring of points, from how the team describes the region. An area with no coastline gets one that the app generates, so land drawn before outlines existed still renders. An area is never colored by the health of its frames.
+A named region of the product on the Product Map, for example Integrations or Billing. An area can contain sub-areas. An agent draws the coastline of an area as a ring of points, from how the team describes the region. An area with no coastline gets one that the app generates, so land drawn before outlines existed still renders. An area is never colored by the health of its requests.
 _Avoid_: Territory, country, section, module, epic
 
 **Island**:
@@ -80,19 +80,19 @@ An area that holds islands. This is the largest region the Product Map draws. It
 _Avoid_: Continent (islands do not sit on one), territory, group
 
 **Cluster** (Product Map):
-What the Product Map does when an area is too small on screen to read. The area becomes one bubble that carries the number of frames under it. A bubble stands for more than one frame: a bubble reading "1" would hide a pin behind a number. A cluster never crosses an area boundary.
+What the Product Map does when an area is too small on screen to read. The area becomes one bubble that carries the number of requests under it. A bubble stands for more than one request: a bubble reading "1" would hide a pin behind a number. A cluster never crosses an area boundary.
 _Avoid_: Using "cluster" for a group of areas — that is an **Island** or an **Archipelago**
 
 **Area owner**:
-The person the app suggests as **Frame owner** for a new frame in that area. This is a default and nothing more. An area owner is not answerable for the area.
+The person the app suggests as **Request owner** for a new request in that area. This is a default and nothing more. An area owner is not answerable for the area.
 _Avoid_: President, DRI, maintainer
 
-**Frame owner**:
-The one person who cares that a frame gets addressed. A frame owner is not the person who will do the work. A frame with no cycle and no **Shape** is still owned.
+**Request owner**:
+The one person who cares that a request gets addressed. A request owner is not the person who will do the work. A request with no cycle and no **Pitch** is still owned.
 _Avoid_: Assignee, DRI, responsible
 
 **Raised by**:
-The person who raised the problem that a frame holds. It is a member of the org, or a free-text name for a person outside the app. It is not the capturer of a **Report**, because somebody other than the person who raised the problem often records it. Nothing fills it by default. A frame with no "raised by" is valid. The **Business case** says why now, so there is no separate field for it.
+The person who raised the problem that a request holds. It is a member of the org, or a free-text name for a person outside the app. It is not the capturer of a **Report**, because somebody other than the person who raised the problem often records it. Nothing fills it by default. A request with no "raised by" is valid. The **Business case** says why now, so there is no separate field for it.
 _Avoid_: Reporter, requester, author, submitter
 
 **Kind**:
@@ -100,11 +100,11 @@ What is at stake. `brand_burn` costs reputation or revenue right now. `pain_poin
 _Avoid_: Severity, priority, type (**Type** is a different axis). Do not read Kind as a pain scale — a win to unlock is not a small pain.
 
 **Type**:
-Where a problem came from and how it gets worked: `bug`, `idea`, `request`, `security`, or `irritant`. **Type selects the Playbook.** Type has no visual channel on the map. It appears in the frame detail and in `map_list_frames` filters (see [ADR 0025](docs/adr/0025-type-selects-the-playbook.md)).
+Where a problem came from and how it gets worked: `bug`, `idea`, `ask`, `security`, or `irritant`. An `ask` is something a customer or a colleague asked for. **Type selects the Playbook.** Type has no visual channel on the map. It appears in the request detail and in `map_list_requests` filters (see [ADR 0025](docs/adr/0025-type-selects-the-playbook.md)).
 _Avoid_: Kind (that is severity), category, label
 
 **Playbook**:
-The workflow for one **Type**. A bug playbook skips full shaping. A feature playbook runs Shape Up or Kanban. A security playbook wants one pull request per service. A playbook names the **Pointers** its frames expect.
+The workflow for one **Type**. A bug playbook skips full shaping. A feature playbook runs Shape Up or Kanban. A security playbook wants one pull request per service. A playbook names the **Pointers** its requests expect.
 
 Each **Type** expects these pointer kinds. A new Type with no playbook is a bug ([ADR 0025](docs/adr/0025-type-selects-the-playbook.md)):
 
@@ -112,7 +112,7 @@ Each **Type** expects these pointer kinds. A new Type with no playbook is a bug 
 | --- | --- |
 | `bug` | `issue`, `pull_request` |
 | `idea` | `research`, `shaped_doc`, `pull_request` |
-| `request` | `conversation`, `shaped_doc` |
+| `ask` | `conversation`, `shaped_doc` |
 | `security` | `issue`, `pull_request` |
 | `irritant` | nothing |
 
@@ -120,97 +120,97 @@ A bug expects less than an idea, so a small fix carries no Shape Up ceremony. An
 _Avoid_: Process, workflow, template
 
 **Pointer**:
-An outbound link that a frame packages: a url, a label, and a kind. A frame holds only pointers. The artifacts live elsewhere, in GitHub, in Notion, or in a wayfinder map. A frame never imports, never syncs, and never mirrors state.
+An outbound link that a request packages: a url, a label, and a kind. A request holds only pointers. The artifacts live elsewhere, in GitHub, in Notion, or in a wayfinder map. A request never imports, never syncs, and never mirrors state.
 
-There are six pointer kinds: `issue`, `wayfinder`, `research`, `shaped_doc`, `pull_request`, and `conversation`. There is no kind for a **Shape**. A shape points at its frame, and not the reverse, so the app reads a frame's shape list from the cycle rooms ([ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)).
+There are six pointer kinds: `issue`, `wayfinder`, `research`, `shaped_doc`, `pull_request`, and `conversation`. There is no kind for a **Pitch**. A pitch points at its request, and not the reverse, so the app reads a request's pitch list from the cycle rooms ([ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)).
 _Avoid_: Attachment, child, document, embed
 
 **Gap list**:
-The **Pointers** a frame's **Playbook** expects and the frame does not have, derived and never stored. A gap blocks nothing. It is a prompt, not a gate.
+The **Pointers** a request's **Playbook** expects and the request does not have, derived and never stored. A gap blocks nothing. It is a prompt, not a gate.
 _Avoid_: Checklist, requirement, blocker
 
-**Frame**’s text fields — **Problem**, **Appetite**, **Business case**:
-**Problem** says what hurts, or what value sits unclaimed. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. The frame also holds its **Outcomes**.
+**Request**’s text fields — **Problem**, **Appetite**, **Business case**:
+**Problem** says what hurts, or what value sits unclaimed. **Appetite** is the time the business will spend on it. **Business case** is free text: who is affected, what it is worth, why now. The request also holds its **Outcomes**.
 _Avoid_: Requirements, spec, PRD, estimate (for appetite)
 
 **Outcome**:
-One observable change the frame says must be true afterwards. Each outcome is **one item** on the frame, because a shape is checked against them one at a time. An outcome states a change in the world, never delivered functionality: "a failed import tells the importer why" is an outcome, "the user can filter the table" is a mechanism. Never invent a number. If no metric exists, write the observable change and stop. Framing decides the outcomes, not shaping, so two shapes that attack one frame chase the same win.
-_Avoid_: Goal, success metric, KPI, acceptance criteria, requirement
+One observable change the request says must be true afterwards. Each outcome is **one item** on the request, because a pitch is checked against them one at a time. An outcome states a change in the world, never delivered functionality: "a failed import tells the importer why" is an outcome, "the user can filter the table" is a mechanism. Never invent a number. If no metric exists, write the observable change and stop. On a request, the outcomes are its acceptance criteria. This is true for a bug too: a bug says what must be true when it is fixed. Two pitches that attack one request chase the same win.
+_Avoid_: Goal, success metric, KPI, requirement
 
 **Brief**:
-A short written answer to "where is this frame, and what comes next?". An agent such as Paulo writes it through `map_write_brief`. A brief holds a headline, a paragraph on where the frame stands, one next step, an optional owner for that step, an optional warning, the writer, and the date. The frame page shows the last brief with its date. Nobody asks for a brief live from the page. To get a new one, a person starts a Claude chat with `/paulo` and the frame id. Each write replaces the whole brief. Writing a brief does not **wake** the frame ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
+A short written answer to "where is this request, and what comes next?". An agent such as Paulo writes it through `map_write_brief`. A brief holds a headline, a paragraph on where the request stands, one next step, an optional owner for that step, an optional warning, the writer, and the date. The request page shows the last brief with its date. Nobody asks for a brief live from the page. To get a new one, a person starts a Claude chat with `/paulo` and the request id. Each write replaces the whole brief. Writing a brief does not **wake** the request ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
 _Avoid_: Summary, status, digest
 
 **Release announcement**:
-The note that customers would read after the problem is solved. The team writes it as a draft when it frames the problem, long before anything ships. The draft says in the customer's words what changes for them, never how it was built. The frame page marks it as a draft until the frame is **released**. It is free text on the frame, written in the frame dialog or through `map_upsert_frame`.
+The note that customers would read after the problem is solved. The team writes it as a draft when it requests the problem, long before anything ships. The draft says in the customer's words what changes for them, never how it was built. The request page marks it as a draft until the request is **released**. It is free text on the request, written in the request dialog or through `map_upsert_request`.
 _Avoid_: Changelog, release note (that is the Notion record of a shipped release), press release
 
 **Sharp**:
-A frame with a problem, an **Appetite** and at least one **Outcome**. A frame that has fewer is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp frame can be bet on**, so nobody bets on a frame that never says what would change.
+A request with a problem, an **Appetite** and at least one **Outcome**. A request that has fewer is **rough**. Sharpness is derived, never a stored flag, in the same way **Cycle phase** is date-derived ([ADR 0015](docs/adr/0015-cycle-lifecycle-is-date-derived.md)). **Only a sharp request can be bet on**, so nobody bets on a request that never says what would change.
 _Avoid_: Framed, ready, validated, approved
 
-**Frame state**:
-A frame’s position in its life, derived from what it points at and never stored:
-`rough` (no appetite) → `candidate` (sharp, no **Shape** yet) → `in_flight` (a Shape that is not `done`) → `released` (its Shape reached `done`) → `monitoring` (released and not resolved) → `resolved` (a person resolved it).
-Monitoring has no end condition. A released frame that nobody wakes goes **Dormant** like any other.
-_Avoid_: Status, stage (reserved for a **Shape**), workflow state
+**Request state**:
+A request’s position in its life, derived from what it points at and never stored:
+`rough` (no appetite) → `candidate` (sharp, no **Pitch** yet) → `in_flight` (a pitch that is not `done`) → `released` (its pitch reached `done`) → `monitoring` (released and not resolved) → `resolved` (a person resolved it).
+Monitoring has no end condition. A released request that nobody wakes goes **Dormant** like any other.
+_Avoid_: Status, stage (reserved for a **Pitch**), workflow state
 
 **Candidate**:
-A sharp frame with no **Shape** yet. A candidate is what the betting table bets on.
+A sharp request with no **Pitch** yet. A candidate is what the betting table bets on.
 _Avoid_: Backlog item, proposal, ready
 
 **Candidate statement**:
-The sentence the Product Map shows under a sharp frame: "If we can shape this into something doable in X weeks, that is meaningful to us." The app builds it from the problem and the appetite. Nobody types it.
+The sentence the Product Map shows under a sharp request: "If we can shape this into something doable in X weeks, that is meaningful to us." The app builds it from the problem and the appetite. Nobody types it.
 
-**Origin frame**:
-The frame whose **monitoring** surfaced this one. A quality problem or an adoption problem found after release becomes a **new frame** with a pointer back, never a reopening of the old one. This gives a visible chain of which releases create follow-on pain.
-_Avoid_: Parent, duplicate, related (that is a **Related frame**)
+**Origin request**:
+The request whose **monitoring** surfaced this one. A quality problem or an adoption problem found after release becomes a **new request** with a pointer back, never a reopening of the old one. This gives a visible chain of which releases create follow-on pain.
+_Avoid_: Parent, duplicate, related (that is a **Related request**)
 
-**Related frame**:
-A frame that relates to this one, for example two problems that one solution would close. The relation goes both ways: if frame A relates to frame B, frame B relates to frame A. The frame page shows each related frame with its current problem line, so the link does not break when that line changes. A duplicate is not a related frame. It gets deleted ([ADR 0026](docs/adr/0026-a-frame-can-be-deleted-only-for-map-hygiene.md)). There is no "blocks" relation, because blocking is about work, and work lives in a **Shape**.
+**Related request**:
+A request that relates to this one, for example two problems that one solution would close. The relation goes both ways: if request A relates to request B, request B relates to request A. The request page shows each related request with its current problem line, so the link does not break when that line changes. A duplicate is not a related request. It gets deleted ([ADR 0026](docs/adr/0026-a-frame-can-be-deleted-only-for-map-hygiene.md)). There is no "blocks" relation, because blocking is about work, and work lives in a **Shape**.
 _Avoid_: Linked issue, dependency, duplicate, child
 
 **Report**:
-One record of a problem happening. A report holds an id, a capturer (a Clerk user id or an agent id), a source (`internal` or `customer`), an optional customer label, an optional link, text, and a date. Nothing reaches a frame unmediated. A person or an agent always captures it. The report count sets the **Pin** size.
+One record of a problem happening. A report holds an id, a capturer (a Clerk user id or an agent id), a source (`internal` or `customer`), an optional customer label, an optional link, text, and a date. Nothing reaches a request unmediated. A person or an agent always captures it. The report count sets the **Pin** size.
 
-A report can be corrected. An edit changes the text, the link, the customer label or the source, and marks the report as edited. An edit never wakes the frame and never changes the count. A delete removes a report recorded in error and lowers the count by one. To fix a report, correct it. Do not add a second report, because a second report counts as the problem happening again ([ADR 0030](docs/adr/0030-a-report-can-be-corrected.md)).
+A report can be corrected. An edit changes the text, the link, the customer label or the source, and marks the report as edited. An edit never wakes the request and never changes the count. A delete removes a report recorded in error and lowers the count by one. To fix a report, correct it. Do not add a second report, because a second report counts as the problem happening again ([ADR 0030](docs/adr/0030-a-report-can-be-corrected.md)).
 _Avoid_: Vote, upvote, duplicate, occurrence
 
 **Heat lens**:
-A switch on the Product Map that chooses which reports count: all, internal only, or customer only. A frame has one freshness clock. The lens filters what feeds it. A frame hot with customers and cold internally is the most useful thing the map can show.
+A switch on the Product Map that chooses which reports count: all, internal only, or customer only. A request has one freshness clock. The lens filters what feeds it. A request hot with customers and cold internally is the most useful thing the map can show.
 _Avoid_: Filter (too general), segment
 
 **Wake**:
-To reset a frame's freshness clock. Three things wake a frame: a new **Report**, a mention in a transcript sent through `map_wake_frame`, and an explicit "still hurts" click. Opening a frame does not wake it. Work on a linked **Shape** does not wake it either (see [ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)).
+To reset a request's freshness clock. Three things wake a request: a new **Report**, a mention in a transcript sent through `map_wake_request`, and an explicit "still hurts" click. Opening a request does not wake it. Work on a linked **Shape** does not wake it either (see [ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)).
 _Avoid_: Bump, touch, refresh, revive
 
 **Freshness**:
-How much people still talk about a frame, read from the time since its last **Wake**. The pin shows it as opacity. The **Frame list** shows it as one of three levels. **Top of mind** is a mention in about the last two or three weeks. **Cooling** is a mention within one cycle. **Fading** is anything older, until the frame goes **Dormant**. The levels are cut points on the pin opacity, so the map and the list always agree.
+How much people still talk about a request, read from the time since its last **Wake**. The pin shows it as opacity. The **Request list** shows it as one of three levels. **Top of mind** is a mention in about the last two or three weeks. **Cooling** is a mention within one cycle. **Fading** is anything older, until the request goes **Dormant**. The levels are cut points on the pin opacity, so the map and the list always agree.
 _Avoid_: Priority, score, hotness
 
-**Frame list**:
-The list of open frames in a sidebar on the right of the Product Map and of each area page. You can close the sidebar. The browser keeps that choice. It has filters for area, kind, type, state, owner, report source and freshness. The same filters shape the map, so a pin is always a row. The filters live in the URL, so a filtered view is a link that people can share. The default order is top of mind first, then the most reported. The list never shows a **Dormant** frame ([ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)). In cooldown, the capped review queue of that ADR shows under the list, in the same sidebar, as its own section.
+**Request list**:
+The list of open requests in a sidebar on the right of the Product Map and of each area page. You can close the sidebar. The browser keeps that choice. It has filters for area, kind, type, state, owner, report source and freshness. The same filters shape the map, so a pin is always a row. The filters live in the URL, so a filtered view is a link that people can share. The default order is top of mind first, then the most reported. The list never shows a **Dormant** request ([ADR 0024](docs/adr/0024-frames-sleep-when-nobody-talks-about-them.md)). In cooldown, the capped review queue of that ADR shows under the list, in the same sidebar, as its own section.
 _Avoid_: Backlog, queue, board
 
 **Dormant**:
-A frame that nobody has woken for two cycles. A dormant frame leaves the Product Map view. It is not deleted and it keeps every field and every report. A mention wakes it back onto the map. Reaching a dormant frame needs a filtered query. There is no browsable list of them, by design.
+A request that nobody has woken for two cycles. A dormant request leaves the Product Map view. It is not deleted and it keeps every field and every report. A mention wakes it back onto the map. Reaching a dormant request needs a filtered query. There is no browsable list of them, by design.
 _Avoid_: Archived (reserved for cycles), fog (reserved by the wayfinder skill), stale, closed, backlog
 
 **Unmapped**:
-The holding area for a frame that belongs to no **Area**. Capture is cheap, so a frame can arrive with no home. The same idea as an **Unscoped task** ([ADR 0018](docs/adr/0018-kanban-is-a-view-not-an-entity.md)). Unmapped is a special area. Nobody draws it on the land, but it has an area page like the others. A person files a frame into an area from that page ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
+The holding area for a request that belongs to no **Area**. Capture is cheap, so a request can arrive with no home. The same idea as an **Unscoped task** ([ADR 0018](docs/adr/0018-kanban-is-a-view-not-an-entity.md)). Unmapped is a special area. Nobody draws it on the land, but it has an area page like the others. A person files a request into an area from that page ([ADR 0029](docs/adr/0029-a-frame-has-a-page-with-a-brief-an-agent-left.md)).
 _Avoid_: Inbox, triage, uncategorized
 
 **Resolve**:
-To remove a frame from the Product Map because the problem is gone. Only a person resolves a frame. Nothing resolves on a timer. The frame's **Area** keeps the record and the **Shapes** that closed it.
+To remove a request from the Product Map because the problem is gone. Only a person resolves a request. Nothing resolves on a timer. The request's **Area** keeps the record and the **Pitches** that closed it.
 _Avoid_: Close, done, complete, delete
-_Not_: **Delete**. Resolve is for a problem that is gone. Delete is for a frame that never described a problem ([ADR 0026](docs/adr/0026-a-frame-can-be-deleted-only-for-map-hygiene.md)).
+_Not_: **Delete**. Resolve is for a problem that is gone. Delete is for a request that never described a problem ([ADR 0026](docs/adr/0026-a-frame-can-be-deleted-only-for-map-hygiene.md)).
 
 **Delete** (Product Map):
-To erase a frame or an area that should never have been captured, such as a duplicate, a test or a mistake. It destroys the record, and no tool puts it back. Deleting an area keeps what is inside it: its frames go back to **Unmapped** and its sub-areas move to the top level.
+To erase a request or an area that should never have been captured, such as a duplicate, a test or a mistake. It destroys the record, and no tool puts it back. Deleting an area keeps what is inside it: its requests go back to **Unmapped** and its sub-areas move to the top level.
 _Avoid_: Remove, archive, clear
 
 **Investment**:
-The **Shapes** that attacked a frame, with their cycles. The Product Map shows a mark on a worked frame and no number. Investment does not stop a frame from going dormant, because sunk cost must never set priority.
+The **Pitches** that attacked a request, with their cycles. The Product Map shows a mark on a worked request and no number. Investment does not stop a request from going dormant, because sunk cost must never set priority.
 _Avoid_: Spend, cost, effort, score
 
 ### Calendar overlays
@@ -225,21 +225,25 @@ _Avoid_: Holiday (reserved for statutory days — see Flagged ambiguities), PTO,
 
 ### Pitch lifecycle
 
+**Pitch**:
+The shaped bet, and the thing a cycle contains. Has a stage, a timebox, scopes, a needle, and a pointer home to its **Request**. A pitch has two parts: its **Frame** and its **Shape**. The stored type is `CyclePitch` and the route is `[pitchSlug]`.
+_Avoid_: Shape (that is one part of a pitch), package (that is what a request does with its **Pointers**), project, epic, initiative, ticket
+
+**Frame**:
+The framing part of a **Pitch**: the full problem, reworked with research, and the outcome the pitch must reach. A **Request** holds a short summary. The frame says it with depth. "Frame Go" means the frame is complete.
+_Avoid_: Frame for the record on the Product Map (that is a **Request**)
+
 **Shape**:
-A shaped piece of work within a cycle: the output of shaping, and the thing a cycle contains. Has a stage, timebox, scopes, a needle, and a pointer home to its **Frame**. Framing produces a frame; shaping produces a shape. **The stored type is still `CyclePitch` and the route is still `[pitchSlug]`**: the rename is deferred (see Flagged ambiguities), so read "pitch" in code as **Shape**.
-_Avoid_: Pitch (Ryan Singer's later sense of "pitch" is the raw input, which here is a **Frame**), package (that is what a frame does with its **Pointers**), project, epic, initiative, ticket
+The solution part of a **Pitch**, at a high level: its **Scopes**, and visuals or a prototype that show how the solution looks. A shape is not a stored object. It is the scopes plus a link to the shaped doc.
+_Avoid_: Shape for the whole bet (that is a **Pitch**), spec, design
 
 **Stage**:
-A **Shape**'s current lifecycle phase: `shaping`, `building`, `done`. Can move forward or backward. Cooldown shapes start at `building`. A shape **auto-advances to `done`** when an update sets the **Needle** to 100% — posting a 100% update is the act of shipping. There is no `framing` stage: framing happens on the **Product Map**, before a shape exists (see [ADR 0023](docs/adr/0023-framing-leaves-the-shape.md)). `shaping` stays, because shaping work really does happen inside the cycle.
-_Avoid_: Status (ambiguous — see Flagged ambiguities), framing (a **Frame state**, never a shape stage)
+A **Pitch**'s current lifecycle phase: `shaping`, `building`, `done`. Can move forward or backward. Cooldown pitches start at `building`. A pitch **auto-advances to `done`** when an update sets the **Needle** to 100% — posting a 100% update is the act of shipping. There is no `framing` stage: framing happens before a pitch exists (see [ADR 0023](docs/adr/0023-framing-leaves-the-shape.md)). `shaping` stays, because shaping work really does happen inside the cycle.
+_Avoid_: Status (ambiguous — see Flagged ambiguities), framing (not a stage)
 
 **Frame as bet**:
-The copy of a **Frame**'s problem text, taken at the moment the bet was made and stored on the **Shape** as `frame_problem`. The frame on the map keeps changing. This copy does not, so a past cycle always shows what the team committed to (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)). A shape also points home through `frame_id`.
-_Avoid_: Frame (unqualified — that is the living frame on the map), requirements, spec, PRD
-
-**Outcome**:
-What success looks like for a **Shape**, stored as `frame_outcome`. Outcome is a product of shaping, so a **Frame** never holds one. "Frame Go" means the shape has both a **Frame as bet** and an outcome.
-_Avoid_: Goal, KPI, acceptance criteria
+The problem text of a **Pitch**'s **Frame**, stored as `frame_problem`, with its outcome stored as free text in `frame_outcome`. The problem is copied from the **Request** when the bet is made. The request on the map keeps changing. This copy does not, so a past cycle always shows what the team committed to (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)). A pitch points home through `request_id`.
+_Avoid_: Request (that is the living record on the map), requirements, spec, PRD
 
 **Timebox**:
 The fixed time boundary of a pitch. Has start and end dates — but is **optional**: a pitch may have no timebox, in which case its tape is hidden (never "Invalid Date") and it draws no bar on the **Pitch timeline**. Visualized as a tape-measure strip with day ticks and a "today" marker. For the cycle's own span, use **Cycle window** — not "timebox" (see ADR 0010). All of its math — days left, elapsed fill, "Week X of Y" — counts **business days**, not calendar days (see ADR 0013).
@@ -389,7 +393,7 @@ Every scope's hill progress — plus its title and tier — frozen at the time a
 _Avoid_: Scope snapshot (conflicts with existing PitchSnapshot)
 
 **Hill History**:
-The arrow-scrubbable sequence of past Hill Snapshots. Stepping back shows a read-only historical frame — that update's positions with the trail from the update before it. There is no continuous log of every drag; the heartbeat is the needle update, so history advances one update at a time.
+The arrow-scrubbable sequence of past Hill Snapshots. Stepping back shows a read-only historical request — that update's positions with the trail from the update before it. There is no continuous log of every drag; the heartbeat is the needle update, so history advances one update at a time.
 _Avoid_: Timeline (reserved for the updates feed), movement log, playback
 
 ### Squads
@@ -449,14 +453,14 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - Deleting a **Squad** moves its **Pitches** to **Unassigned** (never deletes them)
 - An **Organization** has exactly one **Product Map**
 - A **Product Map** contains zero or more **Areas**; an **Area** contains zero or more sub-**Areas**
-- An **Area** contains zero or more **Frames**; a **Frame** with no **Area** is **Unmapped**
+- An **Area** contains zero or more **Requests**; a **Request** with no **Area** is **Unmapped**
 - An **Area** that holds areas is an **Island**; an **Area** that holds islands is an **Archipelago**; both draw as a merged silhouette of the areas underneath
-- Each **Frame** is drawn on the map as one **Pin**
-- A **Frame** has one **Kind**, one **Type**, zero or one **Frame owner**, zero or more **Reports**, and zero or more **Pointers**
-- A **Frame**'s **Type** selects one **Playbook**; the playbook's expected **Pointers** minus the frame's own give its **Gap list**
-- A **Frame** has zero or one **Origin frame** — the frame whose **monitoring** surfaced it
-- A **Shape** points at zero or one **Frame**, and keeps a **Frame as bet** taken when the bet was made
-- A **Frame** can carry several **Shapes** over its life, each in its own **Cycle**
+- Each **Request** is drawn on the map as one **Pin**
+- A **Request** has one **Kind**, one **Type**, zero or one **Request owner**, zero or more **Reports**, and zero or more **Pointers**
+- A **Request**'s **Type** selects one **Playbook**; the playbook's expected **Pointers** minus the request's own give its **Gap list**
+- A **Request** has zero or one **Origin request** — the request whose **monitoring** surfaced it
+- A **Pitch** points at zero or one **Request**, and keeps a **Frame as bet** taken when the bet was made
+- A **Request** can carry several **Pitches** over its life, each in its own **Cycle**
 - **Mission Control** renders its pitches as a **Pitch timeline** — per-pitch **Timebox** bars grouped by squad on the **Cycle window**'s shared scale; derived, never stored
 
 ## Example dialogue
@@ -486,11 +490,11 @@ _Avoid_: Scope modal, scope detail dialog, side panel
 - **"active" for tasks** — a not-done task is **Open**, never "active". "Active/inactive" is already reserved-against for **Cycle phase**, and "status" is a known landmine; the Scope Drawer's task filter toggle is labelled **All / Open**, not "All / Active".
 - **`BE/Simon`-style task prefixes** encoded two orthogonal things in the title: a **discipline** (`BE`/`FE`/design) and an **assignee** (`Simon`). Resolved (v1): only the **assignee** half becomes a first-class field (a Clerk org user on the **Task**). The discipline half — a task **type/tag** — stays deferred; the glossary's "no type" stance still holds for now. Revisit tags only if the prefix hack persists after assignment ships.
 - **"map"** is ambiguous across three things: the **Product Map** (problems in product space), the **Scope Map** (one pitch's detail view), and the wayfinder map in the agent harness (a GitHub issue holding decision tickets). Resolved: never write "map" unqualified, in product copy, in code, or in docs. Always name which one.
-- **"frame"** now means two things at different lifetimes. Resolved: **Frame** is the living record on the **Product Map** (problem, appetite, business case). **Frame as bet** is the snapshot stored on a shape when the bet was made. The frame on the map keeps changing. The snapshot never does (see [ADR 0022](docs/adr/0022-the-frame-is-the-captured-unit.md)).
-- **"pitch" vs "shape"** — Ryan Singer's later vocabulary uses **pitch** for the raw input that starts framing. This app used **Pitch** for the shaped bet, which is the opposite sense. Resolved in the glossary: the shaped bet is a **Shape**, and the raw input is a **Frame**. Deferred in code: the rename touches the stored type `CyclePitch`, every MCP tool name, the `[pitchSlug]` route, and every user's habit. It gets its own cycle and its own ADR. Until then, read "pitch" in code as **Shape**.
-- **"pin" vs "frame"** — the record is a **Frame** and the **Pin** is only how it is drawn. "Pin" named the marker, so it never names the thing. Resolved: capture produces a frame, the map shows a pin, and a pin holds no data of its own.
+- **"frame"** named the record on the Product Map, but Shape Up uses it for the careful statement of a problem. Raw intake is not that work. Resolved: the record on the map is a **Request**. **Frame** is the framing part of a **Pitch**. The **Type** that was `request` is now `ask`, so no request has the type "request" ([ADR 0032](docs/adr/0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md)).
+- **"pitch" vs "shape"** — the glossary once renamed the shaped bet to **Shape**, because Ryan Singer's later vocabulary uses "pitch" for the raw input. The raw input is now a **Request**, so that reason is gone. Resolved: the shaped bet is a **Pitch**, in the glossary and in the code. **Shape** is the solution part of a pitch ([ADR 0032](docs/adr/0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md)).
+- **"pin" vs "request"** — the record is a **Request** and the **Pin** is only how it is drawn. "Pin" named the marker, so it never names the thing. Resolved: capture produces a request, the map shows a pin, and a pin holds no data of its own.
 - **"an agent cannot draw"** was the reason the app generated every area shape. It is wrong: an agent writes a ring of coordinates as easily as any other field. Resolved: an agent draws the coastline of an area, and a generated ring is only the fallback for an area nobody has drawn. The out-of-scope note in the pitch meant uploaded artwork, which an agent really cannot write into.
 - **"cluster"** names the zoom behavior and nothing else. Resolved: a **Cluster** is an area collapsing into one numbered bubble because it is too small on screen. A group of areas is an **Island**, and a group of islands is an **Archipelago**. Never use "cluster" for either.
-- **"kind" vs "type"** — two axes on one frame, and they answer different questions. Resolved: **Kind** is what is at stake (`brand_burn`, `pain_point`, `unlock_win`) and is the only axis with a color. It is not a pain scale: a win to unlock breaks nothing. **Type** is where it came from and how it gets worked (`bug`, `idea`, `request`, `security`, `irritant`) and it selects the **Playbook**. Type gets no visual channel, because four channels is the legibility ceiling of a pin.
+- **"kind" vs "type"** — two axes on one request, and they answer different questions. Resolved: **Kind** is what is at stake (`brand_burn`, `pain_point`, `unlock_win`) and is the only axis with a color. It is not a pain scale: a win to unlock breaks nothing. **Type** is where it came from and how it gets worked (`bug`, `idea`, `request`, `security`, `irritant`) and it selects the **Playbook**. Type gets no visual channel, because four channels is the legibility ceiling of a pin.
 - **"betting table" vs "Debating Table"** — a design session used "Debating Table" while Shape Up says betting table. Resolved: **betting table**, everywhere. Never write "Debating Table" in the glossary, the UI, or the skills.
-- **the area-owner alert** — a design session proposed alerting an **Area owner** when frames cluster in their area. This app defines an area owner as a default and nothing more. Deferred, not resolved: an alert makes the owner answerable for the region, which is a different role and needs its own decision.
+- **the area-owner alert** — a design session proposed alerting an **Area owner** when requests cluster in their area. This app defines an area owner as a default and nothing more. Deferred, not resolved: an alert makes the owner answerable for the region, which is a different role and needs its own decision.

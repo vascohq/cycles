@@ -1,8 +1,8 @@
-import type { FrameKind, FrameReport, FrameType } from '@/product-map-liveblocks.config'
-import type { FrameState, RenderedArea, RenderedPin } from '@/lib/product-map-engine'
+import type { RequestKind, RequestReport, RequestType } from '@/product-map-liveblocks.config'
+import type { RequestState, RenderedArea, RenderedPin } from '@/lib/product-map-engine'
 
 /**
- * How top of mind a frame is, read from the same freshness the pin fades by.
+ * How top of mind a request is, read from the same freshness the pin fades by.
  * Opacity falls from 1 to its floor over the sleep window (two cycles), so with
  * six-week cycles "top of mind" means a mention in the last two or three weeks,
  * "cooling" a mention within the cycle, and "fading" anything older.
@@ -17,29 +17,29 @@ export function freshnessOf(opacity: number): Freshness {
   return 'fading'
 }
 
-/** The Area filter's value for the frames that belong to no area. */
+/** The Area filter's value for the requests that belong to no area. */
 export const UNMAPPED_AREA = 'unmapped'
 
-/** The Owner filter's value for the frames that nobody owns. */
+/** The Owner filter's value for the requests that nobody owns. */
 export const NO_OWNER = 'nobody'
 
 /**
- * The filters on a frame list. Every value is a URL search param, so a filtered
+ * The filters on a request list. Every value is a URL search param, so a filtered
  * list has a link somebody can share. An absent key means "any".
  */
-export type FrameFilters = {
+export type RequestFilters = {
   /** An area id, or "unmapped". Matches the area and every area under it. */
   area?: string
-  kind?: FrameKind
-  type?: FrameType
-  /** Absent means every state but resolved: a resolved frame is off the map. */
-  state?: FrameState
+  kind?: RequestKind
+  type?: RequestType
+  /** Absent means every state but resolved: a resolved request is off the map. */
+  state?: RequestState
   /** A Clerk user id, or "nobody". */
   owner?: string
   /** A Clerk user id, or the exact free-text name of somebody outside the app. */
   raised_by?: string
-  /** Frames with at least one report from that side — the heat lens. */
-  source?: FrameReport['source']
+  /** Requests with at least one report from that side — the heat lens. */
+  source?: RequestReport['source']
   freshness?: Freshness
   /** Absent means top of mind first. */
   sort?: 'reports'
@@ -58,13 +58,13 @@ export const FILTER_KEYS = [
 ] as const
 
 /**
- * The frames that pass every filter, in the order asked for. `areaIds` is the
+ * The requests that pass every filter, in the order asked for. `areaIds` is the
  * chosen area and everything under it, resolved by the caller from the area
- * tree, so this stays a flat pass over the frames.
+ * tree, so this stays a flat pass over the requests.
  */
-export function listFrames(
+export function listRequests(
   pins: RenderedPin[],
-  filters: FrameFilters,
+  filters: RequestFilters,
   areaIds?: Set<string>
 ): RenderedPin[] {
   const passed = pins.filter(
@@ -92,15 +92,15 @@ function byReports(a: RenderedPin, b: RenderedPin): number {
 }
 
 /**
- * The area tree with only the frames in `keep` left on it, so the filters that
+ * The area tree with only the requests in `keep` left on it, so the filters that
  * shape the list shape the map too. The land itself never changes: an area with
- * no frame left still draws, so the map does not jump when a filter changes.
+ * no request left still draws, so the map does not jump when a filter changes.
  */
-export function keepFrames(areas: RenderedArea[], keep: Set<string>): RenderedArea[] {
+export function keepRequests(areas: RenderedArea[], keep: Set<string>): RenderedArea[] {
   return areas.map((area) => ({
     ...area,
-    pins: area.pins.filter((p) => keep.has(p.frameId)),
-    resolved: area.resolved.filter((p) => keep.has(p.frameId)),
-    children: keepFrames(area.children, keep),
+    pins: area.pins.filter((p) => keep.has(p.requestId)),
+    resolved: area.resolved.filter((p) => keep.has(p.requestId)),
+    children: keepRequests(area.children, keep),
   }))
 }

@@ -5,21 +5,21 @@ import { useParams } from 'next/navigation'
 
 import { useMember } from '@/components/organization-users-context'
 import { UserAvatar } from '@/components/scope-card/assignee-picker'
-import { TypeIcon } from '@/components/product-map/frame-icons'
-import { freshnessOf, type Freshness } from '@/lib/frame-list'
+import { TypeIcon } from '@/components/product-map/request-icons'
+import { freshnessOf, type Freshness } from '@/lib/request-list'
 import { flattenAreas, type RenderedArea, type RenderedPin } from '@/lib/product-map-engine'
 
 import { FRESHNESS_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
-import { UNMAPPED_AREA, areaHref, frameHref } from './links'
+import { UNMAPPED_AREA, areaHref, requestHref } from './links'
 
 /**
- * Frames as a list, each with a freshness signal. It shows what it is given:
- * the caller filters and orders the frames (frame-filters), so the list and the
+ * Requests as a list, each with a freshness signal. It shows what it is given:
+ * the caller filters and orders the requests (request-filters), so the list and the
  * map always agree on what is shown.
  *
  * `areas` names the area on each row.
  */
-export function FrameList({
+export function RequestList({
   pins,
   areas,
   action,
@@ -35,19 +35,19 @@ export function FrameList({
   const { slug } = useParams<{ slug: string }>()
   const names = areaNames(areas)
   return (
-    <section aria-label="Frames" className="flex flex-col gap-2">
+    <section aria-label="Requests" className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">
-        {pins.length} {pins.length === 1 ? 'frame' : 'frames'}
+        {pins.length} {pins.length === 1 ? 'request' : 'requests'}
       </p>
       {pins.length === 0 ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No frame matches these filters.
+          No request matches these filters.
         </p>
       ) : (
         <ul className="divide-y rounded-lg border bg-background">
           {pins.map((pin) => (
             <Row
-              key={pin.frameId}
+              key={pin.requestId}
               pin={pin}
               slug={slug}
               areaName={pin.areaId ? names.get(pin.areaId) : undefined}
@@ -92,10 +92,10 @@ function Row({
         />
         <div className="min-w-0">
           <Link
-            href={frameHref(slug, pin.frameId)}
+            href={requestHref(slug, pin.requestId)}
             className="line-clamp-2 text-sm font-medium hover:underline"
           >
-            {pin.problem || 'Untitled frame'}
+            {pin.problem || 'Untitled request'}
           </Link>
           <p className="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
             {areaName ? (
@@ -142,7 +142,7 @@ function Row({
   )
 }
 
-/** Three bars, like a signal: how much this frame is still being talked about. */
+/** Three bars, like a signal: how much this request is still being talked about. */
 function FreshnessMark({ pin }: { pin: RenderedPin }) {
   const level: Freshness = freshnessOf(pin.opacity)
   const bars = level === 'top_of_mind' ? 3 : level === 'cooling' ? 2 : 1

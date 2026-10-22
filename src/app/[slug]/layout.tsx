@@ -18,12 +18,12 @@ export default async function OrgLayout({
   params: Promise<{ slug: string }>
 }>) {
   const { slug } = await params
-  // Read here so the server renders the sidebar and the frame list as the
+  // Read here so the server renders the sidebar and the request list as the
   // viewer left them, with no flicker after load.
   const jar = await cookies()
   const prefs = {
     sidebarClosed: jar.get(UI_PREF_COOKIES.sidebarClosed)?.value === '1',
-    framesHidden: jar.get(UI_PREF_COOKIES.framesHidden)?.value === '1',
+    requestsHidden: jar.get(UI_PREF_COOKIES.requestsHidden)?.value === '1',
   }
   return (
     <CommandPaletteProvider slug={slug}>

@@ -30,7 +30,7 @@ test.describe('Product Map canvas', () => {
   }
 
   function bubbles(page: import('@playwright/test').Page) {
-    return page.locator('svg [role="button"][aria-label*="frames."]')
+    return page.locator('svg [role="button"][aria-label*="requests."]')
   }
 
   /**
@@ -60,12 +60,12 @@ test.describe('Product Map canvas', () => {
     expect(await marks(page).count()).toBeLessThan(opened)
   })
 
-  test('a bubble numbers frames, not reports', async ({ page }) => {
+  test('a bubble numbers requests, not reports', async ({ page }) => {
     await shrink(page)
 
-    // Back office holds 8 frames, carrying more than 8 reports between them.
+    // Back office holds 8 requests, carrying more than 8 reports between them.
     const backOffice = page.locator('svg [role="button"][aria-label^="Back office,"]')
-    await expect(backOffice).toHaveAttribute('aria-label', /Back office, 8 frames/)
+    await expect(backOffice).toHaveAttribute('aria-label', /Back office, 8 requests/)
   })
 
   test('clicking a bubble zooms to that region and splits it into pins', async ({ page }) => {
@@ -82,7 +82,7 @@ test.describe('Product Map canvas', () => {
     ).toBeVisible()
   })
 
-  test('clicking a pin opens its frame', async ({ page }) => {
+  test('clicking a pin opens its request', async ({ page }) => {
     // A big window renders the map large, so every region is past the collapse
     // size and its pins are drawn individually.
     await page.setViewportSize({ width: 1600, height: 1000 })
@@ -93,11 +93,11 @@ test.describe('Product Map canvas', () => {
 
     await pin.click()
 
-    await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f1')
+    await expect(page.getByTestId('opened-request')).toHaveText('Opened: f1')
   })
 
-  // The tooltip of one pin opens the frame too, the same as a bubble's list.
-  test('clicking the tooltip of a pin opens its frame', async ({ page }) => {
+  // The tooltip of one pin opens the request too, the same as a bubble's list.
+  test('clicking the tooltip of a pin opens its request', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 })
     await page
       .locator('svg [role="button"][aria-label="Capture from Slack loses the thread link"]')
@@ -105,7 +105,7 @@ test.describe('Product Map canvas', () => {
 
     await page.locator('[data-radix-popper-content-wrapper] button').click()
 
-    await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f1')
+    await expect(page.getByTestId('opened-request')).toHaveText('Opened: f1')
   })
 
   test('browsing the map never zooms out past the whole map', async ({ page }) => {
@@ -125,7 +125,7 @@ test.describe('Product Map canvas', () => {
 
     await page.getByRole('button', { name: 'Customers only' }).click()
 
-    // Every frame that no customer ever reported leaves the land.
+    // Every request that no customer ever reported leaves the land.
     await expect(page.getByTestId('counts')).not.toContainText('20 on the map')
     await expect(page.getByTestId('counts')).toContainText('on the map')
   })
@@ -148,8 +148,8 @@ test.describe('Product Map canvas', () => {
   })
 
   // The filters live in the URL, so a filtered list is a link somebody can share.
-  test('lists every open frame, and filters it from the URL', async ({ page }) => {
-    const list = page.getByRole('region', { name: 'Frames' })
+  test('lists every open request, and filters it from the URL', async ({ page }) => {
+    const list = page.getByRole('region', { name: 'Requests' })
     await expect(list.locator('li')).toHaveCount(20)
 
     await page.goto('/e2e/product-map?type=security')
@@ -160,26 +160,26 @@ test.describe('Product Map canvas', () => {
     await expect(list.locator('li')).toHaveCount(8)
   })
 
-  // Freshness comes from the last mention. A frame nobody woke for two cycles
-  // is dormant, and there is no browsable list of dormant frames (ADR 0024).
-  test('marks how top of mind each frame is, and leaves dormant ones out', async ({ page }) => {
-    const list = page.getByRole('region', { name: 'Frames' })
+  // Freshness comes from the last mention. A request nobody woke for two cycles
+  // is dormant, and there is no browsable list of dormant requests (ADR 0024).
+  test('marks how top of mind each request is, and leaves dormant ones out', async ({ page }) => {
+    const list = page.getByRole('region', { name: 'Requests' })
     await expect(list.locator('li').first()).toContainText('Top of mind')
     await expect(list).not.toContainText('Contract dates parse in the wrong locale')
   })
 
-  // A bubble's tooltip lists its frames, five at a time, so a person can open
+  // A bubble's tooltip lists its requests, five at a time, so a person can open
   // one without zooming in.
-  test('pages through the frames of a bubble and opens one', async ({ page }) => {
+  test('pages through the requests of a bubble and opens one', async ({ page }) => {
     await page.setViewportSize({ width: 420, height: 700 })
     await page.goto('/e2e/product-map')
-    await page.getByRole('button', { name: 'Back office, 8 frames. Zoom in.' }).hover()
+    await page.getByRole('button', { name: 'Back office, 8 requests. Zoom in.' }).hover()
 
     await expect(page.getByText('1–5 of 8')).toBeVisible()
-    await page.getByRole('button', { name: 'Next frames' }).click()
+    await page.getByRole('button', { name: 'Next requests' }).click()
     await expect(page.getByText('6–8 of 8')).toBeVisible()
     await page.getByRole('button', { name: /Reconciliation hides which source won/ }).click()
 
-    await expect(page.getByTestId('opened-frame')).toHaveText('Opened: f14')
+    await expect(page.getByTestId('opened-request')).toHaveText('Opened: f14')
   })
 })

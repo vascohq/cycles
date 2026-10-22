@@ -43,18 +43,18 @@ export type CyclePitch = {
   stage: Stage
   needle: Needle | null
   /**
-   * **Frame as bet**: a copy of the Frame's problem text, taken when the bet was
-   * made. The frame on the Product Map keeps changing. This copy never does, so
+   * **Frame as bet**: a copy of the Request's problem text, taken when the bet was
+   * made. The request on the Product Map keeps changing. This copy never does, so
    * a past cycle always shows what the team actually committed to (ADR 0022).
    */
   frame_problem: string
   frame_outcome: string
   /**
-   * The Frame on the Product Map this shape attacks (ADR 0022). Undefined on a
-   * shape created with no frame, and on every shape written before the Product
+   * The Request on the Product Map this shape attacks (ADR 0022). Undefined on a
+   * shape created with no request, and on every shape written before the Product
    * Map existed. Editing this shape never writes back to the map.
    */
-  frame_id?: string
+  request_id?: string
   timebox_start: string
   timebox_end: string
   /** Identity emoji (single grapheme), or '' when unset. */

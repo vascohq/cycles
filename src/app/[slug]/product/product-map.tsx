@@ -15,20 +15,20 @@ import {
 } from '@/product-map-room-context'
 import type {
   Area,
-  Frame,
-  FrameKind,
-  FrameOutcome,
-  FramePointer,
-  FrameReport,
-  FrameType,
+  ProductRequest,
+  RequestKind,
+  RequestOutcome,
+  RequestPointer,
+  RequestReport,
+  RequestType,
   PointerKind,
 } from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
   KIND_COLORS,
   DEFAULT_LENS,
-  FRAME_KINDS,
-  FRAME_TYPES,
+  REQUEST_KINDS,
+  REQUEST_TYPES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
   correctReport,
@@ -37,7 +37,7 @@ import {
   isMemberId,
   renderProductMap,
   type CycleWindow,
-  type FrameState,
+  type RequestState,
   type LinkedShape,
   type HeatLens,
   type RenderedArea,
@@ -47,12 +47,12 @@ import {
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
-import { betOnFrame } from './actions'
+import { betOnRequest } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
-import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/frame-icons'
+import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/request-icons'
 import { ExternalLink, Pencil, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
-import { claudeChatHref, frameHref, useOpenFramePage } from './links'
-import { FilteredFrames } from './frame-filters'
+import { claudeChatHref, requestHref, useOpenRequestPage } from './links'
+import { FilteredRequests } from './request-filters'
 import { MapWorkspace, WorkspaceSkeleton } from './map-workspace'
 import {
   OrganizationUsersProvider,
@@ -89,7 +89,7 @@ import { SidebarButton, TopBar } from '@/components/sidebar-layout'
 import { SectionCrumb } from '@/components/crumb-menu'
 import { DraftMarkdown } from '@/components/draft-markdown'
 
-const SOURCE_LABELS: Record<FrameReport['source'], string> = {
+const SOURCE_LABELS: Record<RequestReport['source'], string> = {
   internal: 'Internal',
   customer: 'Customer',
 }
@@ -103,7 +103,7 @@ const PILL =
   'inline-flex h-auto w-auto items-center gap-1.5 rounded-full border border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-0 focus:ring-offset-0'
 
 /**
- * A pill that edits. Capture and the frame form use the same one, so a frame is
+ * A pill that edits. Capture and the request form use the same one, so a request is
  * read and written the same way and nothing has to be learned twice.
  */
 function PillSelect({
@@ -142,16 +142,16 @@ function PillSelect({
   )
 }
 
-/** One wording, so the field reads the same whether a frame is being made or read. */
+/** One wording, so the field reads the same whether a request is being made or read. */
 const WHY_LABEL = 'Why does this matter to Vasco?'
 
-const KIND_OPTIONS = FRAME_KINDS.map((k) => ({
+const KIND_OPTIONS = REQUEST_KINDS.map((k) => ({
   value: k,
   label: KIND_LABELS[k],
   icon: KIND_ICONS[k],
   color: KIND_COLORS[k],
 }))
-const TYPE_OPTIONS = FRAME_TYPES.map((t) => ({
+const TYPE_OPTIONS = REQUEST_TYPES.map((t) => ({
   value: t,
   label: TYPE_LABELS[t],
   icon: TYPE_ICONS[t],
@@ -163,20 +163,20 @@ const TITLE_INPUT =
 
 /** The Select value that stands for "no area". Empty string is not selectable. */
 const UNMAPPED = '__unmapped__'
-/** The Select value that stands for "nobody holds this frame". */
+/** The Select value that stands for "nobody holds this request". */
 const NOBODY = '__nobody__'
 
 /**
- * A pin sits three components deep inside the land, and opening its frame is
+ * A pin sits three components deep inside the land, and opening its request is
  * none of that land's business — so the opener travels by context instead of
  * threading through every region (the repo rule on cross-cutting concerns).
  */
-export const OpenFrameContext = createContext<(frameId: string) => void>(() => {})
+export const OpenRequestContext = createContext<(requestId: string) => void>(() => {})
 
-/** The cycles a frame can be bet into. Read once, at the page boundary. */
+/** The cycles a request can be bet into. Read once, at the page boundary. */
 export const CyclesContext = createContext<CycleWindow[]>([])
 
-/** The Product Map's own page: the land, plus every list that reaches a frame. */
+/** The Product Map's own page: the land, plus every list that reaches a request. */
 export function ProductMap({
   roomId,
   organizationUsers,
@@ -206,9 +206,9 @@ export function ProductMap({
 function ProductMapView({ cycles, shapes }: { cycles: CycleWindow[]; shapes: LinkedShape[] }) {
   // Guarded reads: `initialStorage` only seeds a brand-new room, so a room whose
   // root predates either list must still render, not throw.
-  const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
+  const requests = useProductMapStorage((root) => (root.requests ?? []) as unknown as ProductRequest[])
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
-  const openFrame = useOpenFramePage()
+  const openRequest = useOpenRequestPage()
   // No control on the page for this. The engine still computes every lens, and
   // MCP callers still filter by one, so the switch can come back without a
   // change to the model.
@@ -218,7 +218,7 @@ function ProductMapView({ cycles, shapes }: { cycles: CycleWindow[]; shapes: Lin
   // in the team timezone, the same as every other date-derived surface.
   const model = renderProductMap({
     areas,
-    frames,
+    requests,
     lens,
     cycles,
     shapes,
@@ -232,24 +232,24 @@ function ProductMapView({ cycles, shapes }: { cycles: CycleWindow[]; shapes: Lin
   // With land, the map is the page: the toolbar above it, the list beside it.
   if (model.areas.length > 0) {
     return (
-      <OpenFrameContext.Provider value={openFrame}>
+      <OpenRequestContext.Provider value={openRequest}>
         <CyclesContext.Provider value={cycles}>
           <MapWorkspace
             title={<SectionCrumb section="Product Map" current />}
             heading={<h1 className="font-display text-2xl">Product Map</h1>}
             areas={model.areas}
             pins={pins}
-            onOpenFrame={openFrame}
+            onOpenRequest={openRequest}
             footer={dormant}
             withUnmapped
           />
         </CyclesContext.Provider>
-      </OpenFrameContext.Provider>
+      </OpenRequestContext.Provider>
     )
   }
 
   return (
-    <OpenFrameContext.Provider value={openFrame}>
+    <OpenRequestContext.Provider value={openRequest}>
       <CyclesContext.Provider value={cycles}>
         <Shell>
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-center">
@@ -263,16 +263,16 @@ function ProductMapView({ cycles, shapes }: { cycles: CycleWindow[]; shapes: Lin
               <AskClaude drawTheMap />
             </div>
           </div>
-          {/* Frames can arrive before the land does. They are still reachable. */}
+          {/* Requests can arrive before the land does. They are still reachable. */}
           {pins.length > 0 && (
             <div className="mt-8">
-              <FilteredFrames pins={pins} areas={model.areas} />
+              <FilteredRequests pins={pins} areas={model.areas} />
             </div>
           )}
           {dormant}
         </Shell>
       </CyclesContext.Provider>
-    </OpenFrameContext.Provider>
+    </OpenRequestContext.Provider>
   )
 }
 
@@ -291,7 +291,7 @@ export const CaptureTrigger = forwardRef<HTMLButtonElement, ComponentProps<'butt
   }
 )
 
-/** Area id → the owner the area suggests for a new frame filed there. */
+/** Area id → the owner the area suggests for a new request filed there. */
 export function areaOwners(areas: RenderedArea[]): Record<string, string> {
   const owners: Record<string, string> = {}
   for (const area of areas) {
@@ -301,7 +301,7 @@ export function areaOwners(areas: RenderedArea[]): Record<string, string> {
   return owners
 }
 
-/** One flat, indented list of every area, for the "file this frame" pickers. */
+/** One flat, indented list of every area, for the "file this request" pickers. */
 export type AreaOption = { id: string; label: string }
 
 export function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
@@ -313,11 +313,11 @@ export function areaOptions(areas: RenderedArea[], depth = 0): AreaOption[] {
 
 /**
  * The sweep's review queue, shown only in cooldown and capped. It exists for the
- * one case dormancy cannot cover on its own: a frame that came up at the betting
+ * one case dormancy cannot cover on its own: a request that came up at the betting
  * table and that nobody's transcript turned into a wake.
  *
- * This is NOT a browsable list of dormant frames. Anything past the cap is
- * reached with a filtered `map_list_frames` query, and that friction is the
+ * This is NOT a browsable list of dormant requests. Anything past the cap is
+ * reached with a filtered `map_list_requests` query, and that friction is the
  * feature (ADR 0024).
  */
 function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOption[] }) {
@@ -333,7 +333,7 @@ function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOp
       </p>
       <ul className="flex flex-col gap-1.5">
         {pins.map((pin) => (
-          <PinDot key={pin.frameId} pin={pin} options={options} />
+          <PinDot key={pin.requestId} pin={pin} options={options} />
         ))}
       </ul>
     </section>
@@ -341,8 +341,8 @@ function DormantReview({ pins, options }: { pins: RenderedPin[]; options: AreaOp
 }
 
 function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
-  const openFrame = useContext(OpenFrameContext)
-  const wake = useWakeFrame()
+  const openRequest = useContext(OpenRequestContext)
+  const wake = useWakeRequest()
 
   return (
     <li
@@ -370,7 +370,7 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
       <button
         type="button"
         className="truncate text-left hover:underline"
-        onClick={() => openFrame(pin.frameId)}
+        onClick={() => openRequest(pin.requestId)}
       >
         {pin.problem}
       </button>
@@ -388,15 +388,15 @@ function PinDot({ pin, options }: { pin: RenderedPin; options: AreaOption[] }) {
         {KIND_LABELS[pin.kind]} · {TYPE_LABELS[pin.type]} · {STATE_LABELS[pin.state]}
         {pin.reportCount > 0 && ` · ${pin.reportCount} reported`}
       </span>
-      <StillHurtsButton onWake={() => wake(pin.frameId)} />
+      <StillHurtsButton onWake={() => wake(pin.requestId)} />
       <FileInto pin={pin} options={options} className="ml-auto" />
     </li>
   )
 }
 
 /**
- * Files a frame into an area, or back to Unmapped. Filing is the one edit a
- * row carries. Moving a frame out is the same write with the area cleared, so
+ * Files a request into an area, or back to Unmapped. Filing is the one edit a
+ * row carries. Moving a request out is the same write with the area cleared, so
  * nothing needs a second control.
  */
 export function FileInto({
@@ -408,12 +408,12 @@ export function FileInto({
   options: AreaOption[]
   className?: string
 }) {
-  const fileFrame = useProductMapMutation(
-    ({ storage }, frameId: string, areaId: string) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      if (!frame) return
-      if (areaId) frame.set('areaId', areaId)
-      else frame.delete('areaId')
+  const fileRequest = useProductMapMutation(
+    ({ storage }, requestId: string, areaId: string) => {
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      if (!request) return
+      if (areaId) request.set('areaId', areaId)
+      else request.delete('areaId')
     },
     []
   )
@@ -421,7 +421,7 @@ export function FileInto({
   return (
     <Select
       value={pin.areaId || UNMAPPED}
-      onValueChange={(v) => fileFrame(pin.frameId, v === UNMAPPED ? '' : v)}
+      onValueChange={(v) => fileRequest(pin.requestId, v === UNMAPPED ? '' : v)}
     >
       <SelectTrigger className={`h-7 w-36 shrink-0 ${className}`} aria-label="File in area">
         <SelectValue />
@@ -452,15 +452,15 @@ function outlineStyle(outline: RenderedPin['outline']): React.CSSProperties {
 }
 
 /**
- * "Still hurts" — the third and simplest of the three things that wake a frame.
- * It writes the freshness clock and nothing else, so somebody keeps a frame
+ * "Still hurts" — the third and simplest of the three things that wake a request.
+ * It writes the freshness clock and nothing else, so somebody keeps a request
  * alive without having to write a new report.
  */
-function useWakeFrame() {
-  return useProductMapMutation(({ storage }, frameId: string) => {
-    const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-    if (!frame) return
-    frame.set('last_woken', getTeamToday(new Date()))
+function useWakeRequest() {
+  return useProductMapMutation(({ storage }, requestId: string) => {
+    const request = storage.get('requests').find((f) => f.get('id') === requestId)
+    if (!request) return
+    request.set('last_woken', getTeamToday(new Date()))
   }, [])
 }
 
@@ -471,7 +471,7 @@ function StillHurtsButton({ onWake }: { onWake: () => void }) {
       variant="ghost"
       className="h-7 shrink-0 px-2 text-xs"
       onClick={onWake}
-      title="Reset this frame's freshness clock"
+      title="Reset this request's freshness clock"
     >
       Still hurts
     </Button>
@@ -480,11 +480,11 @@ function StillHurtsButton({ onWake }: { onWake: () => void }) {
 
 /**
  * The heat lens. It changes which reports count towards pin size, and nothing
- * else — a frame keeps one freshness clock whatever the lens says. Comparing
+ * else — a request keeps one freshness clock whatever the lens says. Comparing
  * the internal lens with the customer lens is how a team finds pain it is
  * ignoring.
  */
-export function FrameDetail({
+export function RequestDetail({
   pin,
   onClose,
   areas,
@@ -495,12 +495,12 @@ export function FrameDetail({
 }) {
   const users = useOrganizationUsers()
 
-  const editFrame = useProductMapMutation(
-    ({ storage }, frameId: string, field: EditableField, value: string) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      if (!frame) return
+  const editRequest = useProductMapMutation(
+    ({ storage }, requestId: string, field: EditableField, value: string) => {
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      if (!request) return
       // '' clears an optional field: the key goes away rather than sitting there
-      // as an empty string nobody can tell from "unset". A frame with no areaId
+      // as an empty string nobody can tell from "unset". A request with no areaId
       // is Unmapped, which is always a valid answer.
       if (
         (field === 'owner' ||
@@ -509,31 +509,31 @@ export function FrameDetail({
           field === 'announcement') &&
         value === ''
       )
-        frame.delete(field)
-      else frame.set(field, value as never)
+        request.delete(field)
+      else request.set(field, value as never)
     },
     []
   )
 
   if (!pin) return null
   const set = (field: EditableField) => (value: string) =>
-    editFrame(pin.frameId, field, value)
+    editRequest(pin.requestId, field, value)
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      {/* key: a fresh frame gets fresh local field state, so no draft leaks
-          from the frame that was open before it. */}
+      {/* key: a fresh request gets fresh local field state, so no draft leaks
+          from the request that was open before it. */}
       <DialogContent
-        key={pin.frameId}
+        key={pin.requestId}
         className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5"
       >
         {/*
           The problem IS the title, in the same language as capture and as the
           new-card modal: a big borderless line you type straight into, with the
-          frame's facts as pills under it. A separate "Problem" field below a
-          generic heading made the frame read like a form.
+          request's facts as pills under it. A separate "Problem" field below a
+          generic heading made the request read like a form.
         */}
-        <DialogTitle className="sr-only">{pin.problem || 'Frame'}</DialogTitle>
+        <DialogTitle className="sr-only">{pin.problem || 'Request'}</DialogTitle>
         <DraftTitle value={pin.problem} onCommit={set('problem')} />
         {/*
           The pills ARE the inputs, the same as capture. Kind, Type and the owner
@@ -567,7 +567,7 @@ export function FrameDetail({
           <PillSelect
             value={pin.owner ?? NOBODY}
             onChange={(v) => set('owner')(v === NOBODY ? '' : v)}
-            label="Frame owner"
+            label="Request owner"
             options={[
               { value: NOBODY, label: 'Nobody yet' },
               ...users.map((u) => ({ value: u.userId, label: u.name })),
@@ -581,11 +581,11 @@ export function FrameDetail({
         <p className="text-sm text-muted-foreground">
           {pin.sharp
             ? 'Sharp — it has a problem, an appetite and an outcome, so it can be bet on.'
-            : 'Rough — a frame is sharp once it has a problem, an appetite and an outcome.'}
+            : 'Rough — a request is sharp once it has a problem, an appetite and an outcome.'}
         </p>
 
         {/*
-          Tabs, not one long scroll. A frame carries four different kinds of
+          Tabs, not one long scroll. A request carries four different kinds of
           thing — the framing, the evidence, the dossier, and the history — and
           only one of them is ever the reason somebody opened it. The counts are
           on the tabs so nothing hides behind an unopened one.
@@ -603,7 +603,7 @@ export function FrameDetail({
           </TabsList>
 
           {/* The same order and the same question as capture. A field that means
-              one thing must not move between creating a frame and reading it. */}
+              one thing must not move between creating a request and reading it. */}
           <TabsContent value="framing" className="flex flex-col gap-3 pt-2">
             <Field label={WHY_LABEL} hint="Who is affected, what it is worth, why now.">
               <DraftMarkdown
@@ -729,39 +729,39 @@ function RaisedByPicker({
 }
 
 /**
- * Frames related to this one, and the way to change the set. The relation goes
- * both ways, so the write updates both frames (`relateFrames`). A duplicate is
+ * Requests related to this one, and the way to change the set. The relation goes
+ * both ways, so the write updates both requests (`relateRequests`). A duplicate is
  * not related: it gets deleted (ADR 0026).
  */
 function Related({ pin }: { pin: RenderedPin }) {
   const { slug } = useParams<{ slug: string }>()
-  const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
+  const requests = useProductMapStorage((root) => (root.requests ?? []) as unknown as ProductRequest[])
   const relate = useProductMapMutation(
-    ({ storage }, ids: string[]) => storeRelated(storage.get('frames'), pin.frameId, ids),
-    [pin.frameId]
+    ({ storage }, ids: string[]) => storeRelated(storage.get('requests'), pin.requestId, ids),
+    [pin.requestId]
   )
-  const current = pin.related.map((r) => r.frameId)
-  const candidates = frames.filter((f) => f.id !== pin.frameId && !current.includes(f.id))
+  const current = pin.related.map((r) => r.requestId)
+  const candidates = requests.filter((f) => f.id !== pin.requestId && !current.includes(f.id))
 
   return (
     <div className="flex flex-col gap-2 border-t pt-4">
-      <Label>Related frames</Label>
+      <Label>Related requests</Label>
       {pin.related.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          None yet. Relate a frame that one solution would also close.
+          None yet. Relate a request that one solution would also close.
         </p>
       )}
       <ul className="flex flex-col gap-1">
         {pin.related.map((r) => (
-          <li key={r.frameId} className="flex items-start gap-2 text-sm">
-            <Link href={frameHref(slug, r.frameId)} className="flex-1 underline">
-              {r.problem || 'Untitled frame'}
+          <li key={r.requestId} className="flex items-start gap-2 text-sm">
+            <Link href={requestHref(slug, r.requestId)} className="flex-1 underline">
+              {r.problem || 'Untitled request'}
             </Link>
             <button
               type="button"
               aria-label={`Unrelate ${r.problem}`}
               title="Remove the relation"
-              onClick={() => relate(current.filter((id) => id !== r.frameId))}
+              onClick={() => relate(current.filter((id) => id !== r.requestId))}
               className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
@@ -771,13 +771,13 @@ function Related({ pin }: { pin: RenderedPin }) {
       </ul>
       {candidates.length > 0 && (
         <Select value="" onValueChange={(id) => relate([...current, id])}>
-          <SelectTrigger aria-label="Relate a frame">
-            <SelectValue placeholder="Relate a frame…" />
+          <SelectTrigger aria-label="Relate a request">
+            <SelectValue placeholder="Relate a request…" />
           </SelectTrigger>
           <SelectContent>
             {candidates.map((f) => (
               <SelectItem key={f.id} value={f.id}>
-                {f.problem || 'Untitled frame'}
+                {f.problem || 'Untitled request'}
               </SelectItem>
             ))}
           </SelectContent>
@@ -791,25 +791,25 @@ function Related({ pin }: { pin: RenderedPin }) {
  * The origin chain, and the way to add to it.
  *
  * A quality or an adoption problem found while monitoring a release becomes a
- * NEW frame with a pointer back — never a reopening of this one. One frame text
+ * NEW request with a pointer back — never a reopening of this one. One request text
  * cannot hold two differently-framed problems, and each deserves its own
  * appetite (ADR 0025). The chain then shows which releases create follow-on
  * pain, and nobody maintains it.
  */
 function Origin({ pin }: { pin: RenderedPin }) {
-  const openFrame = useContext(OpenFrameContext)
+  const openRequest = useContext(OpenRequestContext)
   const { userId } = useAuth()
   const [problem, setProblem] = useState('')
-  const [type, setType] = useState<FrameType>('bug')
+  const [type, setType] = useState<RequestType>('bug')
 
-  const captureFrame = useProductMapMutation(({ storage }, frame: Frame) => {
-    storage.get('frames').push(new LiveObject(frame))
+  const captureRequest = useProductMapMutation(({ storage }, request: ProductRequest) => {
+    storage.get('requests').push(new LiveObject(request))
   }, [])
 
   function onSubmit(): boolean {
     const text = problem.trim()
     if (!text) return false
-    captureFrame({
+    captureRequest({
       id: nanoid(),
       kind: DEFAULT_KIND,
       type,
@@ -818,9 +818,9 @@ function Origin({ pin }: { pin: RenderedPin }) {
       business_case: '',
       ...(pin.areaId ? { areaId: pin.areaId } : {}),
       ...(pin.owner ? { owner: pin.owner } : userId ? { owner: userId } : {}),
-      // The pointer back. Capturing it never touches this frame: the origin
-      // frame is not reopened, and it stays in monitoring.
-      originFrameId: pin.frameId,
+      // The pointer back. Capturing it never touches this request: the origin
+      // request is not reopened, and it stays in monitoring.
+      originRequestId: pin.requestId,
       reports: [],
       pointers: [],
       // Capture stays one line. Outcomes are what framing adds later.
@@ -839,11 +839,11 @@ function Origin({ pin }: { pin: RenderedPin }) {
           <Label>Came out of</Label>
           <ol className="flex flex-col gap-1">
             {pin.originChain.map((link) => (
-              <li key={link.frameId} className="text-sm">
+              <li key={link.requestId} className="text-sm">
                 <button
                   type="button"
                   className="text-left underline"
-                  onClick={() => openFrame(link.frameId)}
+                  onClick={() => openRequest(link.requestId)}
                 >
                   {link.problem}
                 </button>
@@ -856,7 +856,7 @@ function Origin({ pin }: { pin: RenderedPin }) {
         <AddDialog
           cta="Found a problem in this release?"
           title="Capture a follow-on problem"
-          hint="It becomes a new frame pointing back at this one, with its own appetite. This frame is never reopened and stays in monitoring."
+          hint="It becomes a new request pointing back at this one, with its own appetite. This request is never reopened and stays in monitoring."
           submit="Capture it"
           disabled={!problem.trim()}
           onSubmit={onSubmit}
@@ -868,12 +868,12 @@ function Origin({ pin }: { pin: RenderedPin }) {
             value={problem}
             onChange={(e) => setProblem(e.target.value)}
           />
-          <Select value={type} onValueChange={(v) => setType(v as FrameType)}>
+          <Select value={type} onValueChange={(v) => setType(v as RequestType)}>
             <SelectTrigger className="w-36" aria-label="Follow-on Type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {FRAME_TYPES.map((t) => (
+              {REQUEST_TYPES.map((t) => (
                 <SelectItem key={t} value={t}>
                   {TYPE_LABELS[t]}
                 </SelectItem>
@@ -893,10 +893,10 @@ function Origin({ pin }: { pin: RenderedPin }) {
  */
 function Resolve({ pin, onClose }: { pin: RenderedPin; onClose: () => void }) {
   const setResolved = useProductMapMutation(
-    ({ storage }, frameId: string, resolved: boolean) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      if (!frame) return
-      frame.set('resolved', resolved)
+    ({ storage }, requestId: string, resolved: boolean) => {
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      if (!request) return
+      request.set('resolved', resolved)
     },
     []
   )
@@ -913,7 +913,7 @@ function Resolve({ pin, onClose }: { pin: RenderedPin; onClose: () => void }) {
         variant="outline"
         className="h-8 shrink-0"
         onClick={() => {
-          setResolved(pin.frameId, true)
+          setResolved(pin.requestId, true)
           onClose()
         }}
       >
@@ -924,10 +924,10 @@ function Resolve({ pin, onClose }: { pin: RenderedPin; onClose: () => void }) {
 }
 
 /**
- * Every shape that attacked this frame, with its cycle, plus the way to bet on
- * it. A frame outlives the work done against it, so the same problem can be
+ * Every shape that attacked this request, with its cycle, plus the way to bet on
+ * it. A request outlives the work done against it, so the same problem can be
  * attacked again years later and both bets stay visible. The list is read from
- * the cycle rooms and never stored on the frame (ADR 0022).
+ * the cycle rooms and never stored on the request (ADR 0022).
  */
 function Shapes({ pin }: { pin: RenderedPin }) {
   const cycles = useContext(CyclesContext)
@@ -939,7 +939,7 @@ function Shapes({ pin }: { pin: RenderedPin }) {
     setBetting(true)
     setError('')
     try {
-      await betOnFrame({ frameId: pin.frameId, cycleSlug, title: pin.problem })
+      await betOnRequest({ requestId: pin.requestId, cycleSlug, title: pin.problem })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -949,7 +949,7 @@ function Shapes({ pin }: { pin: RenderedPin }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Bets on this frame ({pin.shapes.length})</Label>
+      <Label>Bets on this request ({pin.shapes.length})</Label>
       <ul className="flex flex-col gap-1">
         {pin.shapes.map((shape) => (
           <li key={shape.shapeId} className="text-sm">
@@ -960,7 +960,7 @@ function Shapes({ pin }: { pin: RenderedPin }) {
           </li>
         ))}
       </ul>
-      {/* Only a sharp frame can be bet on, so a rough one is offered no bet at
+      {/* Only a sharp request can be bet on, so a rough one is offered no bet at
           all. The action re-checks server-side: this is the courtesy, not the
           rule. */}
       {pin.sharp && cycles.length > 0 && (
@@ -990,8 +990,8 @@ function Shapes({ pin }: { pin: RenderedPin }) {
       )}
       {!pin.sharp && (
         <p className="text-xs text-muted-foreground">
-          Give this frame an appetite before betting on it. Nobody bets on half a
-          frame.
+          Give this request an appetite before betting on it. Nobody bets on half a
+          request.
         </p>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -1000,39 +1000,39 @@ function Shapes({ pin }: { pin: RenderedPin }) {
 }
 
 /**
- * Opening a frame does NOT wake it. This button is how a reader who still feels
+ * Opening a request does NOT wake it. This button is how a reader who still feels
  * the problem says so on purpose (ADR 0024).
  */
 function StillHurts({ pin }: { pin: RenderedPin }) {
-  const wake = useWakeFrame()
+  const wake = useWakeRequest()
   return (
     <div className="flex items-center justify-between gap-2 border-t pt-4">
       <p className="text-xs text-muted-foreground">
         {pin.dormant
           ? 'Asleep — nobody has mentioned this for two cycles.'
           : pin.daysSinceWoken === null
-            ? 'No freshness clock on this frame.'
+            ? 'No freshness clock on this request.'
             : `Last mentioned ${pin.daysSinceWoken} days ago.`}
       </p>
-      <StillHurtsButton onWake={() => wake(pin.frameId)} />
+      <StillHurtsButton onWake={() => wake(pin.requestId)} />
     </div>
   )
 }
 
 /**
- * The dossier. A frame packages links and never copies the artifact, so the
+ * The dossier. A request packages links and never copies the artifact, so the
  * whole dossier is reachable from one place without anything drifting.
  *
- * Under it, the **Gap list**: what this frame's playbook expects and the frame
+ * Under it, the **Gap list**: what this request's playbook expects and the request
  * does not have. It refuses nothing — it is a prompt, never a gate (ADR 0025).
  */
 /**
- * Adding to a list opens its own dialog on top of the frame, rather than
+ * Adding to a list opens its own dialog on top of the request, rather than
  * sitting inline under the list.
  *
- * The frame detail is already dense — four tabs of lists — and an inline form
+ * The request detail is already dense — four tabs of lists — and an inline form
  * under each list reads as another row of that list. A CTA and a dialog make
- * the difference between reading a frame and writing to it visible, and it
+ * the difference between reading a request and writing to it visible, and it
  * gives every add form room for its fields instead of one cramped line.
  *
  * The dialog closes when `onSubmit` returns true, so a form that rejected its
@@ -1109,11 +1109,11 @@ function Outcomes({ pin }: { pin: RenderedPin }) {
   const [text, setText] = useState('')
 
   const write = useProductMapMutation(
-    ({ storage }, frameId: string, next: (current: FrameOutcome[]) => FrameOutcome[]) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      if (!frame) return
-      frame.set('outcomes', next((frame.get('outcomes') ?? []) as FrameOutcome[]))
-      // Deliberately no wake: framing a frame is not somebody mentioning the
+    ({ storage }, requestId: string, next: (current: RequestOutcome[]) => RequestOutcome[]) => {
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      if (!request) return
+      request.set('outcomes', next((request.get('outcomes') ?? []) as RequestOutcome[]))
+      // Deliberately no wake: framing a request is not somebody mentioning the
       // problem again (ADR 0024).
     },
     []
@@ -1122,7 +1122,7 @@ function Outcomes({ pin }: { pin: RenderedPin }) {
   function onSubmit(): boolean {
     const line = text.trim()
     if (!line) return false
-    write(pin.frameId, (current) => [...current, { id: nanoid(), text: line }])
+    write(pin.requestId, (current) => [...current, { id: nanoid(), text: line }])
     setText('')
     return true
   }
@@ -1143,7 +1143,7 @@ function Outcomes({ pin }: { pin: RenderedPin }) {
                 type="button"
                 className="shrink-0 text-xs text-muted-foreground underline"
                 onClick={() =>
-                  write(pin.frameId, (current) => current.filter((o) => o.id !== outcome.id))
+                  write(pin.requestId, (current) => current.filter((o) => o.id !== outcome.id))
                 }
                 aria-label={`Remove outcome: ${outcome.text}`}
               >
@@ -1179,13 +1179,13 @@ function Pointers({ pin }: { pin: RenderedPin }) {
   const [kind, setKind] = useState<PointerKind>('issue')
 
   const addPointer = useProductMapMutation(
-    ({ storage }, frameId: string, pointer: FramePointer) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      if (!frame) return
-      const pointers = (frame.get('pointers') ?? []) as FramePointer[]
-      frame.set('pointers', [...pointers, pointer])
+    ({ storage }, requestId: string, pointer: RequestPointer) => {
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      if (!request) return
+      const pointers = (request.get('pointers') ?? []) as RequestPointer[]
+      request.set('pointers', [...pointers, pointer])
       // Deliberately no wake: filing a link is not one of the three things that
-      // wake a frame (ADR 0024).
+      // wake a request (ADR 0024).
     },
     []
   )
@@ -1193,7 +1193,7 @@ function Pointers({ pin }: { pin: RenderedPin }) {
   function onSubmit(): boolean {
     const href = url.trim()
     if (!href) return false
-    addPointer(pin.frameId, {
+    addPointer(pin.requestId, {
       url: href,
       label: label.trim() || POINTER_KIND_LABELS[kind],
       kind,
@@ -1225,7 +1225,7 @@ function Pointers({ pin }: { pin: RenderedPin }) {
       </ul>
       {pin.gaps.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          A {TYPE_LABELS[pin.type].toLowerCase()} frame usually also points at:{' '}
+          A {TYPE_LABELS[pin.type].toLowerCase()} request usually also points at:{' '}
           {pin.gaps.map((gap) => POINTER_KIND_LABELS[gap]).join(', ')}. Nothing is
           blocked while these are missing.
         </p>
@@ -1233,7 +1233,7 @@ function Pointers({ pin }: { pin: RenderedPin }) {
       <AddDialog
         cta="Link a pointer"
         title="Link a pointer"
-        hint="The artifact stays where it lives. A frame holds the link and never a copy."
+        hint="The artifact stays where it lives. A request holds the link and never a copy."
         submit="Link it"
         disabled={!url.trim()}
         onSubmit={onSubmit}
@@ -1276,40 +1276,40 @@ function Pointers({ pin }: { pin: RenderedPin }) {
 
 /**
  * The evidence. A reader needs the reports and not only the count, so an agent's
- * frame can be judged by the person reading it — every report names its capturer.
+ * request can be judged by the person reading it — every report names its capturer.
  *
- * Adding a report also wakes the frame, because a fresh report IS the
+ * Adding a report also wakes the request, because a fresh report IS the
  * conversation the freshness clock listens for (ADR 0024).
  */
 function Reports({ pin }: { pin: RenderedPin }) {
   const users = useOrganizationUsers()
   const { userId } = useAuth()
   const [text, setText] = useState('')
-  const [source, setSource] = useState<FrameReport['source']>('internal')
+  const [source, setSource] = useState<RequestReport['source']>('internal')
   const [customer, setCustomer] = useState('')
 
   const addReport = useProductMapMutation(
-    ({ storage }, frameId: string, report: FrameReport, wokenOn: string) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      if (!frame) return
-      const reports = (frame.get('reports') ?? []) as FrameReport[]
-      frame.set('reports', [...reports, report])
+    ({ storage }, requestId: string, report: RequestReport, wokenOn: string) => {
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      if (!request) return
+      const reports = (request.get('reports') ?? []) as RequestReport[]
+      request.set('reports', [...reports, report])
       // The wake is the act of reporting, which happens now — the same rule the
-      // writer follows, so a report never ages the frame it woke.
-      frame.set('last_woken', wokenOn)
+      // writer follows, so a report never ages the request it woke.
+      request.set('last_woken', wokenOn)
     },
     []
   )
 
   function onSubmit(): boolean {
     const line = text.trim()
-    // Nothing reaches a frame unmediated: a report with no capturer would be an
+    // Nothing reaches a request unmediated: a report with no capturer would be an
     // anonymous claim, and the whole point is that a reader can judge who made
     // it. The submit button is disabled for the same reason.
     if (!line || !userId) return false
     const today = getTeamToday(new Date())
     addReport(
-      pin.frameId,
+      pin.requestId,
       {
         id: nanoid(),
         capturer: userId,
@@ -1335,13 +1335,13 @@ function Reports({ pin }: { pin: RenderedPin }) {
       )}
       <ul className="flex flex-col gap-2">
         {pin.reports.map((report) => (
-          <ReportItem key={report.id} frameId={pin.frameId} report={report} />
+          <ReportItem key={report.id} requestId={pin.requestId} report={report} />
         ))}
       </ul>
       <AddDialog
         cta="Add a report"
         title="Add a report"
-        hint="One record of the problem happening. A report wakes the frame, because a fresh report is the conversation the freshness clock listens for."
+        hint="One record of the problem happening. A report wakes the request, because a fresh report is the conversation the freshness clock listens for."
         submit="Add report"
         disabled={!text.trim() || !userId}
         onSubmit={onSubmit}
@@ -1360,7 +1360,7 @@ function Reports({ pin }: { pin: RenderedPin }) {
         <div className="flex items-center gap-2">
           <Select
             value={source}
-            onValueChange={(v) => setSource(v as FrameReport['source'])}
+            onValueChange={(v) => setSource(v as RequestReport['source'])}
           >
             <SelectTrigger className="w-32" aria-label="Source">
               <SelectValue />
@@ -1387,11 +1387,11 @@ function Reports({ pin }: { pin: RenderedPin }) {
 
 /**
  * One report, with the way to correct it (ADR 0030). An edit replaces the
- * report in place: it never wakes the frame and never changes the count, so a
+ * report in place: it never wakes the request and never changes the count, so a
  * badly written report is fixed without counting as the problem happening
  * again. A delete is for a report recorded in error, and it asks first.
  */
-function ReportItem({ frameId, report }: { frameId: string; report: IdentifiedReport }) {
+function ReportItem({ requestId, report }: { requestId: string; report: IdentifiedReport }) {
   const users = useOrganizationUsers()
   const { userId } = useAuth()
   const [mode, setMode] = useState<'read' | 'edit' | 'delete'>('read')
@@ -1399,19 +1399,19 @@ function ReportItem({ frameId, report }: { frameId: string; report: IdentifiedRe
 
   const correct = useProductMapMutation(
     ({ storage }, patch: ReportPatch, editor: string, today: string) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      const reports = frame && correctReport(frame.get('reports') ?? [], report.id, patch, editor, today)
-      if (reports) frame.set('reports', reports)
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      const reports = request && correctReport(request.get('reports') ?? [], report.id, patch, editor, today)
+      if (reports) request.set('reports', reports)
     },
-    [frameId, report.id]
+    [requestId, report.id]
   )
   const remove = useProductMapMutation(
     ({ storage }) => {
-      const frame = storage.get('frames').find((f) => f.get('id') === frameId)
-      const reports = frame && removeReport(frame.get('reports') ?? [], report.id)
-      if (reports) frame.set('reports', reports)
+      const request = storage.get('requests').find((f) => f.get('id') === requestId)
+      const reports = request && removeReport(request.get('reports') ?? [], report.id)
+      if (reports) request.set('reports', reports)
     },
-    [frameId, report.id]
+    [requestId, report.id]
   )
 
   if (mode === 'edit') {
@@ -1426,7 +1426,7 @@ function ReportItem({ frameId, report }: { frameId: string; report: IdentifiedRe
         <div className="flex items-center gap-2">
           <Select
             value={draft.source}
-            onValueChange={(v) => setDraft({ ...draft, source: v as FrameReport['source'] })}
+            onValueChange={(v) => setDraft({ ...draft, source: v as RequestReport['source'] })}
           >
             <SelectTrigger className="w-32" aria-label="Source">
               <SelectValue />
@@ -1591,7 +1591,7 @@ function DraftInput({
   )
 }
 
-/** The frame's problem, styled as its heading rather than as a form field. */
+/** The request's problem, styled as its heading rather than as a form field. */
 function DraftTitle({
   value,
   onCommit,
@@ -1620,11 +1620,11 @@ function DraftTitle({
  * The order is the order somebody thinks in. The title says what hurts, or what
  * value sits unclaimed — a win to unlock breaks nothing, and it belongs here
  * beside the burns. The
- * struggle says what the customer cannot do, and it becomes the frame's FIRST
+ * struggle says what the customer cannot do, and it becomes the request's FIRST
  * REPORT rather than more prose — capture should leave evidence, not an
  * assertion. Then why it matters to Vasco, then the appetite.
  *
- * There is deliberately no outcome field. A frame holds the problem; an outcome
+ * There is deliberately no outcome field. A request holds the problem; an outcome
  * belongs to the Shape that attacks it, so the map stays about problems and
  * shaping stays about solutions.
  *
@@ -1648,13 +1648,13 @@ function CaptureForm({
   const [customer, setCustomer] = useState('')
   const [why, setWhy] = useState('')
   const [appetite, setAppetite] = useState('')
-  const [type, setType] = useState<FrameType>('bug')
-  const [kind, setKind] = useState<FrameKind>(DEFAULT_KIND)
+  const [type, setType] = useState<RequestType>('bug')
+  const [kind, setKind] = useState<RequestKind>(DEFAULT_KIND)
   const [areaId, setAreaId] = useState(UNMAPPED)
   const { userId } = useAuth()
 
-  const captureFrame = useProductMapMutation(({ storage }, frame: Frame) => {
-    storage.get('frames').push(new LiveObject(frame))
+  const captureRequest = useProductMapMutation(({ storage }, request: ProductRequest) => {
+    storage.get('requests').push(new LiveObject(request))
   }, [])
 
   function reset() {
@@ -1670,14 +1670,14 @@ function CaptureForm({
     const text = problem.trim()
     if (!text) return
     const today = getTeamToday(new Date())
-    // Every frame leaves capture owned. The area's owner is the suggestion, and
-    // it is only a suggestion — the capturer changes it in the frame detail. An
-    // Unmapped frame falls back to the capturer, because somebody must care.
+    // Every request leaves capture owned. The area's owner is the suggestion, and
+    // it is only a suggestion — the capturer changes it in the request detail. An
+    // Unmapped request falls back to the capturer, because somebody must care.
     const owner = areaOwners[areaId] ?? userId ?? ''
     const struggleText = struggle.trim()
     const who = customer.trim()
 
-    captureFrame({
+    captureRequest({
       id: nanoid(),
       kind,
       type,
@@ -1703,7 +1703,7 @@ function CaptureForm({
       pointers: [],
       // Capture stays one line. Outcomes are what framing adds later.
       outcomes: [],
-      // A frame is born awake. Its clock starts on the day it was captured.
+      // A request is born awake. Its clock starts on the day it was captured.
       last_woken: today,
       resolved: false,
     })
@@ -1720,14 +1720,14 @@ function CaptureForm({
       }}
     >
       <DialogContent className="max-h-[85vh] max-w-2xl gap-3 overflow-y-auto p-5">
-        <DialogTitle className="sr-only">Capture a frame</DialogTitle>
+        <DialogTitle className="sr-only">Capture a request</DialogTitle>
         <textarea
           autoFocus
           rows={2}
           value={problem}
           onChange={(e) => setProblem(e.target.value)}
           onKeyDown={(e) => {
-            // Enter creates, so a frame noticed in passing costs one line and a
+            // Enter creates, so a request noticed in passing costs one line and a
             // keystroke. Shift+Enter still breaks the line.
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
@@ -1739,18 +1739,18 @@ function CaptureForm({
           className={TITLE_INPUT}
         />
 
-        {/* The same pills the frame form uses, in the same place: directly under
-            the title. Capturing a frame and reading one are the same gesture. */}
+        {/* The same pills the request form uses, in the same place: directly under
+            the title. Capturing a request and reading one are the same gesture. */}
         <div className="flex flex-wrap items-center gap-2">
           <PillSelect
             value={kind}
-            onChange={(v) => setKind(v as FrameKind)}
+            onChange={(v) => setKind(v as RequestKind)}
             label="Kind"
             options={KIND_OPTIONS}
           />
           <PillSelect
             value={type}
-            onChange={(v) => setType(v as FrameType)}
+            onChange={(v) => setType(v as RequestType)}
             label="Type"
             options={TYPE_OPTIONS}
           />
@@ -1768,20 +1768,20 @@ function CaptureForm({
         </div>
 
         {/*
-          The same tab row the frame form has. Reports, pointers and history all
-          need a frame to point at, so they are shown and disabled rather than
-          hidden: what a frame will hold is visible from the moment it is made.
+          The same tab row the request form has. Reports, pointers and history all
+          need a request to point at, so they are shown and disabled rather than
+          hidden: what a request will hold is visible from the moment it is made.
         */}
         <Tabs value="framing" className="mt-1">
           <TabsList>
             <TabsTrigger value="framing">Framing</TabsTrigger>
-            <TabsTrigger value="reports" disabled title="Once the frame exists">
+            <TabsTrigger value="reports" disabled title="Once the request exists">
               Reports
             </TabsTrigger>
-            <TabsTrigger value="pointers" disabled title="Once the frame exists">
+            <TabsTrigger value="pointers" disabled title="Once the request exists">
               Pointers
             </TabsTrigger>
-            <TabsTrigger value="history" disabled title="Once the frame exists">
+            <TabsTrigger value="history" disabled title="Once the request exists">
               History
             </TabsTrigger>
           </TabsList>
@@ -1800,13 +1800,13 @@ function CaptureForm({
               <Input
                 value={appetite}
                 onChange={(e) => setAppetite(e.target.value)}
-                placeholder="Two weeks, six weeks… a frame is sharp once it has one."
+                placeholder="Two weeks, six weeks… a request is sharp once it has one."
                 aria-label="Appetite"
               />
             </Field>
 
             {/*
-              The struggle is the frame's first report, so it belongs to the
+              The struggle is the request's first report, so it belongs to the
               Reports tab — but that tab cannot exist yet, and capture has to
               stay one screen. It sits here, named for what it becomes.
             */}
@@ -1833,7 +1833,7 @@ function CaptureForm({
 
         <DialogFooter className="border-t border-border pt-3">
           <Button onClick={create} disabled={!problem.trim()}>
-            Capture frame
+            Capture request
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1843,7 +1843,7 @@ function CaptureForm({
 
 /**
  * One CTA, two ways in. Capture with AI is the route that scales — an agent
- * interviews you and fills the frame — and manual capture is the 4pm-on-a-Friday
+ * interviews you and fills the request — and manual capture is the 4pm-on-a-Friday
  * escape hatch, so noticing a problem never waits for an agent.
  */
 export function CaptureMenu({
@@ -1862,9 +1862,9 @@ export function CaptureMenu({
           <CaptureTrigger />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          {/* The same way in as Ask Paulo on a frame page: a new Claude chat
+          {/* The same way in as Ask Paulo on a request page: a new Claude chat
               with the command typed. Paulo asks for the problem and writes
-              the frame through the Cycles MCP server. */}
+              the request through the Cycles MCP server. */}
           <DropdownMenuItem asChild>
             <a href={CAPTURE_WITH_CLAUDE_URL} target="_blank" rel="noreferrer">
               Capture with Claude
@@ -1889,12 +1889,12 @@ function AskClaude({ drawTheMap = false }: { drawTheMap?: boolean }) {
   const examples = drawTheMap
     ? [
         'Draw our product map. We have a front office (Slack, email, CRM write-back), a back office (MCP, onboarding, the agent and metric engines) and ten connector categories.',
-        'Read our integration requests in Notion and capture a frame for each one, in the right area.',
+        'Read our integration requests in Notion and capture a request for each one, in the right area.',
       ]
     : [
-        'Capture a frame: Stripe refunds are counted as revenue. Four customers have raised it.',
+        'Capture a request: Stripe refunds are counted as revenue. Four customers have raised it.',
         'Botpress is blocked because reconciliation only matches account-type fields. Capture that as a brand burn on Definitions.',
-        'Read yesterday\'s betting table notes and capture a frame for every product problem in them.',
+        'Read yesterday\'s betting table notes and capture a request for every product problem in them.',
       ]
 
   return (

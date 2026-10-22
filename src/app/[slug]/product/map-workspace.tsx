@@ -6,20 +6,20 @@ import { PanelRight } from 'lucide-react'
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { keepFrames } from '@/lib/frame-list'
+import { keepRequests } from '@/lib/request-list'
 import type { RenderedArea, RenderedPin } from '@/lib/product-map-engine'
 
-import { FilterBar, useFilteredFrames } from './frame-filters'
-import { FrameList } from './frame-list'
+import { FilterBar, useFilteredRequests } from './request-filters'
+import { RequestList } from './request-list'
 import { TopBar } from '@/components/sidebar-layout'
 import { useUiPref } from '@/components/ui-prefs'
 
-/** The width of the frame list beside the map. */
+/** The width of the request list beside the map. */
 const PANEL = 380
 
 /**
  * The map as the whole page: the breadcrumb in the top bar, the page's title,
- * the filters in a toolbar above the land, and the frame list in a right
+ * the filters in a toolbar above the land, and the request list in a right
  * sidebar that closes (a cookie remembers it, see ui-prefs). One set of
  * filters shapes the map and the list, so a pin on the land is always a row
  * in the list.
@@ -34,12 +34,12 @@ export function MapWorkspace(props: {
   heading?: React.ReactNode
   /** The land to draw. */
   areas: RenderedArea[]
-  /** Every frame the list and the map can show, before the filters. */
+  /** Every request the list and the map can show, before the filters. */
   pins: RenderedPin[]
-  onOpenFrame: (frameId: string) => void
+  onOpenRequest: (requestId: string) => void
   /** Under the list, inside the panel: the dormant review queue. */
   footer?: React.ReactNode
-  /** The Area filter offers Unmapped. Only the whole map holds those frames. */
+  /** The Area filter offers Unmapped. Only the whole map holds those requests. */
   withUnmapped?: boolean
 }) {
   return (
@@ -54,22 +54,22 @@ function Workspace({
   heading,
   areas,
   pins,
-  onOpenFrame,
+  onOpenRequest,
   footer,
   withUnmapped = false,
 }: Parameters<typeof MapWorkspace>[0]) {
-  const [hidden, setHidden] = useUiPref('framesHidden')
+  const [hidden, setHidden] = useUiPref('requestsHidden')
   const open = !hidden
   const wide = useWide()
-  const { shown, keep } = useFilteredFrames(pins, areas)
+  const { shown, keep } = useFilteredRequests(pins, areas)
   const showList = open || !wide
   const toggle = (
     <button
       type="button"
       onClick={() => setHidden(open)}
-      aria-label={open ? 'Hide the frame list' : 'Show the frame list'}
+      aria-label={open ? 'Hide the request list' : 'Show the request list'}
       aria-expanded={open}
-      title={open ? 'Hide the frame list' : 'Show the frame list'}
+      title={open ? 'Hide the request list' : 'Show the request list'}
       className="hidden size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
     >
       <PanelRight className="size-4" />
@@ -89,15 +89,15 @@ function Workspace({
           </div>
           {!open && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              Frames · {shown.length}
+              Requests · {shown.length}
               {toggle}
             </span>
           )}
         </div>
         <div className="relative h-[55vh] md:h-auto md:min-h-0 md:flex-1">
           <MapCanvas
-            areas={keepFrames(areas, keep)}
-            onOpenFrame={onOpenFrame}
+            areas={keepRequests(areas, keep)}
+            onOpenRequest={onOpenRequest}
             className="absolute inset-0 h-full min-h-0 rounded-none border-0"
           />
         </div>
@@ -110,12 +110,12 @@ function Workspace({
         >
           <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3">
             <h2 className="text-sm font-medium">
-              Frames <span className="text-muted-foreground">· {shown.length}</span>
+              Requests <span className="text-muted-foreground">· {shown.length}</span>
             </h2>
             {toggle}
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-6 p-3 md:overflow-y-auto">
-            <FrameList pins={shown} areas={areas} dense />
+            <RequestList pins={shown} areas={areas} dense />
             {footer}
           </div>
         </aside>
@@ -143,7 +143,7 @@ function useWide(): boolean {
  * list unless the viewer hid it. So nothing pushes the map down when it loads.
  */
 export function WorkspaceSkeleton({ withHeading = false }: { withHeading?: boolean }) {
-  const [hidden] = useUiPref('framesHidden')
+  const [hidden] = useUiPref('requestsHidden')
   return (
     <main
       className="flex w-full flex-col md:h-[100dvh] md:max-h-full md:flex-row md:overflow-hidden"

@@ -34,20 +34,20 @@ import {
   upsertSquad,
   deleteSquad,
   upsertArea,
-  upsertFrame,
+  upsertRequest,
   attachReport,
   updateReport,
   deleteReport,
   linkPointer,
-  wakeFrame,
+  wakeRequest,
   writeBrief,
-  resolveFrame,
-  deleteFrame,
+  resolveRequest,
+  deleteRequest,
   deleteArea,
 } from './liveblocks-writer'
 import { SCOPE_PALETTE } from '@/lib/color-engine'
 import type { PitchUpdate } from '@/cycle-liveblocks.config'
-import type { FrameReport } from '@/product-map-liveblocks.config'
+import type { RequestReport } from '@/product-map-liveblocks.config'
 import { withReportIds } from '@/lib/product-map-engine'
 
 const mockGetRoom = vi.mocked(liveblocks.getRoom)
@@ -130,7 +130,7 @@ type StorageData = {
   squads?: MockItem[]
   cycle?: Record<string, unknown>
   // Product Map room storage (ADR 0021) — a different room, same mock shape.
-  frames?: MockItem[]
+  requests?: MockItem[]
   areas?: MockItem[]
 }
 
@@ -143,7 +143,7 @@ function setupStorage(data: StorageData = {}) {
     updates: makeMockList(data.updates ?? []),
     squads: makeMockList(data.squads ?? []),
     cycle: makeMockItem(data.cycle ?? {}),
-    frames: makeMockList(data.frames ?? []),
+    requests: makeMockList(data.requests ?? []),
     areas: makeMockList(data.areas ?? []),
   }
 
@@ -402,7 +402,7 @@ describe('upsertPitch', () => {
     expect(existing.get('stage')).toBe('building')
   })
 
-  it('leaves timebox, frame, emoji and notion untouched when omitted on update', async () => {
+  it('leaves timebox, request, emoji and notion untouched when omitted on update', async () => {
     // Regression: upsert_pitch is a partial update. Omitting a field (e.g. when
     // assigning a squad) must NOT wipe it — previously these clobbered to ''.
     const existing = makeMockItem({
@@ -1442,7 +1442,7 @@ describe('upsertPitch squad assignment', () => {
 
 const MAP_ROOM = 'org_1:product-map'
 
-function makeFrameItem(overrides: Record<string, unknown> = {}) {
+function makeRequestItem(overrides: Record<string, unknown> = {}) {
   return makeMockItem({
     id: 'f1',
     kind: 'pain_point',
@@ -1636,119 +1636,119 @@ describe('upsertArea', () => {
   })
 })
 
-describe('upsertFrame', () => {
+describe('upsertRequest', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('creates a frame from a problem and a Type alone', async () => {
+  it('creates a request from a problem and a Type alone', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
 
-    const result = await upsertFrame(MAP_ROOM, {
+    const result = await upsertRequest(MAP_ROOM, {
       type: 'irritant',
       problem: 'The export button is three clicks deep',
     })
 
     expect(result.created).toBe(true)
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('problem')).toBe('The export button is three clicks deep')
-    expect(frame.get('type')).toBe('irritant')
-    // A frame with no appetite is rough. Sharpness is derived, never stored.
-    expect(frame.get('appetite')).toBe('')
-    expect(frame.get('business_case')).toBe('')
-    expect(frame.get('reports')).toEqual([])
-    expect(frame.get('pointers')).toEqual([])
-    expect(frame.get('resolved')).toBe(false)
+    const request = storage.requests.find(() => true)!
+    expect(request.get('problem')).toBe('The export button is three clicks deep')
+    expect(request.get('type')).toBe('irritant')
+    // A request with no appetite is rough. Sharpness is derived, never stored.
+    expect(request.get('appetite')).toBe('')
+    expect(request.get('business_case')).toBe('')
+    expect(request.get('reports')).toEqual([])
+    expect(request.get('pointers')).toEqual([])
+    expect(request.get('resolved')).toBe(false)
   })
 
-  // Every frame wants an owner, and the area owner is the default the app
+  // Every request wants an owner, and the area owner is the default the app
   // suggests — nothing more. The agent capture path gets the same deal the
   // in-app form gets (#221).
-  it('fills the frame owner from the area owner on capture', async () => {
+  it('fills the request owner from the area owner on capture', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
 
-    expect(storage.frames.find(() => true)!.get('owner')).toBe('user_9')
+    expect(storage.requests.find(() => true)!.get('owner')).toBe('user_9')
   })
 
   it('lets the capturer name an owner instead of the area owner', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
 
-    await upsertFrame(MAP_ROOM, {
+    await upsertRequest(MAP_ROOM, {
       type: 'bug',
       problem: 'Slow',
       areaId: 'a1',
       owner: 'user_3',
     })
 
-    expect(storage.frames.find(() => true)!.get('owner')).toBe('user_3')
+    expect(storage.requests.find(() => true)!.get('owner')).toBe('user_3')
   })
 
   it('leaves an Unmapped capture unowned rather than guessing', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow' })
 
-    expect(storage.frames.find(() => true)!.get('owner')).toBeUndefined()
+    expect(storage.requests.find(() => true)!.get('owner')).toBeUndefined()
   })
 
   // The capturer often records a problem somebody else raised, so nothing
   // fills raised_by on its own.
-  it('never defaults who raised the frame', async () => {
+  it('never defaults who raised the request', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({ areas: [makeAreaItem({ id: 'a1', owner: 'user_9' })] })
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow', areaId: 'a1' })
 
-    expect(storage.frames.find(() => true)!.get('raised_by')).toBeUndefined()
+    expect(storage.requests.find(() => true)!.get('raised_by')).toBeUndefined()
   })
 
-  it('records who raised the frame, a member or a free-text name', async () => {
+  it('records who raised the request, a member or a free-text name', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
-    const frame = () => storage.frames.find(() => true)!
+    const storage = setupStorage({ requests: [makeRequestItem()] })
+    const request = () => storage.requests.find(() => true)!
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', raisedBy: ' Jane at Acme ' })
-    expect(frame().get('raised_by')).toBe('Jane at Acme')
+    await upsertRequest(MAP_ROOM, { id: 'f1', raisedBy: ' Jane at Acme ' })
+    expect(request().get('raised_by')).toBe('Jane at Acme')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '2 weeks' })
-    expect(frame().get('raised_by')).toBe('Jane at Acme')
+    await upsertRequest(MAP_ROOM, { id: 'f1', appetite: '2 weeks' })
+    expect(request().get('raised_by')).toBe('Jane at Acme')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', raisedBy: 'user_3' })
-    expect(frame().get('raised_by')).toBe('user_3')
+    await upsertRequest(MAP_ROOM, { id: 'f1', raisedBy: 'user_3' })
+    expect(request().get('raised_by')).toBe('user_3')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', raisedBy: '' })
-    expect(frame().get('raised_by')).toBeUndefined()
+    await upsertRequest(MAP_ROOM, { id: 'f1', raisedBy: '' })
+    expect(request().get('raised_by')).toBeUndefined()
   })
 
   it('defaults the Kind to pain_point, so capture never has to pick a severity', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow' })
 
-    expect(storage.frames.find(() => true)!.get('kind')).toBe('pain_point')
+    expect(storage.requests.find(() => true)!.get('kind')).toBe('pain_point')
   })
 
   it('is born awake, with its clock started on the day it was captured', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow' })
 
-    expect(storage.frames.find(() => true)!.get('last_woken')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(storage.requests.find(() => true)!.get('last_woken')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('leaves a frame Unmapped when no area is given', async () => {
+  it('leaves a request Unmapped when no area is given', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
 
-    await upsertFrame(MAP_ROOM, { type: 'idea', problem: 'A digest email' })
+    await upsertRequest(MAP_ROOM, { type: 'idea', problem: 'A digest email' })
 
-    expect(storage.frames.find(() => true)!.get('areaId')).toBeUndefined()
+    expect(storage.requests.find(() => true)!.get('areaId')).toBeUndefined()
   })
 
   // The Product Map room is org-scoped and may not exist yet (ADR 0021). An
@@ -1757,11 +1757,11 @@ describe('upsertFrame', () => {
     mockGetRoom.mockRejectedValue(new Error('Room not found'))
     setupStorage()
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow' })
 
     expect(mockCreateRoom).toHaveBeenCalledWith(MAP_ROOM, expect.anything())
     const [, doc] = mockInitStorage.mock.calls[0]
-    expect((doc as any).data.frames).toEqual({ liveblocksType: 'LiveList', data: [] })
+    expect((doc as any).data.requests).toEqual({ liveblocksType: 'LiveList', data: [] })
     expect((doc as any).data.areas).toEqual({ liveblocksType: 'LiveList', data: [] })
   })
 
@@ -1769,81 +1769,81 @@ describe('upsertFrame', () => {
     mockGetRoom.mockResolvedValue({} as never)
     setupStorage()
 
-    await upsertFrame(MAP_ROOM, { type: 'bug', problem: 'Slow' })
+    await upsertRequest(MAP_ROOM, { type: 'bug', problem: 'Slow' })
 
     expect(mockCreateRoom).not.toHaveBeenCalled()
   })
 
   // ADR 0011: an omitted field is left unchanged. This is the guarantee that
-  // lets a light touch on a frame never erase what somebody else wrote.
+  // lets a light touch on a request never erase what somebody else wrote.
   it('changes only the field the caller sent', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    const result = await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
+    const result = await upsertRequest(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
 
     expect(result.created).toBe(false)
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('appetite')).toBe('6 weeks')
-    expect(frame.get('problem')).toBe('Imports fail silently')
-    expect(frame.get('kind')).toBe('pain_point')
-    expect(frame.get('type')).toBe('bug')
-    expect(frame.get('business_case')).toBe('Three customers hit this last month')
-    expect(frame.get('owner')).toBe('user_9')
+    const request = storage.requests.find(() => true)!
+    expect(request.get('appetite')).toBe('6 weeks')
+    expect(request.get('problem')).toBe('Imports fail silently')
+    expect(request.get('kind')).toBe('pain_point')
+    expect(request.get('type')).toBe('bug')
+    expect(request.get('business_case')).toBe('Three customers hit this last month')
+    expect(request.get('owner')).toBe('user_9')
   })
 
   it('never touches the reports, the pointers or the wake clock', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', problem: 'Imports fail, loudly now' })
+    await upsertRequest(MAP_ROOM, { id: 'f1', problem: 'Imports fail, loudly now' })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('reports')).toHaveLength(1)
-    expect(frame.get('pointers')).toHaveLength(1)
-    expect(frame.get('last_woken')).toBe('2026-08-01')
-    expect(frame.get('resolved')).toBe(false)
+    const request = storage.requests.find(() => true)!
+    expect(request.get('reports')).toHaveLength(1)
+    expect(request.get('pointers')).toHaveLength(1)
+    expect(request.get('last_woken')).toBe('2026-08-01')
+    expect(request.get('resolved')).toBe(false)
   })
 
   it('clears an optional field when the caller passes an empty string', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ areaId: 'a1' })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ areaId: 'a1' })] })
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', areaId: '' })
+    await upsertRequest(MAP_ROOM, { id: 'f1', areaId: '' })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('areaId')).toBeUndefined()
-    expect(frame.get('owner')).toBe('user_9')
+    const request = storage.requests.find(() => true)!
+    expect(request.get('areaId')).toBeUndefined()
+    expect(request.get('owner')).toBe('user_9')
   })
 
   // The announcement is a partial field like the others (ADR 0011): omitted
   // leaves it alone, "" clears it.
   it('writes the release announcement, keeps it when omitted, and clears it on ""', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
-    const frame = () => storage.frames.find(() => true)!
+    const storage = setupStorage({ requests: [makeRequestItem()] })
+    const request = () => storage.requests.find(() => true)!
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', announcement: 'Imports now tell you why they failed.' })
-    expect(frame().get('announcement')).toBe('Imports now tell you why they failed.')
+    await upsertRequest(MAP_ROOM, { id: 'f1', announcement: 'Imports now tell you why they failed.' })
+    expect(request().get('announcement')).toBe('Imports now tell you why they failed.')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '3 weeks' })
-    expect(frame().get('announcement')).toBe('Imports now tell you why they failed.')
+    await upsertRequest(MAP_ROOM, { id: 'f1', appetite: '3 weeks' })
+    expect(request().get('announcement')).toBe('Imports now tell you why they failed.')
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', announcement: '' })
-    expect(frame().get('announcement')).toBeUndefined()
+    await upsertRequest(MAP_ROOM, { id: 'f1', announcement: '' })
+    expect(request().get('announcement')).toBeUndefined()
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
-    await expect(upsertFrame(MAP_ROOM, { id: 'nope', problem: 'x' })).rejects.toThrow(
-      'Frame not found: "nope"'
+    await expect(upsertRequest(MAP_ROOM, { id: 'nope', problem: 'x' })).rejects.toThrow(
+      'Request not found: "nope"'
     )
   })
 })
 
-describe('upsertFrame validation', () => {
+describe('upsertRequest validation', () => {
   beforeEach(() => vi.clearAllMocks())
 
   // The writer is the shared seam every path goes through, so the vocabularies
@@ -1853,7 +1853,7 @@ describe('upsertFrame validation', () => {
     setupStorage()
 
     await expect(
-      upsertFrame(MAP_ROOM, { type: 'feature' as never, problem: 'x' })
+      upsertRequest(MAP_ROOM, { type: 'feature' as never, problem: 'x' })
     ).rejects.toThrow('Invalid type')
     expect(mockCreateRoom).not.toHaveBeenCalled()
   })
@@ -1863,7 +1863,7 @@ describe('upsertFrame validation', () => {
     setupStorage()
 
     await expect(
-      upsertFrame(MAP_ROOM, { id: 'f1', kind: 'severe' as never })
+      upsertRequest(MAP_ROOM, { id: 'f1', kind: 'severe' as never })
     ).rejects.toThrow('Invalid kind')
   })
 
@@ -1872,49 +1872,49 @@ describe('upsertFrame validation', () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage()
 
-    await expect(upsertFrame(MAP_ROOM, { problem: 'Something hurts' })).rejects.toThrow(
-      'A new frame needs a type'
+    await expect(upsertRequest(MAP_ROOM, { problem: 'Something hurts' })).rejects.toThrow(
+      'A new request needs a type'
     )
-    expect(storage.frames.find(() => true)).toBeUndefined()
+    expect(storage.requests.find(() => true)).toBeUndefined()
   })
 
-  it('lets an update omit the Type, because the frame already has one', async () => {
+  it('lets an update omit the Type, because the request already has one', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
+    await upsertRequest(MAP_ROOM, { id: 'f1', appetite: '6 weeks' })
 
-    expect(storage.frames.find(() => true)!.get('type')).toBe('bug')
+    expect(storage.requests.find(() => true)!.get('type')).toBe('bug')
   })
 })
 
-describe('related frames', () => {
+describe('related requests', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const three = () =>
     setupStorage({
-      frames: [makeFrameItem(), makeFrameItem({ id: 'f2' }), makeFrameItem({ id: 'f3' })],
+      requests: [makeRequestItem(), makeRequestItem({ id: 'f2' }), makeRequestItem({ id: 'f3' })],
     })
   const related = (storage: ReturnType<typeof setupStorage>, id: string) =>
-    storage.frames.find((f: any) => f.get('id') === id)!.get('related_frame_ids')
+    storage.requests.find((f: any) => f.get('id') === id)!.get('related_request_ids')
 
-  it('stores the relation on both frames', async () => {
+  it('stores the relation on both requests', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = three()
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2', 'f3'] })
+    await upsertRequest(MAP_ROOM, { id: 'f1', related_request_ids: ['f2', 'f3'] })
 
     expect(related(storage, 'f1')).toEqual(['f2', 'f3'])
     expect(related(storage, 'f2')).toEqual(['f1'])
     expect(related(storage, 'f3')).toEqual(['f1'])
   })
 
-  it('removes the relation from both frames, from either side', async () => {
+  it('removes the relation from both requests, from either side', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = three()
-    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2', 'f3'] })
+    await upsertRequest(MAP_ROOM, { id: 'f1', related_request_ids: ['f2', 'f3'] })
 
-    await upsertFrame(MAP_ROOM, { id: 'f2', related_frame_ids: [] })
+    await upsertRequest(MAP_ROOM, { id: 'f2', related_request_ids: [] })
 
     expect(related(storage, 'f1')).toEqual(['f3'])
     expect(related(storage, 'f2')).toBeUndefined()
@@ -1923,31 +1923,31 @@ describe('related frames', () => {
   it('leaves the relations alone when the field is omitted', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = three()
-    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2'] })
+    await upsertRequest(MAP_ROOM, { id: 'f1', related_request_ids: ['f2'] })
 
-    await upsertFrame(MAP_ROOM, { id: 'f1', appetite: '1 week' })
+    await upsertRequest(MAP_ROOM, { id: 'f1', appetite: '1 week' })
 
     expect(related(storage, 'f1')).toEqual(['f2'])
   })
 
-  it('refuses the frame itself and an unknown frame', async () => {
+  it('refuses the request itself and an unknown request', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     three()
 
-    await expect(upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f1'] })).rejects.toThrow(
+    await expect(upsertRequest(MAP_ROOM, { id: 'f1', related_request_ids: ['f1'] })).rejects.toThrow(
       'itself'
     )
-    await expect(upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['nope'] })).rejects.toThrow(
-      'Related frame not found'
+    await expect(upsertRequest(MAP_ROOM, { id: 'f1', related_request_ids: ['nope'] })).rejects.toThrow(
+      'Related request not found'
     )
   })
 
-  it('clears a deleted frame from every frame related to it', async () => {
+  it('clears a deleted request from every request related to it', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = three()
-    await upsertFrame(MAP_ROOM, { id: 'f1', related_frame_ids: ['f2', 'f3'] })
+    await upsertRequest(MAP_ROOM, { id: 'f1', related_request_ids: ['f2', 'f3'] })
 
-    await deleteFrame(MAP_ROOM, 'f2')
+    await deleteRequest(MAP_ROOM, 'f2')
 
     expect(related(storage, 'f1')).toEqual(['f3'])
   })
@@ -1957,14 +1957,14 @@ describe('updateReport', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const legacy = { capturer: 'user_9', source: 'internal', text: 'again', date: '2026-08-01' }
-  const legacyId = withReportIds([legacy as FrameReport])[0].id
+  const legacyId = withReportIds([legacy as RequestReport])[0].id
 
   it('corrects an old report by its derived id and stores the id', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
     await updateReport(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       reportId: legacyId,
       editor: 'user_2',
       text: ' Their import dropped 400 rows ',
@@ -1972,7 +1972,7 @@ describe('updateReport', () => {
       customer: 'Acme',
     })
 
-    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    const [report] = storage.requests.find(() => true)!.get('reports') as any[]
     expect(report).toEqual({
       id: legacyId,
       capturer: 'user_9',
@@ -1987,27 +1987,27 @@ describe('updateReport', () => {
 
   it('keeps the id after the text that derived it changes', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: legacyId, editor: 'u', text: 'one' })
-    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: legacyId, editor: 'u', text: 'two' })
+    await updateReport(MAP_ROOM, { requestId: 'f1', reportId: legacyId, editor: 'u', text: 'one' })
+    await updateReport(MAP_ROOM, { requestId: 'f1', reportId: legacyId, editor: 'u', text: 'two' })
 
-    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    const [report] = storage.requests.find(() => true)!.get('reports') as any[]
     expect(report.text).toBe('two')
   })
 
   // An edit is not the problem happening again.
-  it('never wakes the frame, never changes the count, and clears with ""', async () => {
+  it('never wakes the request, never changes the count, and clears with ""', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({
-      frames: [makeFrameItem({ reports: [{ ...legacy, id: 'r1', link: 'https://x.test' }] })],
+      requests: [makeRequestItem({ reports: [{ ...legacy, id: 'r1', link: 'https://x.test' }] })],
     })
 
-    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', link: '' })
+    await updateReport(MAP_ROOM, { requestId: 'f1', reportId: 'r1', editor: 'u', link: '' })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('last_woken')).toBe('2026-08-01')
-    const reports = frame.get('reports') as any[]
+    const request = storage.requests.find(() => true)!
+    expect(request.get('last_woken')).toBe('2026-08-01')
+    const reports = request.get('reports') as any[]
     expect(reports).toHaveLength(1)
     expect(reports[0]).not.toHaveProperty('link')
     expect(reports[0].text).toBe('again')
@@ -2015,11 +2015,11 @@ describe('updateReport', () => {
 
   it('leaves no "edited" mark when nothing changed', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ reports: [{ ...legacy, id: 'r1' }] })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ reports: [{ ...legacy, id: 'r1' }] })] })
 
-    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', text: 'again' })
+    await updateReport(MAP_ROOM, { requestId: 'f1', reportId: 'r1', editor: 'u', text: 'again' })
 
-    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    const [report] = storage.requests.find(() => true)!.get('reports') as any[]
     expect(report).not.toHaveProperty('edited_on')
   })
 
@@ -2027,24 +2027,24 @@ describe('updateReport', () => {
   it('drops the customer label when a report moves to internal', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const customerReport = { ...legacy, id: 'r1', source: 'customer', customer: 'Acme' }
-    const storage = setupStorage({ frames: [makeFrameItem({ reports: [customerReport] })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ reports: [customerReport] })] })
 
-    await updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1', editor: 'u', source: 'internal' })
+    await updateReport(MAP_ROOM, { requestId: 'f1', reportId: 'r1', editor: 'u', source: 'internal' })
 
-    const [report] = storage.frames.find(() => true)!.get('reports') as any[]
+    const [report] = storage.requests.find(() => true)!.get('reports') as any[]
     expect(report.source).toBe('internal')
     expect(report).not.toHaveProperty('customer')
   })
 
   it('refuses empty text and an unknown report', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
-      updateReport(MAP_ROOM, { frameId: 'f1', reportId: legacyId, editor: 'u', text: ' ' })
+      updateReport(MAP_ROOM, { requestId: 'f1', reportId: legacyId, editor: 'u', text: ' ' })
     ).rejects.toThrow('needs text')
     await expect(
-      updateReport(MAP_ROOM, { frameId: 'f1', reportId: 'nope', editor: 'u', text: 'x' })
+      updateReport(MAP_ROOM, { requestId: 'f1', reportId: 'nope', editor: 'u', text: 'x' })
     ).rejects.toThrow('Report not found')
   })
 })
@@ -2058,21 +2058,21 @@ describe('deleteReport', () => {
       { id: 'r1', capturer: 'u', source: 'internal', text: 'a', date: '2026-08-01' },
       { id: 'r2', capturer: 'u', source: 'internal', text: 'b', date: '2026-08-02' },
     ]
-    const storage = setupStorage({ frames: [makeFrameItem({ reports })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ reports })] })
 
-    const result = await deleteReport(MAP_ROOM, { frameId: 'f1', reportId: 'r1' })
+    const result = await deleteReport(MAP_ROOM, { requestId: 'f1', reportId: 'r1' })
 
-    expect(result).toEqual({ frameId: 'f1', reportCount: 1 })
-    const frame = storage.frames.find(() => true)!
-    expect((frame.get('reports') as any[]).map((r) => r.id)).toEqual(['r2'])
-    expect(frame.get('last_woken')).toBe('2026-08-01')
+    expect(result).toEqual({ requestId: 'f1', reportCount: 1 })
+    const request = storage.requests.find(() => true)!
+    expect((request.get('reports') as any[]).map((r) => r.id)).toEqual(['r2'])
+    expect(request.get('last_woken')).toBe('2026-08-01')
   })
 
   it('refuses an unknown report', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
-    await expect(deleteReport(MAP_ROOM, { frameId: 'f1', reportId: 'nope' })).rejects.toThrow(
+    await expect(deleteReport(MAP_ROOM, { requestId: 'f1', reportId: 'nope' })).rejects.toThrow(
       'Report not found'
     )
   })
@@ -2083,10 +2083,10 @@ describe('attachReport', () => {
 
   it('adds the report and reports the new count', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
     const result = await attachReport(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       capturer: 'user_2',
       source: 'customer',
       customer: 'Acme',
@@ -2095,8 +2095,8 @@ describe('attachReport', () => {
       date: '2026-09-02',
     })
 
-    expect(result).toEqual({ frameId: 'f1', reportCount: 2 })
-    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    expect(result).toEqual({ requestId: 'f1', reportCount: 2 })
+    const reports = storage.requests.find(() => true)!.get('reports') as any[]
     expect(reports).toHaveLength(2)
     expect(reports[1]).toEqual({
       id: expect.any(String),
@@ -2110,32 +2110,32 @@ describe('attachReport', () => {
   })
 
   // The core ADR 0011 guarantee for this tool: a report is additive and nothing
-  // else on the frame is rewritten.
+  // else on the request is rewritten.
   it('leaves the problem, the appetite, the pointers and the owner untouched', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+    await attachReport(MAP_ROOM, { requestId: 'f1', capturer: 'user_2', text: 'again' })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('problem')).toBe('Imports fail silently')
-    expect(frame.get('appetite')).toBe('2 weeks')
-    expect(frame.get('business_case')).toBe('Three customers hit this last month')
-    expect(frame.get('owner')).toBe('user_9')
-    expect(frame.get('pointers')).toHaveLength(1)
-    expect(frame.get('kind')).toBe('pain_point')
-    expect(frame.get('type')).toBe('bug')
-    expect(frame.get('resolved')).toBe(false)
+    const request = storage.requests.find(() => true)!
+    expect(request.get('problem')).toBe('Imports fail silently')
+    expect(request.get('appetite')).toBe('2 weeks')
+    expect(request.get('business_case')).toBe('Three customers hit this last month')
+    expect(request.get('owner')).toBe('user_9')
+    expect(request.get('pointers')).toHaveLength(1)
+    expect(request.get('kind')).toBe('pain_point')
+    expect(request.get('type')).toBe('bug')
+    expect(request.get('resolved')).toBe(false)
   })
 
-  // A new report is one of the three things that wake a frame (ADR 0024).
-  it('wakes the frame', async () => {
+  // A new report is one of the three things that wake a request (ADR 0024).
+  it('wakes the request', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ last_woken: '2026-01-01' })] })
 
-    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+    await attachReport(MAP_ROOM, { requestId: 'f1', capturer: 'user_2', text: 'again' })
 
-    const woken = storage.frames.find(() => true)!.get('last_woken') as string
+    const woken = storage.requests.find(() => true)!.get('last_woken') as string
     expect(woken > '2026-01-01').toBe(true)
   })
 
@@ -2143,47 +2143,47 @@ describe('attachReport', () => {
   // lens when somebody said so.
   it('defaults the source to internal', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ reports: [] })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ reports: [] })] })
 
-    await attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: 'again' })
+    await attachReport(MAP_ROOM, { requestId: 'f1', capturer: 'user_2', text: 'again' })
 
-    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    const reports = storage.requests.find(() => true)!.get('reports') as any[]
     expect(reports[0].source).toBe('internal')
   })
 
   it('omits the customer label and the link rather than storing blanks', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ reports: [] })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ reports: [] })] })
 
     await attachReport(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       capturer: 'user_2',
       text: 'again',
       customer: '   ',
       link: '',
     })
 
-    const reports = storage.frames.find(() => true)!.get('reports') as any[]
+    const reports = storage.requests.find(() => true)!.get('reports') as any[]
     expect(reports[0]).not.toHaveProperty('customer')
     expect(reports[0]).not.toHaveProperty('link')
   })
 
   it('refuses a report with no text', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
-      attachReport(MAP_ROOM, { frameId: 'f1', capturer: 'user_2', text: '  ' })
+      attachReport(MAP_ROOM, { requestId: 'f1', capturer: 'user_2', text: '  ' })
     ).rejects.toThrow('A report needs text')
   })
 
   it('refuses a source outside the vocabulary', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
       attachReport(MAP_ROOM, {
-        frameId: 'f1',
+        requestId: 'f1',
         capturer: 'user_2',
         text: 'again',
         source: 'slack' as never,
@@ -2191,35 +2191,35 @@ describe('attachReport', () => {
     ).rejects.toThrow('Invalid source')
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
-      attachReport(MAP_ROOM, { frameId: 'nope', capturer: 'user_2', text: 'again' })
-    ).rejects.toThrow('Frame not found: "nope"')
+      attachReport(MAP_ROOM, { requestId: 'nope', capturer: 'user_2', text: 'again' })
+    ).rejects.toThrow('Request not found: "nope"')
   })
 
   // The report's date is history; the wake is the act of reporting. A support
-  // person filing last quarter's call must not push a live frame to sleep.
-  it('keeps the report date but wakes the frame today', async () => {
+  // person filing last quarter's call must not push a live request to sleep.
+  it('keeps the report date but wakes the request today', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({
-      frames: [makeFrameItem({ reports: [], last_woken: '2026-01-01' })],
+      requests: [makeRequestItem({ reports: [], last_woken: '2026-01-01' })],
     })
 
     await attachReport(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       capturer: 'user_2',
       text: 'a call from last quarter',
       date: '2026-01-05',
     })
 
-    const frame = storage.frames.find(() => true)!
-    const reports = frame.get('reports') as any[]
+    const request = storage.requests.find(() => true)!
+    const reports = request.get('reports') as any[]
     expect(reports[0].date).toBe('2026-01-05')
-    expect(frame.get('last_woken')).not.toBe('2026-01-05')
-    expect(frame.get('last_woken')! > '2026-01-05').toBe(true)
+    expect(request.get('last_woken')).not.toBe('2026-01-05')
+    expect(request.get('last_woken')! > '2026-01-05').toBe(true)
   })
 })
 
@@ -2228,17 +2228,17 @@ describe('linkPointer', () => {
 
   it('attaches the pointer and reports the new count', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
     const result = await linkPointer(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       url: 'https://github.test/org/repo/pull/9',
       kind: 'pull_request',
       label: 'The fix',
     })
 
-    expect(result).toEqual({ frameId: 'f1', pointerCount: 2 })
-    const pointers = storage.frames.find(() => true)!.get('pointers') as any[]
+    expect(result).toEqual({ requestId: 'f1', pointerCount: 2 })
+    const pointers = storage.requests.find(() => true)!.get('pointers') as any[]
     expect(pointers[1]).toEqual({
       url: 'https://github.test/org/repo/pull/9',
       label: 'The fix',
@@ -2247,121 +2247,121 @@ describe('linkPointer', () => {
   })
 
   // The core ADR 0011 guarantee for this tool.
-  it('leaves every other field untouched, and does not wake the frame', async () => {
+  it('leaves every other field untouched, and does not wake the request', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
     await linkPointer(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       url: 'https://notion.test/doc',
       kind: 'shaped_doc',
     })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('problem')).toBe('Imports fail silently')
-    expect(frame.get('appetite')).toBe('2 weeks')
-    expect(frame.get('business_case')).toBe('Three customers hit this last month')
-    expect(frame.get('owner')).toBe('user_9')
-    expect(frame.get('reports')).toHaveLength(1)
-    // Filing a link is not one of the three things that wake a frame (ADR 0024).
-    expect(frame.get('last_woken')).toBe('2026-08-01')
+    const request = storage.requests.find(() => true)!
+    expect(request.get('problem')).toBe('Imports fail silently')
+    expect(request.get('appetite')).toBe('2 weeks')
+    expect(request.get('business_case')).toBe('Three customers hit this last month')
+    expect(request.get('owner')).toBe('user_9')
+    expect(request.get('reports')).toHaveLength(1)
+    // Filing a link is not one of the three things that wake a request (ADR 0024).
+    expect(request.get('last_woken')).toBe('2026-08-01')
   })
 
   it('falls back to the kind for a label, so there is always something to click', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ pointers: [] })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ pointers: [] })] })
 
     await linkPointer(MAP_ROOM, {
-      frameId: 'f1',
+      requestId: 'f1',
       url: 'https://github.test/org/repo/issues/1',
       kind: 'wayfinder',
     })
 
-    const pointers = storage.frames.find(() => true)!.get('pointers') as any[]
+    const pointers = storage.requests.find(() => true)!.get('pointers') as any[]
     expect(pointers[0].label).toBe('Wayfinder map')
   })
 
-  // A shape points at its frame, not the reverse (ADR 0022), so the vocabulary
+  // A shape points at its request, not the reverse (ADR 0022), so the vocabulary
   // has no kind for one and the writer refuses it.
   it('refuses a pointer kind outside the vocabulary, a Shape included', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
-      linkPointer(MAP_ROOM, { frameId: 'f1', url: 'https://x.test', kind: 'shape' as never })
+      linkPointer(MAP_ROOM, { requestId: 'f1', url: 'https://x.test', kind: 'shape' as never })
     ).rejects.toThrow('Invalid pointer kind')
   })
 
   it('refuses a pointer with no url', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
-      linkPointer(MAP_ROOM, { frameId: 'f1', url: '  ', kind: 'issue' })
+      linkPointer(MAP_ROOM, { requestId: 'f1', url: '  ', kind: 'issue' })
     ).rejects.toThrow('A pointer needs a url')
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(
-      linkPointer(MAP_ROOM, { frameId: 'nope', url: 'https://x.test', kind: 'issue' })
-    ).rejects.toThrow('Frame not found: "nope"')
+      linkPointer(MAP_ROOM, { requestId: 'nope', url: 'https://x.test', kind: 'issue' })
+    ).rejects.toThrow('Request not found: "nope"')
   })
 })
 
-describe('wakeFrame', () => {
+describe('wakeRequest', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('resets the freshness clock and reports the date', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-01-01' })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ last_woken: '2026-01-01' })] })
 
-    const result = await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-09-02' })
+    const result = await wakeRequest(MAP_ROOM, { requestId: 'f1', date: '2026-09-02' })
 
-    expect(result).toEqual({ frameId: 'f1', wokenOn: '2026-09-02' })
-    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+    expect(result).toEqual({ requestId: 'f1', wokenOn: '2026-09-02' })
+    expect(storage.requests.find(() => true)!.get('last_woken')).toBe('2026-09-02')
   })
 
   // The guarantee that matters most for this tool: a wake must NEVER erase a
-  // frame (ADR 0011, ADR 0024).
+  // request (ADR 0011, ADR 0024).
   it('leaves the problem, the appetite, the reports, the pointers and the owner alone', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-09-02' })
+    await wakeRequest(MAP_ROOM, { requestId: 'f1', date: '2026-09-02' })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('problem')).toBe('Imports fail silently')
-    expect(frame.get('appetite')).toBe('2 weeks')
-    expect(frame.get('business_case')).toBe('Three customers hit this last month')
-    expect(frame.get('owner')).toBe('user_9')
-    expect(frame.get('kind')).toBe('pain_point')
-    expect(frame.get('type')).toBe('bug')
-    expect(frame.get('reports')).toHaveLength(1)
-    expect(frame.get('pointers')).toHaveLength(1)
-    expect(frame.get('resolved')).toBe(false)
+    const request = storage.requests.find(() => true)!
+    expect(request.get('problem')).toBe('Imports fail silently')
+    expect(request.get('appetite')).toBe('2 weeks')
+    expect(request.get('business_case')).toBe('Three customers hit this last month')
+    expect(request.get('owner')).toBe('user_9')
+    expect(request.get('kind')).toBe('pain_point')
+    expect(request.get('type')).toBe('bug')
+    expect(request.get('reports')).toHaveLength(1)
+    expect(request.get('pointers')).toHaveLength(1)
+    expect(request.get('resolved')).toBe(false)
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
-    await expect(wakeFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
-      'Frame not found: "nope"'
+    await expect(wakeRequest(MAP_ROOM, { requestId: 'nope' })).rejects.toThrow(
+      'Request not found: "nope"'
     )
   })
 
-  // An agent replaying older table notes must never age a frame that something
+  // An agent replaying older table notes must never age a request that something
   // more recent already woke. The clock only ever moves forward.
   it('refuses to move the clock backwards, and reports the date that stands', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ last_woken: '2026-09-02' })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ last_woken: '2026-09-02' })] })
 
-    const result = await wakeFrame(MAP_ROOM, { frameId: 'f1', date: '2026-06-01' })
+    const result = await wakeRequest(MAP_ROOM, { requestId: 'f1', date: '2026-06-01' })
 
-    expect(storage.frames.find(() => true)!.get('last_woken')).toBe('2026-09-02')
+    expect(storage.requests.find(() => true)!.get('last_woken')).toBe('2026-09-02')
     expect(result.wokenOn).toBe('2026-09-02')
   })
 })
@@ -2370,7 +2370,7 @@ describe('writeBrief', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const BRIEF = {
-    frameId: 'f1',
+    requestId: 'f1',
     headline: 'Building this cycle',
     whereWeAre: 'The shape is over the hill.',
     nextStep: 'Link the pull request.',
@@ -2379,13 +2379,13 @@ describe('writeBrief', () => {
     writtenBy: 'paulo',
   }
 
-  it('leaves the brief on the frame, dated today', async () => {
+  it('leaves the brief on the request, dated today', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
     const result = await writeBrief(MAP_ROOM, BRIEF)
 
-    expect(storage.frames.find(() => true)!.get('brief')).toEqual({
+    expect(storage.requests.find(() => true)!.get('brief')).toEqual({
       headline: 'Building this cycle',
       where_we_are: 'The shape is over the hill.',
       next_step: 'Link the pull request.',
@@ -2401,187 +2401,187 @@ describe('writeBrief', () => {
   it('replaces the previous brief, and drops the lines the new one omits', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({
-      frames: [makeFrameItem({ brief: { headline: 'old', watch: 'old warning' } })],
+      requests: [makeRequestItem({ brief: { headline: 'old', watch: 'old warning' } })],
     })
 
     await writeBrief(MAP_ROOM, { ...BRIEF, watch: undefined, nextStepOwner: '' })
 
-    const brief = storage.frames.find(() => true)!.get('brief') as Record<string, unknown>
+    const brief = storage.requests.find(() => true)!.get('brief') as Record<string, unknown>
     expect(brief.headline).toBe('Building this cycle')
     expect(brief).not.toHaveProperty('watch')
     expect(brief).not.toHaveProperty('next_step_owner')
   })
 
   // A brief is not a mention of the problem (ADR 0024), and it must
-  // never erase the frame it describes.
-  it('does not wake the frame, and leaves every other field alone', async () => {
+  // never erase the request it describes.
+  it('does not wake the request, and leaves every other field alone', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
     await writeBrief(MAP_ROOM, BRIEF)
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('last_woken')).toBe('2026-08-01')
-    expect(frame.get('problem')).toBe('Imports fail silently')
-    expect(frame.get('owner')).toBe('user_9')
-    expect(frame.get('reports')).toHaveLength(1)
-    expect(frame.get('pointers')).toHaveLength(1)
+    const request = storage.requests.find(() => true)!
+    expect(request.get('last_woken')).toBe('2026-08-01')
+    expect(request.get('problem')).toBe('Imports fail silently')
+    expect(request.get('owner')).toBe('user_9')
+    expect(request.get('reports')).toHaveLength(1)
+    expect(request.get('pointers')).toHaveLength(1)
   })
 
   it('refuses a brief with no headline or no next step', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
     await expect(writeBrief(MAP_ROOM, { ...BRIEF, headline: ' ' })).rejects.toThrow('headline')
     await expect(writeBrief(MAP_ROOM, { ...BRIEF, nextStep: '' })).rejects.toThrow('next step')
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
-    await expect(writeBrief(MAP_ROOM, { ...BRIEF, frameId: 'nope' })).rejects.toThrow(
-      'Frame not found: "nope"'
+    await expect(writeBrief(MAP_ROOM, { ...BRIEF, requestId: 'nope' })).rejects.toThrow(
+      'Request not found: "nope"'
     )
   })
 })
 
-describe('upsertPitch frame pointer', () => {
+describe('upsertPitch request pointer', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const ROOM = 'org_1:cycle:2026-q3'
 
-  it('stores the frame the shape attacks', async () => {
+  it('stores the request the shape attacks', async () => {
     const storage = setupStorage()
 
     await upsertPitch(ROOM, {
       title: 'Fix silent imports',
       stage: 'shaping',
       frame_problem: 'Imports fail silently',
-      frame_id: 'f1',
+      request_id: 'f1',
     })
 
     const pitch = storage.pitches.find(() => true)!
-    expect(pitch.get('frame_id')).toBe('f1')
+    expect(pitch.get('request_id')).toBe('f1')
     // The Frame as bet: a copy taken now, which the Product Map can never rewrite.
     expect(pitch.get('frame_problem')).toBe('Imports fail silently')
   })
 
-  it('leaves a shape created with no frame without one', async () => {
+  it('leaves a shape created with no request without one', async () => {
     const storage = setupStorage()
 
     await upsertPitch(ROOM, { title: 'Cooldown chores', stage: 'building' })
 
-    expect(storage.pitches.find(() => true)!.get('frame_id')).toBeUndefined()
+    expect(storage.pitches.find(() => true)!.get('request_id')).toBeUndefined()
   })
 
-  it('leaves the frame pointer alone when the caller omits it (ADR 0011)', async () => {
+  it('leaves the request pointer alone when the caller omits it (ADR 0011)', async () => {
     const storage = setupStorage({
-      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frame_id: 'f1' })],
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', request_id: 'f1' })],
     })
 
     await upsertPitch(ROOM, { id: 'p1', title: 'Renamed', stage: 'building' })
 
-    expect(storage.pitches.find(() => true)!.get('frame_id')).toBe('f1')
+    expect(storage.pitches.find(() => true)!.get('request_id')).toBe('f1')
   })
 
-  it('clears the frame pointer on an empty string', async () => {
+  it('clears the request pointer on an empty string', async () => {
     const storage = setupStorage({
-      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', frame_id: 'f1' })],
+      pitches: [makeMockItem({ id: 'p1', title: 'Old', stage: 'building', request_id: 'f1' })],
     })
 
-    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', frame_id: '' })
+    await upsertPitch(ROOM, { id: 'p1', title: 'Old', stage: 'building', request_id: '' })
 
-    expect(storage.pitches.find(() => true)!.get('frame_id')).toBeUndefined()
+    expect(storage.pitches.find(() => true)!.get('request_id')).toBeUndefined()
   })
 })
 
-describe('resolveFrame', () => {
+describe('resolveRequest', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('sets the resolved flag', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    const result = await resolveFrame(MAP_ROOM, { frameId: 'f1' })
+    const result = await resolveRequest(MAP_ROOM, { requestId: 'f1' })
 
-    expect(result).toEqual({ frameId: 'f1', resolved: true })
-    expect(storage.frames.find(() => true)!.get('resolved')).toBe(true)
+    expect(result).toEqual({ requestId: 'f1', resolved: true })
+    expect(storage.requests.find(() => true)!.get('resolved')).toBe(true)
   })
 
   it('changes nothing else, because nothing is ever deleted', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem()] })
+    const storage = setupStorage({ requests: [makeRequestItem()] })
 
-    await resolveFrame(MAP_ROOM, { frameId: 'f1' })
+    await resolveRequest(MAP_ROOM, { requestId: 'f1' })
 
-    const frame = storage.frames.find(() => true)!
-    expect(frame.get('problem')).toBe('Imports fail silently')
-    expect(frame.get('appetite')).toBe('2 weeks')
-    expect(frame.get('business_case')).toBe('Three customers hit this last month')
-    expect(frame.get('owner')).toBe('user_9')
-    expect(frame.get('reports')).toHaveLength(1)
-    expect(frame.get('pointers')).toHaveLength(1)
-    expect(frame.get('last_woken')).toBe('2026-08-01')
+    const request = storage.requests.find(() => true)!
+    expect(request.get('problem')).toBe('Imports fail silently')
+    expect(request.get('appetite')).toBe('2 weeks')
+    expect(request.get('business_case')).toBe('Three customers hit this last month')
+    expect(request.get('owner')).toBe('user_9')
+    expect(request.get('reports')).toHaveLength(1)
+    expect(request.get('pointers')).toHaveLength(1)
+    expect(request.get('last_woken')).toBe('2026-08-01')
   })
 
-  it('puts a frame back on the Product Map when the caller passes false', async () => {
+  it('puts a request back on the Product Map when the caller passes false', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    const storage = setupStorage({ frames: [makeFrameItem({ resolved: true })] })
+    const storage = setupStorage({ requests: [makeRequestItem({ resolved: true })] })
 
-    await resolveFrame(MAP_ROOM, { frameId: 'f1', resolved: false })
+    await resolveRequest(MAP_ROOM, { requestId: 'f1', resolved: false })
 
-    expect(storage.frames.find(() => true)!.get('resolved')).toBe(false)
+    expect(storage.requests.find(() => true)!.get('resolved')).toBe(false)
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
-    await expect(resolveFrame(MAP_ROOM, { frameId: 'nope' })).rejects.toThrow(
-      'Frame not found: "nope"'
+    await expect(resolveRequest(MAP_ROOM, { requestId: 'nope' })).rejects.toThrow(
+      'Request not found: "nope"'
     )
   })
 })
 
-describe('deleteFrame', () => {
+describe('deleteRequest', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('removes the frame and clears any origin pointer at it', async () => {
+  it('removes the request and clears any origin pointer at it', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({
-      frames: [makeFrameItem(), makeFrameItem({ id: 'f2', originFrameId: 'f1' })],
+      requests: [makeRequestItem(), makeRequestItem({ id: 'f2', originRequestId: 'f1' })],
     })
 
-    await deleteFrame(MAP_ROOM, 'f1')
+    await deleteRequest(MAP_ROOM, 'f1')
 
-    expect(storage.frames.map((f) => f.get('id'))).toEqual(['f2'])
-    expect(storage.frames.find(() => true)!.get('originFrameId')).toBeUndefined()
+    expect(storage.requests.map((f) => f.get('id'))).toEqual(['f2'])
+    expect(storage.requests.find(() => true)!.get('originRequestId')).toBeUndefined()
   })
 
-  it('throws when the frame id is unknown', async () => {
+  it('throws when the request id is unknown', async () => {
     mockGetRoom.mockResolvedValue({} as never)
-    setupStorage({ frames: [makeFrameItem()] })
+    setupStorage({ requests: [makeRequestItem()] })
 
-    await expect(deleteFrame(MAP_ROOM, 'nope')).rejects.toThrow('Frame not found: "nope"')
+    await expect(deleteRequest(MAP_ROOM, 'nope')).rejects.toThrow('Request not found: "nope"')
   })
 })
 
 describe('deleteArea', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('unfiles its frames and lifts its sub-areas, deleting neither', async () => {
+  it('unfiles its requests and lifts its sub-areas, deleting neither', async () => {
     mockGetRoom.mockResolvedValue({} as never)
     const storage = setupStorage({
       areas: [makeAreaItem(), makeAreaItem({ id: 'a2', parentAreaId: 'a1' })],
-      frames: [makeFrameItem({ areaId: 'a1' }), makeFrameItem({ id: 'f2', areaId: 'a2' })],
+      requests: [makeRequestItem({ areaId: 'a1' }), makeRequestItem({ id: 'f2', areaId: 'a2' })],
     })
 
     await deleteArea(MAP_ROOM, 'a1')
 
     expect(storage.areas.map((a) => a.get('id'))).toEqual(['a2'])
     expect(storage.areas.find(() => true)!.get('parentAreaId')).toBeUndefined()
-    expect(storage.frames.map((f) => f.get('areaId'))).toEqual([undefined, 'a2'])
+    expect(storage.requests.map((f) => f.get('areaId'))).toEqual([undefined, 'a2'])
   })
 
   it('moves every lifted sub-area to a free grid slot, off each other', async () => {

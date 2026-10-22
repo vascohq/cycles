@@ -3,7 +3,7 @@ import { linkedShapesFrom, type CycleWindow, type LinkedShape } from '@/lib/prod
 import { getTeamToday } from '@/lib/team-time'
 
 /**
- * The shapes that point home to a frame. A frame never stores its shape list,
+ * The shapes that point home to a request. A request never stores its shape list,
  * so it is read from the cycle rooms every load (ADR 0022).
  *
  * ponytail: one room read per cycle, in parallel, fail-soft per room. A team
