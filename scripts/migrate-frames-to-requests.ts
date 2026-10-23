@@ -14,9 +14,13 @@ import {
   migrateProductMapDocument,
 } from '../src/lib/migrations/frames-to-requests'
 
-process.loadEnvFile?.('.env.local')
+// A key passed on the command line wins over .env.local, which holds the dev
+// project's key. Production needs its own key:
+//   LIVEBLOCKS_SECRET_KEY=sk_prod_... npx jiti scripts/migrate-frames-to-requests.ts
+if (!process.env.LIVEBLOCKS_SECRET_KEY) process.loadEnvFile?.('.env.local')
 const secret = process.env.LIVEBLOCKS_SECRET_KEY
 if (!secret) throw new Error('LIVEBLOCKS_SECRET_KEY is not set')
+console.log(secret.startsWith('sk_prod') ? 'Liveblocks project: production' : 'Liveblocks project: NOT production')
 
 const apply = process.argv.includes('--apply')
 const liveblocks = new Liveblocks({ secret })
