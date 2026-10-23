@@ -55,15 +55,24 @@ async function main() {
         return
       }
       // @liveblocks/node's LiveList has no toArray(); map() is the way to read it.
-      const pitches: any[] = root.get('pitches')?.map((pitch: any) => pitch) ?? []
-      for (const pitch of pitches) {
-        const before = pitch.toImmutable() as Record<string, unknown>
+      // A pitch is a LiveObject in some rooms and a plain object in others (the
+      // writer reads both through getField), so handle both shapes.
+      const list = root.get('pitches')
+      const pitches: any[] = list?.map((pitch: any) => pitch) ?? []
+      pitches.forEach((pitch, index) => {
+        const live = typeof pitch?.set === 'function'
+        const before = (live ? pitch.toJSON() : pitch) as Record<string, unknown>
         const after = migratePitch(before)
+        if (JSON.stringify(before) === JSON.stringify(after)) return
+        if (!live) {
+          list.set(index, after)
+          return
+        }
         for (const key of Object.keys(before)) if (!(key in after)) pitch.delete(key)
         for (const [key, value] of Object.entries(after)) {
           if (JSON.stringify(before[key]) !== JSON.stringify(value)) pitch.set(key, value)
         }
-      }
+      })
     })
   }
 }
