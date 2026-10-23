@@ -87,7 +87,7 @@ describe('ProductMapPage', () => {
     ])
     vi.mocked(getCycleStorage).mockResolvedValueOnce({
       pitches: [
-        { id: 'p1', title: 'Fix imports', stage: 'building', request_id: 'f1' },
+        { id: 'p1', title: 'Fix imports', stage: 'building', request_ids: ['f1'] },
         { id: 'p2', title: 'No request here', stage: 'building' },
       ],
     } as never)

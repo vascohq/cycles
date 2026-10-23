@@ -1,5 +1,6 @@
 'use client'
 import { newShapeStage, readStage } from '@/lib/stage-engine'
+import { isUpcomingCycle } from '@/lib/product-map-engine'
 
 import { ClientSideSuspense } from '@liveblocks/react'
 import { MissionControlSkeleton } from '@/components/mission-control'
@@ -96,10 +97,9 @@ function MissionControlWired({
         new LiveObject({
           id: nanoid(),
           title,
-          stage: newShapeStage(cycle.type),
+          stage: newShapeStage(cycle.type, isUpcomingCycle(cycle, getTeamToday(new Date()))),
           needle: null,
           frame_problem: '',
-          frame_outcome: '',
           timebox_start: cycle.start_date,
           timebox_end: cycle.end_date,
           emoji: '',

@@ -85,11 +85,12 @@ export function partitionByStage(cards: PitchCard[]): {
 const STAGE_ORDER: Record<Stage, number> = {
   building: 0,
   shaping: 1,
-  done: 2,
+  framing: 2,
+  done: 3,
 }
 
 /**
- * Order pitches by stage progression: building → shaping → done.
+ * Order pitches by stage progression: building → shaping → framing → done.
  * Stable within a stage (preserves input order) and non-mutating.
  */
 export function sortByStageProgression(cards: PitchCard[]): PitchCard[] {

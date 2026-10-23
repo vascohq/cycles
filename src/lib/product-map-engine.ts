@@ -3,6 +3,7 @@
 // returns the rendered map model. No React, no Liveblocks, no clock of its own,
 // the same shape as the cycle list engine.
 
+import { STAGES } from '@/lib/stage-engine'
 import type {
   Area,
   ProductRequest,
@@ -57,14 +58,15 @@ export function isRequestType(value: unknown): value is RequestType {
  * A request's position in its life. Derived from what the request points at and
  * never stored, so it can never drift from the truth (ADR 0025):
  *
- * `rough` (no appetite) → `candidate` (sharp, no Shape yet) → `in_flight` (a
- * Shape that is not done) → `released` (its Shape reached done this cycle) →
+ * `rough` (no appetite) → `candidate` (sharp, no pitch yet) → `pitched` (a
+ * pitch waits in an upcoming cycle) → `in_flight` (a pitch that is not done) → `released` (its Shape reached done this cycle) →
  * `monitoring` (released, and nobody has resolved it) → `resolved` (a person
  * decided the problem is gone).
  */
 export type RequestState =
   | 'rough'
   | 'candidate'
+  | 'pitched'
   | 'in_flight'
   | 'released'
   | 'monitoring'
@@ -74,6 +76,7 @@ export type RequestState =
 export const REQUEST_STATES: readonly RequestState[] = [
   'rough',
   'candidate',
+  'pitched',
   'in_flight',
   'released',
   'monitoring',
@@ -81,7 +84,7 @@ export const REQUEST_STATES: readonly RequestState[] = [
 ]
 
 /** A Shape's lifecycle phase. Mirrors the cycle model's Stage (ADR 0023). */
-export type ShapeStage = 'shaping' | 'building' | 'done'
+export type ShapeStage = 'framing' | 'shaping' | 'building' | 'done'
 
 /**
  * A Shape that points home to a request. Passed in, because a request never stores
@@ -97,10 +100,14 @@ export type LinkedShape = {
   cycleTitle: string
   /** True when this shape sits in the cycle that is current today. */
   currentCycle: boolean
+  /** True when this shape sits in a cycle that has not started yet. */
+  upcomingCycle: boolean
   /** The squad on it this cycle. Absent when unassigned, or the squad is gone. */
   squad?: { name: string; color: string }
   /** The pitch's Notion doc. Absent when nobody linked one. */
   notionUrl?: string
+  /** What changes for the customer, in their words. Absent when unwritten. */
+  releaseSummary?: string
 }
 
 /** One link in a request's origin chain: the request whose monitoring surfaced it. */
@@ -223,7 +230,7 @@ export function pinOutline(shapes: LinkedShape[]): PinOutline {
   // including one that already shipped. The request reads `released` at that
   // point, and a release this cycle is current investment, not "no work".
   if (shapes.some((s) => s.currentCycle)) return 'solid'
-  if (shapes.some((s) => s.stage === 'shaping')) return 'dashed'
+  if (shapes.some((s) => s.stage === 'framing' || s.stage === 'shaping')) return 'dashed'
   return 'none'
 }
 
@@ -239,9 +246,10 @@ export function linkedShapesFrom(
       id: string
       title: string
       stage: string
-      request_id?: string
+      request_ids?: string[]
       squadId?: string
       notion_url?: string
+      release_summary?: string
     }[]
     squads?: SquadSummary[]
   }[],
@@ -253,22 +261,30 @@ export function linkedShapesFrom(
       !!cycle.end_date &&
       today >= cycle.start_date &&
       today <= cycle.end_date
-    return shapes
-      .filter((shape) => !!shape.request_id)
-      .map((shape) => ({
-        requestId: shape.request_id as string,
+    const upcomingCycle = isUpcomingCycle(cycle, today)
+    // A pitch carries many requests, so it counts once for each of them.
+    return shapes.flatMap((shape) =>
+      (shape.request_ids ?? []).map((requestId) => ({
+        requestId,
         shapeId: shape.id,
         title: shape.title,
-        // A room written before ADR 0023 can still hold a `framing` stage, and
-        // an unreadable stage is not a reason to lose the shape.
+        // An unreadable stage is not a reason to lose the shape.
         stage: isShapeStage(shape.stage) ? shape.stage : 'shaping',
         cycleSlug: cycle.slug,
         cycleTitle: cycle.title || cycle.slug,
         currentCycle,
+        upcomingCycle,
         ...squadOf(squads, shape.squadId),
         ...(shape.notion_url ? { notionUrl: shape.notion_url } : {}),
+        ...(shape.release_summary ? { releaseSummary: shape.release_summary } : {}),
       }))
+    )
   })
+}
+
+/** A cycle that has not started yet: where a new pitch waits for the betting table. */
+export function isUpcomingCycle(cycle: Pick<CycleWindow, 'start_date'>, today: string): boolean {
+  return !!cycle.start_date && today < cycle.start_date
 }
 
 /** What the Product Map needs of a squad from a cycle room. */
@@ -280,7 +296,7 @@ function squadOf(squads: SquadSummary[], id?: string) {
 }
 
 function isShapeStage(value: unknown): value is ShapeStage {
-  return value === 'shaping' || value === 'building' || value === 'done'
+  return (STAGES as unknown[]).includes(value)
 }
 
 /**
@@ -302,6 +318,45 @@ export function isSharp(request: Pick<ProductRequest, 'problem' | 'appetite' | '
  */
 export function statedOutcomes(request: Pick<ProductRequest, 'outcomes'>): RequestOutcome[] {
   return (request.outcomes ?? []).filter((outcome) => text(outcome?.text) !== '')
+}
+
+/** What a new pitch copies from its requests (ADR 0032). After that, the pitch owns it. */
+export type PitchFrameSeed = {
+  frame_problem: string
+  frame_outcomes: RequestOutcome[]
+  frame_appetite: string
+  release_summary: string
+}
+
+const DAYS_PER_UNIT: Record<string, number> = { day: 1, week: 5, month: 20 }
+
+/** "2 weeks" → 10 business days. Null when the free text names no length. */
+function appetiteDays(appetite: string): number | null {
+  const match = /(\d+(?:\.\d+)?)\s*(day|week|month)/i.exec(appetite)
+  return match ? Number(match[1]) * DAYS_PER_UNIT[match[2].toLowerCase()] : null
+}
+
+/**
+ * Seed the frame of a new pitch from the requests it carries: every outcome,
+ * the largest appetite, and the first release draft. The problem joins the
+ * request summaries, one per line, for the framer to rework.
+ */
+export function seedPitchFrame(
+  requests: Pick<ProductRequest, 'problem' | 'appetite' | 'outcomes' | 'announcement'>[]
+): PitchFrameSeed {
+  const appetites = requests.map((r) => text(r.appetite)).filter(Boolean)
+  // ponytail: reads "N days|weeks|months" only; anything else keeps the first appetite.
+  const largest = appetites.reduce<string | undefined>((best, next) => {
+    const a = best === undefined ? null : appetiteDays(best)
+    const b = appetiteDays(next)
+    return best === undefined || (b !== null && (a === null || b > a)) ? next : best
+  }, undefined)
+  return {
+    frame_problem: requests.map((r) => text(r.problem)).filter(Boolean).join('\n'),
+    frame_outcomes: requests.flatMap(statedOutcomes),
+    frame_appetite: largest ?? '',
+    release_summary: requests.map((r) => text(r.announcement)).find(Boolean) ?? '',
+  }
 }
 
 /**
@@ -329,7 +384,10 @@ export function requestState(
   if (shapes.length > 0) {
     // One shape still moving means work is in flight, even beside an older
     // release: a request can be attacked again years later (ADR 0022).
-    if (shapes.some((s) => s.stage !== 'done')) return 'in_flight'
+    const moving = shapes.filter((s) => s.stage !== 'done')
+    if (moving.some((s) => !s.upcomingCycle)) return 'in_flight'
+    // Every live pitch waits for the betting table, even beside an old release.
+    if (moving.length > 0) return 'pitched'
     // Every shape is done. `released` while the release is this cycle's news;
     // `monitoring` once it is not. Monitoring has no end condition, so only a
     // person moves a request on from here (ADR 0025).

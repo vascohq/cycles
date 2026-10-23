@@ -26,7 +26,19 @@ export function migrateProductMapDocument<T extends Doc>(doc: T): Doc {
 }
 
 export function migratePitch(pitch: Doc): Doc {
-  return renameKey(pitch, 'frame_id', 'request_id')
+  const { frame_id, request_id, frame_outcome, ...rest } = pitch
+  const next: Doc = { ...rest }
+  // A pitch carries many requests (ADR 0032). Rooms hold either the name from
+  // before the rename (frame_id) or the one from the rename itself (request_id).
+  const single = frame_id ?? request_id
+  if (typeof single === 'string' && single) next.request_ids = [single]
+  // The free-text outcome becomes a list. A fixed id keeps a rerun a no-op.
+  if (typeof frame_outcome === 'string') {
+    next.frame_outcomes = frame_outcome.trim()
+      ? [{ id: `${pitch.id}-outcome`, text: frame_outcome.trim() }]
+      : []
+  }
+  return next
 }
 
 export function migrateCycleDocument<T extends Doc>(doc: T): Doc {

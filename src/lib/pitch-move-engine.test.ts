@@ -9,7 +9,7 @@ function pitch(id: string, title: string, extra: Partial<CyclePitch> = {}): Cycl
     stage: 'building',
     needle: null,
     frame_problem: '',
-    frame_outcome: '',
+   
     timebox_start: '',
     timebox_end: '',
     emoji: '',

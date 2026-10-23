@@ -2,7 +2,7 @@ import { LiveList, LiveObject } from '@liveblocks/client'
 
 export type Zone = 'on_track' | 'some_risk' | 'concerned'
 
-export type Stage = 'shaping' | 'building' | 'done'
+export type Stage = 'framing' | 'shaping' | 'building' | 'done'
 
 export type Tier = 'must' | 'should' | 'could'
 
@@ -48,13 +48,23 @@ export type CyclePitch = {
    * a past cycle always shows what the team actually committed to (ADR 0022).
    */
   frame_problem: string
-  frame_outcome: string
   /**
-   * The Request on the Product Map this shape attacks (ADR 0022). Undefined on a
-   * shape created with no request, and on every shape written before the Product
-   * Map existed. Editing this shape never writes back to the map.
+   * What the pitch must make true, one item each. Copied from its requests when
+   * the pitch is created, then owned by the pitch (ADR 0032). Absent on a pitch
+   * written before outcomes moved here.
    */
-  request_id?: string
+  frame_outcomes?: { id: string; text: string }[]
+  /** The time the business will spend, copied from the largest request appetite. */
+  frame_appetite?: string
+  /** Two or three sentences, in the customer's words: what changes for them. */
+  release_summary?: string
+  /** The full release note, in Notion. */
+  release_note_url?: string
+  /**
+   * The Requests on the Product Map this pitch carries (ADR 0032). Absent on a
+   * pitch created with no request. Editing the pitch never writes back to the map.
+   */
+  request_ids?: string[]
   timebox_start: string
   timebox_end: string
   /** Identity emoji (single grapheme), or '' when unset. */

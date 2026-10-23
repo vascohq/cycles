@@ -22,6 +22,7 @@ export const TYPE_LABELS: Record<RequestType, string> = {
 export const STATE_LABELS: Record<RequestState, string> = {
   rough: 'Rough',
   candidate: 'Candidate',
+  pitched: 'Pitched',
   in_flight: 'In flight',
   released: 'Released',
   monitoring: 'Monitoring',

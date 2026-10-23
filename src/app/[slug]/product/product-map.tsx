@@ -36,6 +36,7 @@ import {
   storeRelated,
   isMemberId,
   renderProductMap,
+  isUpcomingCycle,
   type CycleWindow,
   type RequestState,
   type LinkedShape,
@@ -47,7 +48,7 @@ import {
 } from '@/lib/product-map-engine'
 import { getTeamToday } from '@/lib/team-time'
 import type { OrganizationUser } from '@/lib/users'
-import { betOnRequest } from './actions'
+import { pitchRequest } from './actions'
 import { KIND_LABELS, STATE_LABELS, TYPE_LABELS } from '@/components/product-map/labels'
 import { KIND_ICONS, TYPE_ICONS } from '@/components/product-map/request-icons'
 import { ExternalLink, Pencil, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
@@ -924,13 +925,15 @@ function Resolve({ pin, onClose }: { pin: RenderedPin; onClose: () => void }) {
 }
 
 /**
- * Every shape that attacked this request, with its cycle, plus the way to bet on
+ * Every pitch that carried this request, with its cycle, plus the way to pitch
  * it. A request outlives the work done against it, so the same problem can be
- * attacked again years later and both bets stay visible. The list is read from
- * the cycle rooms and never stored on the request (ADR 0022).
+ * attacked again years later and both pitches stay visible. The list is read
+ * from the cycle rooms and never stored on the request (ADR 0022).
  */
 function Shapes({ pin }: { pin: RenderedPin }) {
-  const cycles = useContext(CyclesContext)
+  // A new pitch waits for the betting table in a cycle that has not started.
+  const today = getTeamToday(new Date())
+  const cycles = useContext(CyclesContext).filter((cycle) => isUpcomingCycle(cycle, today))
   const [cycleSlug, setCycleSlug] = useState('')
   const [error, setError] = useState('')
   const [betting, setBetting] = useState(false)
@@ -939,7 +942,7 @@ function Shapes({ pin }: { pin: RenderedPin }) {
     setBetting(true)
     setError('')
     try {
-      await betOnRequest({ requestId: pin.requestId, cycleSlug, title: pin.problem })
+      await pitchRequest({ requestId: pin.requestId, cycleSlug, title: pin.problem })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -949,7 +952,7 @@ function Shapes({ pin }: { pin: RenderedPin }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Bets on this request ({pin.shapes.length})</Label>
+      <Label>Pitches for this request ({pin.shapes.length})</Label>
       <ul className="flex flex-col gap-1">
         {pin.shapes.map((shape) => (
           <li key={shape.shapeId} className="text-sm">
@@ -960,14 +963,14 @@ function Shapes({ pin }: { pin: RenderedPin }) {
           </li>
         ))}
       </ul>
-      {/* Only a sharp request can be bet on, so a rough one is offered no bet at
-          all. The action re-checks server-side: this is the courtesy, not the
-          rule. */}
+      {/* Only a sharp request can be pitched, so a rough one is offered no pitch
+          at all. The action re-checks server-side: this is the courtesy, not
+          the rule. */}
       {pin.sharp && cycles.length > 0 && (
         <div className="flex items-center gap-2">
           <Select value={cycleSlug} onValueChange={setCycleSlug}>
-            <SelectTrigger className="h-8 flex-1" aria-label="Bet into cycle">
-              <SelectValue placeholder="Bet into a cycle…" />
+            <SelectTrigger className="h-8 flex-1" aria-label="Pitch into cycle">
+              <SelectValue placeholder="Pitch into an upcoming cycle…" />
             </SelectTrigger>
             <SelectContent>
               {cycles.map((cycle) => (
@@ -984,14 +987,19 @@ function Shapes({ pin }: { pin: RenderedPin }) {
             disabled={!cycleSlug || betting}
             onClick={bet}
           >
-            Bet
+            Pitch
           </Button>
         </div>
       )}
+      {pin.sharp && cycles.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          No upcoming cycle yet. Create the next cycle, then pitch this request into it.
+        </p>
+      )}
       {!pin.sharp && (
         <p className="text-xs text-muted-foreground">
-          Give this request an appetite before betting on it. Nobody bets on half a
-          request.
+          Give this request an appetite and an outcome before you pitch it. Nobody
+          pitches half a request.
         </p>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}

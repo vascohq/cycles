@@ -73,7 +73,9 @@ export type ScopeMapViewProps = {
     stage: Stage
     needle: Needle | null
     frame_problem: string
-    frame_outcome: string
+    frame_outcomes?: { id: string; text: string }[]
+    release_summary?: string
+    release_note_url?: string
     timebox_start: string
     timebox_end: string
     emoji: string
@@ -673,7 +675,9 @@ function HeroCard({
     title: string
     stage: Stage
     frame_problem: string
-    frame_outcome: string
+    frame_outcomes?: { id: string; text: string }[]
+    release_summary?: string
+    release_note_url?: string
     timebox_start: string
     timebox_end: string
     emoji: string
@@ -716,7 +720,7 @@ function HeroCard({
       ro.disconnect()
       cancelAnimationFrame(raf)
     }
-  }, [pitch.title, pitch.frame_problem, pitch.frame_outcome])
+  }, [pitch.title, pitch.frame_problem, pitch.frame_outcomes, pitch.release_summary])
 
   const collapsed = overflowing && !expanded
 
@@ -781,11 +785,30 @@ function HeroCard({
           </div>
           <div>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-              Outcome
+              Outcomes
             </h3>
-            <FramingList text={pitch.frame_outcome} />
+            <FramingList text={(pitch.frame_outcomes ?? []).map((o) => o.text).join('\n')} />
           </div>
         </div>
+
+        {(pitch.release_summary || pitch.release_note_url) && (
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Release
+            </h3>
+            {pitch.release_summary && <p className="text-sm">{pitch.release_summary}</p>}
+            {pitch.release_note_url && (
+              <a
+                href={pitch.release_note_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Full release note
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Fade + toggle when the framing exceeds the fixed height */}
