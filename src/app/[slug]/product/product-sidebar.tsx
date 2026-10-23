@@ -13,15 +13,15 @@ import {
   productMapInitialStorage,
   useProductMapStorage,
 } from '@/product-map-room-context'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, ProductRequest } from '@/product-map-liveblocks.config'
 
 import { CaptureMenu, CaptureTrigger, areaOptions, areaOwners } from './product-map'
 import { UNMAPPED_AREA, areaHref } from './links'
 
 /**
  * The Product Map sidebar: Capture, then the land as a tree, with the open
- * frames each area holds and an entry for Unmapped. It reads the room live in
- * the browser, so it costs no server read per page (ADR 0007) and a frame
+ * requests each area holds and an entry for Unmapped. It reads the room live in
+ * the browser, so it costs no server read per page (ADR 0007) and a request
  * captured anywhere counts at once. It lives in the section layout, so it
  * stays put while you move between map pages. Its provider shares the room
  * connection with the page's.
@@ -55,11 +55,11 @@ function LiveSidebar() {
   const { slug } = useParams<{ slug: string }>()
   // Guarded reads: a room whose root predates either list must still render.
   const areas = useProductMapStorage((root) => (root.areas ?? []) as unknown as Area[])
-  const frames = useProductMapStorage((root) => (root.frames ?? []) as unknown as Frame[])
+  const requests = useProductMapStorage((root) => (root.requests ?? []) as unknown as ProductRequest[])
   // The rendered tree is the same one the map draws, so the order and the
-  // nesting match the land. Frames are left out: only the areas are needed.
-  const tree = renderProductMap({ areas, frames: [], today: getTeamToday(new Date()) }).areas
-  const open = frames.filter((f) => !f.resolved)
+  // nesting match the land. Requests are left out: only the areas are needed.
+  const tree = renderProductMap({ areas, requests: [], today: getTeamToday(new Date()) }).areas
+  const open = requests.filter((f) => !f.resolved)
   const countIn = (areaId?: string) => open.filter((f) => (f.areaId || undefined) === areaId).length
 
   return (

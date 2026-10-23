@@ -6,11 +6,11 @@ import { ChevronRight } from 'lucide-react'
 import { CrumbMenu, SectionCrumb } from '@/components/crumb-menu'
 import { cn } from '@/lib/utils'
 
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, ProductRequest } from '@/product-map-liveblocks.config'
 
-import { UNMAPPED_AREA, areaHref, frameHref } from './links'
+import { UNMAPPED_AREA, areaHref, requestHref } from './links'
 
-/** The areas an area or a frame sits in, outermost first. */
+/** The areas an area or a request sits in, outermost first. */
 export function areaPath(areas: Area[], areaId: string): Area[] {
   const path: Area[] = []
   const seen = new Set<string>()
@@ -28,7 +28,7 @@ export function areaPath(areas: Area[], areaId: string): Area[] {
 /**
  * One area in a breadcrumb. With siblings it is a menu that switches between
  * them; alone, a plain link. A top-level area's siblings are the other
- * top-level areas and Unmapped, because Unmapped is the other place a frame
+ * top-level areas and Unmapped, because Unmapped is the other place a request
  * can sit at the top of the map.
  */
 export function AreaCrumb({
@@ -75,27 +75,27 @@ export function AreaCrumb({
 }
 
 /**
- * The frame part of a breadcrumb on a frame page: switches to another open
- * frame in the same area.
+ * The request part of a breadcrumb on a request page: switches to another open
+ * request in the same area.
  */
-export function FrameCrumb({ frames, frameId }: { frames: Frame[]; frameId: string }) {
+export function RequestCrumb({ requests, requestId }: { requests: ProductRequest[]; requestId: string }) {
   const { slug } = useParams<{ slug: string }>()
-  const frame = frames.find((f) => f.id === frameId)
-  const label = frame?.problem || 'Untitled frame'
-  const items = frames
-    .filter((f) => (f.areaId || '') === (frame?.areaId || '') && (!f.resolved || f.id === frameId))
+  const request = requests.find((f) => f.id === requestId)
+  const label = request?.problem || 'Untitled request'
+  const items = requests
+    .filter((f) => (f.areaId || '') === (request?.areaId || '') && (!f.resolved || f.id === requestId))
     .map((f) => ({
-      href: frameHref(slug, f.id),
-      label: f.problem || 'Untitled frame',
-      current: f.id === frameId,
+      href: requestHref(slug, f.id),
+      label: f.problem || 'Untitled request',
+      current: f.id === requestId,
     }))
   if (items.length < 2) return <span className="truncate font-medium text-foreground">{label}</span>
   return <CrumbMenu label={label} current items={items} />
 }
 
 /**
- * Product Map › region › … › area, then `children` (a frame page adds its
- * frame). The section and every area part are menus. On an area page the
+ * Product Map › region › … › area, then `children` (a request page adds its
+ * request). The section and every area part are menus. On an area page the
  * last part is the page itself, so the page passes `trailing={false}` and
  * adds it as the current part.
  */

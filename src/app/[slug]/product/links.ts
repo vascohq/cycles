@@ -1,18 +1,18 @@
 import { useParams, useRouter } from 'next/navigation'
 
-import { frameHref } from './hrefs'
+import { requestHref } from './hrefs'
 
-export { areaHref, claudeChatHref, frameHref } from './hrefs'
+export { areaHref, claudeChatHref, requestHref } from './hrefs'
 
 // The Area filter and the Unmapped area page share one id for "no area".
-export { UNMAPPED_AREA } from '@/lib/frame-list'
+export { UNMAPPED_AREA } from '@/lib/request-list'
 
 /**
- * Opens a frame's page. Every way into a frame goes through here or through
- * `frameHref`, so a frame always opens on its own URL.
+ * Opens a request's page. Every way into a request goes through here or through
+ * `requestHref`, so a request always opens on its own URL.
  */
-export function useOpenFramePage(): (frameId: string) => void {
+export function useOpenRequestPage(): (requestId: string) => void {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
-  return (frameId) => router.push(frameHref(slug, frameId))
+  return (requestId) => router.push(requestHref(slug, requestId))
 }

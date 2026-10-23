@@ -4,12 +4,12 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { UI_PREF_COOKIES } from '@/lib/ui-pref-cookies'
 
 /**
- * Per-viewer layout choices: is the section sidebar closed, is the frame list
+ * Per-viewer layout choices: is the section sidebar closed, is the request list
  * hidden. They live in cookies, not localStorage, because the server must
  * read them: rendered open and then closed after load, the sidebar flickers.
  * The [slug] layout reads the cookies and seeds this provider.
  */
-export type UiPrefs = { sidebarClosed: boolean; framesHidden: boolean }
+export type UiPrefs = { sidebarClosed: boolean; requestsHidden: boolean }
 
 type Ctx = { prefs: UiPrefs; set: (key: keyof UiPrefs, value: boolean) => void }
 const UiPrefsContext = createContext<Ctx | null>(null)

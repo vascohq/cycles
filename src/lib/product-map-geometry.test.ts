@@ -114,40 +114,40 @@ describe('inRing', () => {
 
 describe('hash', () => {
   it('is stable for the same text', () => {
-    expect(hash('frame-a')).toBe(hash('frame-a'))
+    expect(hash('request-a')).toBe(hash('request-a'))
   })
 
   it('differs for different text', () => {
-    expect(hash('frame-a')).not.toBe(hash('frame-b'))
+    expect(hash('request-a')).not.toBe(hash('request-b'))
   })
 })
 
 describe('pinPosition', () => {
   it('puts the pin inside its area', () => {
-    for (const id of ['a', 'b', 'c', 'frame-42', 'nHq9', 'x'.repeat(30)]) {
+    for (const id of ['a', 'b', 'c', 'request-42', 'nHq9', 'x'.repeat(30)]) {
       expect(inRing(pinPosition(id, LUMPY), LUMPY)).toBe(true)
     }
   })
 
   it('is the same spot every time, so a pin never wanders', () => {
-    expect(pinPosition('frame-a', LUMPY)).toEqual(pinPosition('frame-a', LUMPY))
+    expect(pinPosition('request-a', LUMPY)).toEqual(pinPosition('request-a', LUMPY))
   })
 
-  it('depends on the frame id alone, so capturing a frame never moves the others', () => {
+  it('depends on the request id alone, so capturing a request never moves the others', () => {
     // No list, no index, no count is passed in — there is nothing else it could
     // depend on. This guards the signature as much as the result.
-    const before = pinPosition('frame-a', LUMPY)
-    const unrelated = pinPosition('frame-b', LUMPY)
-    expect(pinPosition('frame-a', LUMPY)).toEqual(before)
+    const before = pinPosition('request-a', LUMPY)
+    const unrelated = pinPosition('request-b', LUMPY)
+    expect(pinPosition('request-a', LUMPY)).toEqual(before)
     expect(unrelated).not.toEqual(before)
   })
 
-  it('separates two frames', () => {
-    expect(pinPosition('frame-a', LUMPY)).not.toEqual(pinPosition('frame-b', LUMPY))
+  it('separates two requests', () => {
+    expect(pinPosition('request-a', LUMPY)).not.toEqual(pinPosition('request-b', LUMPY))
   })
 
   it('falls back to the centroid when there is no area to sit in', () => {
-    expect(pinPosition('frame-a', [[5, 5]])).toEqual([5, 5])
+    expect(pinPosition('request-a', [[5, 5]])).toEqual([5, 5])
   })
 })
 

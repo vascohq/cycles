@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { handleListAreas, handleUpsertArea, handleListFrames, handleUpsertFrame, handleAttachReport, handleUpdateReport, handleDeleteReport, handleLinkPointer, handleWakeFrame, handleWriteBrief, handleResolveFrame, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, handleMovePitch, registerCyclesTools } from './tools'
+import { handleListAreas, handleUpsertArea, handleListRequests, handleUpsertRequest, handleAttachReport, handleUpdateReport, handleDeleteReport, handleLinkPointer, handleWakeRequest, handleWriteBrief, handleResolveRequest, handleListCycles, handleGetCycle, handleGetPitch, handleListUpdates, handlePreviewUpdate, handlePostUpdate, handleBatch, handleCreateCycle, handleArchiveCycle, handleMovePitch, registerCyclesTools } from './tools'
 import type { StorageJson } from './liveblocks-reader'
 
 vi.mock('./liveblocks-reader', () => ({
@@ -31,14 +31,14 @@ vi.mock('./liveblocks-writer', () => ({
   upsertSquad: vi.fn(),
   deleteSquad: vi.fn(),
   upsertArea: vi.fn(),
-  upsertFrame: vi.fn(),
+  upsertRequest: vi.fn(),
   attachReport: vi.fn(),
   updateReport: vi.fn(),
   deleteReport: vi.fn(),
   linkPointer: vi.fn(),
-  wakeFrame: vi.fn(),
+  wakeRequest: vi.fn(),
   writeBrief: vi.fn(),
-  resolveFrame: vi.fn(),
+  resolveRequest: vi.fn(),
   // Batch opens one mutateStorage and runs the callback with a shared root;
   // the mock just invokes it with a dummy root so the ops (mocked above) run.
   openBatch: vi.fn(async (_roomId: string, fn: (root: any) => Promise<void>) => {
@@ -64,7 +64,7 @@ import {
   resolvePitch,
   getProductMapStorage,
 } from './liveblocks-reader'
-import { deleteUpdate, movePitch, pushUpdate, markSlackDelivered, updateCycle,upsertArea, upsertFrame, attachReport, updateReport, deleteReport, linkPointer, wakeFrame, writeBrief, resolveFrame } from './liveblocks-writer'
+import { deleteUpdate, movePitch, pushUpdate, markSlackDelivered, updateCycle,upsertArea, upsertRequest, attachReport, updateReport, deleteReport, linkPointer, wakeRequest, writeBrief, resolveRequest } from './liveblocks-writer'
 import { deliverSlackUpdate, isSlackConfigured } from '@/lib/slack-delivery'
 import { getOrganizationUsers } from '@/lib/users'
 
@@ -840,8 +840,8 @@ describe('tool annotations', () => {
     return tools
   }
 
-  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_frames', 'map_list_areas']
-  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch', 'map_delete_frame', 'map_delete_area', 'map_delete_report']
+  const READ_TOOLS = ['list_cycles', 'get_cycle', 'get_pitch', 'list_updates', 'preview_update', 'list_members', 'map_list_requests', 'map_list_areas']
+  const DESTRUCTIVE_TOOLS = ['delete_pitch', 'delete_scope', 'delete_task', 'delete_parking_item', 'undo_update', 'batch', 'map_delete_request', 'map_delete_area', 'map_delete_report']
 
   it('registers every tool with a title and explicit readOnlyHint', () => {
     const tools = collectTools()
@@ -1114,7 +1114,7 @@ describe('map_list_areas', () => {
         { id: 'a1', name: 'Integrations', x: 0, y: 0 },
         { id: 'a2', name: 'HubSpot', parentAreaId: 'a1', x: 1, y: 0 },
       ],
-      frames: [],
+      requests: [],
     })
 
     const result = await handleListAreas(ORG_ID)
@@ -1125,7 +1125,7 @@ describe('map_list_areas', () => {
   })
 
   it('answers with an empty list for an organization with no map yet', async () => {
-    mockGetMap.mockResolvedValue({ areas: [], frames: [] })
+    mockGetMap.mockResolvedValue({ areas: [], requests: [] })
 
     const result = await handleListAreas(ORG_ID)
 
@@ -1233,36 +1233,36 @@ describe('map_upsert_area', () => {
 
 // An agent must be able to run the whole flow through MCP alone: draw the land,
 // then file a problem onto it.
-describe('an agent creating an area and filing a frame into it', () => {
+describe('an agent creating an area and filing a request into it', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('files the new frame into the area it just created', async () => {
+  it('files the new request into the area it just created', async () => {
     vi.mocked(upsertArea).mockResolvedValue({ created: true, id: 'a_new' })
-    vi.mocked(upsertFrame).mockResolvedValue({ created: true, id: 'f_new' })
+    vi.mocked(upsertRequest).mockResolvedValue({ created: true, id: 'f_new' })
 
     const area = await handleUpsertArea(ORG_ID, { name: 'Integrations' })
     const areaId = (JSON.parse(area.content[0].text) as { id: string }).id
 
-    await handleUpsertFrame(ORG_ID, {
+    await handleUpsertRequest(ORG_ID, {
       type: 'bug',
       problem: 'HubSpot deals stop syncing after a token refresh',
       area_id: areaId,
     })
 
-    const [, params] = vi.mocked(upsertFrame).mock.calls[0]
+    const [, params] = vi.mocked(upsertRequest).mock.calls[0]
     expect(params.areaId).toBe('a_new')
   })
 })
 
-describe('map_list_frames', () => {
+describe('map_list_requests', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const mockGetMap = vi.mocked(getProductMapStorage)
 
-  it("returns the frames of the caller's organization", async () => {
+  it("returns the requests of the caller's organization", async () => {
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [
+      requests: [
         {
           id: 'f1',
           kind: 'brand_burn',
@@ -1279,17 +1279,17 @@ describe('map_list_frames', () => {
       ],
     })
 
-    const result = await handleListFrames(ORG_ID)
+    const result = await handleListRequests(ORG_ID)
 
     expect(mockGetMap).toHaveBeenCalledWith(ORG_ID)
-    const parsed = JSON.parse(result.content[0].text) as { frames: unknown[] }
-    expect(parsed.frames).toHaveLength(1)
+    const parsed = JSON.parse(result.content[0].text) as { requests: unknown[] }
+    expect(parsed.requests).toHaveLength(1)
   })
 
   it('names every report, including one written before ids existed', async () => {
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [
+      requests: [
         {
           id: 'f1',
           kind: 'brand_burn',
@@ -1306,14 +1306,14 @@ describe('map_list_frames', () => {
       ],
     })
 
-    const result = await handleListFrames(ORG_ID)
+    const result = await handleListRequests(ORG_ID)
 
-    const parsed = JSON.parse(result.content[0].text) as { frames: { reports: { id: string }[] }[] }
-    expect(parsed.frames[0].reports[0].id).toMatch(/^r_/)
+    const parsed = JSON.parse(result.content[0].text) as { requests: { reports: { id: string }[] }[] }
+    expect(parsed.requests[0].reports[0].id).toMatch(/^r_/)
   })
 
-  it('filters by who raised the frame', async () => {
-    const frame = {
+  it('filters by who raised the request', async () => {
+    const request = {
       kind: 'pain_point' as const,
       type: 'bug' as const,
       problem: 'p',
@@ -1327,48 +1327,48 @@ describe('map_list_frames', () => {
     }
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [
-        { ...frame, id: 'mine', raised_by: 'user_3' },
-        { ...frame, id: 'theirs', raised_by: 'Jane at Acme' },
-        { ...frame, id: 'unknown' },
+      requests: [
+        { ...request, id: 'mine', raised_by: 'user_3' },
+        { ...request, id: 'theirs', raised_by: 'Jane at Acme' },
+        { ...request, id: 'unknown' },
       ],
     })
 
-    const result = await handleListFrames(ORG_ID, { raised_by: 'Jane at Acme' })
+    const result = await handleListRequests(ORG_ID, { raised_by: 'Jane at Acme' })
 
-    const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
-    expect(parsed.frames.map((f) => f.id)).toEqual(['theirs'])
+    const parsed = JSON.parse(result.content[0].text) as { requests: { id: string }[] }
+    expect(parsed.requests.map((f) => f.id)).toEqual(['theirs'])
 
-    // A person's own frames are a narrow list, so it unlocks the dormant ones too.
-    const dormant = await handleListFrames(ORG_ID, { raised_by: 'user_3', include_dormant: true })
+    // A person's own requests are a narrow list, so it unlocks the dormant ones too.
+    const dormant = await handleListRequests(ORG_ID, { raised_by: 'user_3', include_dormant: true })
     expect(dormant.isError).toBeFalsy()
   })
 
   // The Product Map opens for an org that has never created a cycle, and for
-  // one that has never captured a frame (ADR 0021).
+  // one that has never captured a request (ADR 0021).
   it('answers with an empty list for an organization with no map yet', async () => {
-    mockGetMap.mockResolvedValue({ areas: [], frames: [] })
+    mockGetMap.mockResolvedValue({ areas: [], requests: [] })
 
-    const result = await handleListFrames(ORG_ID)
+    const result = await handleListRequests(ORG_ID)
 
-    expect(JSON.parse(result.content[0].text)).toEqual({ frames: [] })
+    expect(JSON.parse(result.content[0].text)).toEqual({ requests: [] })
   })
 })
 
-describe('map_upsert_frame', () => {
+describe('map_upsert_request', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  const mockUpsertFrame = vi.mocked(upsertFrame)
+  const mockUpsertRequest = vi.mocked(upsertRequest)
 
-  it('captures a frame from a problem and a Type alone', async () => {
-    mockUpsertFrame.mockResolvedValue({ created: true, id: 'f9' })
+  it('captures a request from a problem and a Type alone', async () => {
+    mockUpsertRequest.mockResolvedValue({ created: true, id: 'f9' })
 
-    const result = await handleUpsertFrame(ORG_ID, {
+    const result = await handleUpsertRequest(ORG_ID, {
       problem: 'The export button is three clicks deep',
       type: 'irritant',
     })
 
-    expect(mockUpsertFrame).toHaveBeenCalledWith(
+    expect(mockUpsertRequest).toHaveBeenCalledWith(
       `${ORG_ID}:product-map`,
       expect.objectContaining({
         problem: 'The export button is three clicks deep',
@@ -1381,28 +1381,28 @@ describe('map_upsert_frame', () => {
   // Type decides the workflow, so there is no "unknown" Type to fall back on
   // (ADR 0025). Rejecting at the tool boundary keeps the writer honest.
   it('rejects a capture with no Type, and writes nothing', async () => {
-    const result = await handleUpsertFrame(ORG_ID, { problem: 'Something hurts' })
+    const result = await handleUpsertRequest(ORG_ID, { problem: 'Something hurts' })
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('type')
-    expect(mockUpsertFrame).not.toHaveBeenCalled()
+    expect(mockUpsertRequest).not.toHaveBeenCalled()
   })
 
   it('rejects a capture with no problem, and writes nothing', async () => {
-    const result = await handleUpsertFrame(ORG_ID, { type: 'bug' })
+    const result = await handleUpsertRequest(ORG_ID, { type: 'bug' })
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('problem')
-    expect(mockUpsertFrame).not.toHaveBeenCalled()
+    expect(mockUpsertRequest).not.toHaveBeenCalled()
   })
 
-  it('lets an update omit the Type, because the frame already has one', async () => {
-    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+  it('lets an update omit the Type, because the request already has one', async () => {
+    mockUpsertRequest.mockResolvedValue({ created: false, id: 'f1' })
 
-    const result = await handleUpsertFrame(ORG_ID, { id: 'f1', appetite: '6 weeks' })
+    const result = await handleUpsertRequest(ORG_ID, { id: 'f1', appetite: '6 weeks' })
 
     expect(result.isError).toBeUndefined()
-    expect(mockUpsertFrame).toHaveBeenCalledWith(
+    expect(mockUpsertRequest).toHaveBeenCalledWith(
       `${ORG_ID}:product-map`,
       expect.objectContaining({ id: 'f1', appetite: '6 weeks' })
     )
@@ -1411,11 +1411,11 @@ describe('map_upsert_frame', () => {
   // ADR 0011: an omitted field must reach the writer as undefined, so the writer
   // can leave it alone. Nothing in between may coerce it to ''.
   it('passes an omitted field through as undefined', async () => {
-    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+    mockUpsertRequest.mockResolvedValue({ created: false, id: 'f1' })
 
-    await handleUpsertFrame(ORG_ID, { id: 'f1', appetite: '6 weeks' })
+    await handleUpsertRequest(ORG_ID, { id: 'f1', appetite: '6 weeks' })
 
-    const [, params] = mockUpsertFrame.mock.calls[0]
+    const [, params] = mockUpsertRequest.mock.calls[0]
     expect(params.problem).toBeUndefined()
     expect(params.business_case).toBeUndefined()
     expect(params.owner).toBeUndefined()
@@ -1423,14 +1423,14 @@ describe('map_upsert_frame', () => {
   })
 
   it('forwards the outcomes an agent framed, so /to-frame can write them', async () => {
-    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+    mockUpsertRequest.mockResolvedValue({ created: false, id: 'f1' })
 
-    await handleUpsertFrame(ORG_ID, {
+    await handleUpsertRequest(ORG_ID, {
       id: 'f1',
       outcomes: ['A failed import tells the importer why', 'RevOps stops re-keying rows'],
     })
 
-    const [, params] = mockUpsertFrame.mock.calls[0]
+    const [, params] = mockUpsertRequest.mock.calls[0]
     expect(params.outcomes).toEqual([
       'A failed import tells the importer why',
       'RevOps stops re-keying rows',
@@ -1440,25 +1440,25 @@ describe('map_upsert_frame', () => {
   // ADR 0011 again, for the field most likely to be wiped: an agent updating
   // the appetite must never erase the outcomes somebody framed by hand.
   it('leaves the outcomes alone when the call omits them', async () => {
-    mockUpsertFrame.mockResolvedValue({ created: false, id: 'f1' })
+    mockUpsertRequest.mockResolvedValue({ created: false, id: 'f1' })
 
-    await handleUpsertFrame(ORG_ID, { id: 'f1', appetite: '6 weeks' })
+    await handleUpsertRequest(ORG_ID, { id: 'f1', appetite: '6 weeks' })
 
-    const [, params] = mockUpsertFrame.mock.calls[0]
+    const [, params] = mockUpsertRequest.mock.calls[0]
     expect(params.outcomes).toBeUndefined()
   })
 
   it('reports a writer failure as an error, not a success', async () => {
-    mockUpsertFrame.mockRejectedValue(new Error('Frame not found: "nope"'))
+    mockUpsertRequest.mockRejectedValue(new Error('Request not found: "nope"'))
 
-    const result = await handleUpsertFrame(ORG_ID, { id: 'nope', appetite: '2 weeks' })
+    const result = await handleUpsertRequest(ORG_ID, { id: 'nope', appetite: '2 weeks' })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toBe('Frame not found: "nope"')
+    expect(result.content[0].text).toBe('Request not found: "nope"')
   })
 })
 
-describe('map_upsert_frame schema', () => {
+describe('map_upsert_request schema', () => {
   function schemaFor(toolName: string): Record<string, z.ZodTypeAny> {
     let captured: Record<string, z.ZodTypeAny> | undefined
     const server = {
@@ -1472,7 +1472,7 @@ describe('map_upsert_frame schema', () => {
   }
 
   it('defaults no field, so a partial update can never wipe one (ADR 0011)', () => {
-    const parsed = z.object(schemaFor('map_upsert_frame')).parse({ id: 'f1', appetite: '6 weeks' })
+    const parsed = z.object(schemaFor('map_upsert_request')).parse({ id: 'f1', appetite: '6 weeks' })
 
     expect(parsed.problem).toBeUndefined()
     expect(parsed.kind).toBeUndefined()
@@ -1480,14 +1480,14 @@ describe('map_upsert_frame schema', () => {
     expect(parsed.business_case).toBeUndefined()
     expect(parsed.area_id).toBeUndefined()
     expect(parsed.owner).toBeUndefined()
-    expect(parsed.origin_frame_id).toBeUndefined()
+    expect(parsed.origin_request_id).toBeUndefined()
     expect(parsed.announcement).toBeUndefined()
     expect(parsed.raised_by).toBeUndefined()
-    expect(parsed.related_frame_ids).toBeUndefined()
+    expect(parsed.related_request_ids).toBeUndefined()
   })
 
   it('refuses a Kind or a Type outside the vocabulary', () => {
-    const schema = z.object(schemaFor('map_upsert_frame'))
+    const schema = z.object(schemaFor('map_upsert_request'))
 
     expect(() => schema.parse({ type: 'feature' })).toThrow()
     expect(() => schema.parse({ kind: 'severe' })).toThrow()
@@ -1497,15 +1497,15 @@ describe('map_upsert_frame schema', () => {
   // The `map_` prefix is the only thing separating org-scoped map tools from
   // cycle-scoped tools in the list, so it never comes off (ADR 0021).
   it('takes no cycle slug, because the Product Map names no cycle', () => {
-    expect(schemaFor('map_upsert_frame')).not.toHaveProperty('cycle_slug')
-    expect(schemaFor('map_list_frames')).not.toHaveProperty('cycle_slug')
+    expect(schemaFor('map_upsert_request')).not.toHaveProperty('cycle_slug')
+    expect(schemaFor('map_list_requests')).not.toHaveProperty('cycle_slug')
     expect(schemaFor('map_attach_report')).not.toHaveProperty('cycle_slug')
   })
 
   it('lets map_update_report omit every field it corrects (ADR 0011)', () => {
     const parsed = z
       .object(schemaFor('map_update_report'))
-      .parse({ frame_id: 'f1', report_id: 'r1' })
+      .parse({ request_id: 'f1', report_id: 'r1' })
 
     expect(parsed.text).toBeUndefined()
     expect(parsed.source).toBeUndefined()
@@ -1514,9 +1514,9 @@ describe('map_upsert_frame schema', () => {
     expect(parsed.editor).toBeUndefined()
   })
 
-  it('lets map_attach_report omit everything but the frame and the text', () => {
+  it('lets map_attach_report omit everything but the request and the text', () => {
     const schema = z.object(schemaFor('map_attach_report'))
-    const parsed = schema.parse({ frame_id: 'f1', text: 'again' })
+    const parsed = schema.parse({ request_id: 'f1', text: 'again' })
 
     expect(parsed.source).toBeUndefined()
     expect(parsed.capturer).toBeUndefined()
@@ -1528,24 +1528,24 @@ describe('map_upsert_frame schema', () => {
   it('refuses a report source outside the vocabulary', () => {
     const schema = z.object(schemaFor('map_attach_report'))
 
-    expect(() => schema.parse({ frame_id: 'f1', text: 'x', source: 'slack' })).toThrow()
-    expect(schema.parse({ frame_id: 'f1', text: 'x', source: 'customer' }).source).toBe(
+    expect(() => schema.parse({ request_id: 'f1', text: 'x', source: 'slack' })).toThrow()
+    expect(schema.parse({ request_id: 'f1', text: 'x', source: 'customer' }).source).toBe(
       'customer'
     )
   })
 
-  it('lets map_list_frames filter by area and by Type', () => {
-    const schema = z.object(schemaFor('map_list_frames'))
+  it('lets map_list_requests filter by area and by Type', () => {
+    const schema = z.object(schemaFor('map_list_requests'))
 
     expect(schema.parse({ area_id: 'a1', type: 'bug' }).type).toBe('bug')
     expect(() => schema.parse({ type: 'feature' })).toThrow()
     expect(schema.parse({}).include_dormant).toBeUndefined()
   })
 
-  it('lets map_wake_frame omit the date, so the writer picks today', () => {
-    const schema = z.object(schemaFor('map_wake_frame'))
+  it('lets map_wake_request omit the date, so the writer picks today', () => {
+    const schema = z.object(schemaFor('map_wake_request'))
 
-    expect(schema.parse({ frame_id: 'f1' }).date).toBeUndefined()
+    expect(schema.parse({ request_id: 'f1' }).date).toBeUndefined()
   })
 })
 
@@ -1554,11 +1554,11 @@ describe('handleAttachReport', () => {
 
   const mockAttachReport = vi.mocked(attachReport)
 
-  it('records a customer report on an existing frame', async () => {
-    mockAttachReport.mockResolvedValue({ frameId: 'f1', reportCount: 3 })
+  it('records a customer report on an existing request', async () => {
+    mockAttachReport.mockResolvedValue({ requestId: 'f1', reportCount: 3 })
 
     const result = await handleAttachReport(ORG_ID, {
-      frame_id: 'f1',
+      request_id: 'f1',
       capturer: 'user_2',
       text: 'Their import dropped 400 rows',
       source: 'customer',
@@ -1568,7 +1568,7 @@ describe('handleAttachReport', () => {
     })
 
     expect(mockAttachReport).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
-      frameId: 'f1',
+      requestId: 'f1',
       capturer: 'user_2',
       text: 'Their import dropped 400 rows',
       source: 'customer',
@@ -1576,19 +1576,19 @@ describe('handleAttachReport', () => {
       link: 'https://example.test/call',
       date: '2026-09-02',
     })
-    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', reportCount: 3 })
+    expect(JSON.parse(result.content[0].text)).toEqual({ requestId: 'f1', reportCount: 3 })
   })
 
-  it('rejects a report with no frame, and writes nothing', async () => {
+  it('rejects a report with no request, and writes nothing', async () => {
     const result = await handleAttachReport(ORG_ID, { text: 'again', capturer: 'user_2' })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toContain('frame_id')
+    expect(result.content[0].text).toContain('request_id')
     expect(mockAttachReport).not.toHaveBeenCalled()
   })
 
   it('rejects a report with no text, and writes nothing', async () => {
-    const result = await handleAttachReport(ORG_ID, { frame_id: 'f1', capturer: 'user_2' })
+    const result = await handleAttachReport(ORG_ID, { request_id: 'f1', capturer: 'user_2' })
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('text')
@@ -1598,9 +1598,9 @@ describe('handleAttachReport', () => {
   // ADR 0011: an omitted field reaches the writer as undefined, so the writer
   // fills its own default rather than the tool coercing one in.
   it('passes an omitted field through as undefined', async () => {
-    mockAttachReport.mockResolvedValue({ frameId: 'f1', reportCount: 1 })
+    mockAttachReport.mockResolvedValue({ requestId: 'f1', reportCount: 1 })
 
-    await handleAttachReport(ORG_ID, { frame_id: 'f1', capturer: 'user_2', text: 'again' })
+    await handleAttachReport(ORG_ID, { request_id: 'f1', capturer: 'user_2', text: 'again' })
 
     const [, params] = mockAttachReport.mock.calls[0]
     expect(params.source).toBeUndefined()
@@ -1610,16 +1610,16 @@ describe('handleAttachReport', () => {
   })
 
   it('reports a writer failure as an error, not a success', async () => {
-    mockAttachReport.mockRejectedValue(new Error('Frame not found: "nope"'))
+    mockAttachReport.mockRejectedValue(new Error('Request not found: "nope"'))
 
     const result = await handleAttachReport(ORG_ID, {
-      frame_id: 'nope',
+      request_id: 'nope',
       capturer: 'user_2',
       text: 'again',
     })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toBe('Frame not found: "nope"')
+    expect(result.content[0].text).toBe('Request not found: "nope"')
   })
 })
 
@@ -1628,66 +1628,66 @@ describe('handleLinkPointer', () => {
 
   const mockLinkPointer = vi.mocked(linkPointer)
 
-  it('attaches a pointer to an existing frame', async () => {
-    mockLinkPointer.mockResolvedValue({ frameId: 'f1', pointerCount: 2 })
+  it('attaches a pointer to an existing request', async () => {
+    mockLinkPointer.mockResolvedValue({ requestId: 'f1', pointerCount: 2 })
 
     const result = await handleLinkPointer(ORG_ID, {
-      frame_id: 'f1',
+      request_id: 'f1',
       url: 'https://notion.test/doc',
       kind: 'shaped_doc',
       label: 'The writeup',
     })
 
     expect(mockLinkPointer).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
-      frameId: 'f1',
+      requestId: 'f1',
       url: 'https://notion.test/doc',
       kind: 'shaped_doc',
       label: 'The writeup',
     })
-    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', pointerCount: 2 })
+    expect(JSON.parse(result.content[0].text)).toEqual({ requestId: 'f1', pointerCount: 2 })
   })
 
-  it('rejects a pointer with no frame, no url or no kind, and writes nothing', async () => {
+  it('rejects a pointer with no request, no url or no kind, and writes nothing', async () => {
     expect((await handleLinkPointer(ORG_ID, { url: 'https://x.test', kind: 'issue' })).isError).toBe(true)
-    expect((await handleLinkPointer(ORG_ID, { frame_id: 'f1', kind: 'issue' })).isError).toBe(true)
-    expect((await handleLinkPointer(ORG_ID, { frame_id: 'f1', url: 'https://x.test' })).isError).toBe(true)
+    expect((await handleLinkPointer(ORG_ID, { request_id: 'f1', kind: 'issue' })).isError).toBe(true)
+    expect((await handleLinkPointer(ORG_ID, { request_id: 'f1', url: 'https://x.test' })).isError).toBe(true)
     expect(mockLinkPointer).not.toHaveBeenCalled()
   })
 
   it('says a Shape is not a pointer when the kind is missing', async () => {
-    const result = await handleLinkPointer(ORG_ID, { frame_id: 'f1', url: 'https://x.test' })
+    const result = await handleLinkPointer(ORG_ID, { request_id: 'f1', url: 'https://x.test' })
 
     expect(result.content[0].text).toContain('Shape')
   })
 
   it('passes an omitted label through as undefined (ADR 0011)', async () => {
-    mockLinkPointer.mockResolvedValue({ frameId: 'f1', pointerCount: 1 })
+    mockLinkPointer.mockResolvedValue({ requestId: 'f1', pointerCount: 1 })
 
-    await handleLinkPointer(ORG_ID, { frame_id: 'f1', url: 'https://x.test', kind: 'issue' })
+    await handleLinkPointer(ORG_ID, { request_id: 'f1', url: 'https://x.test', kind: 'issue' })
 
     expect(mockLinkPointer.mock.calls[0][1].label).toBeUndefined()
   })
 
   it('reports a writer failure as an error, not a success', async () => {
-    mockLinkPointer.mockRejectedValue(new Error('Frame not found: "nope"'))
+    mockLinkPointer.mockRejectedValue(new Error('Request not found: "nope"'))
 
     const result = await handleLinkPointer(ORG_ID, {
-      frame_id: 'nope',
+      request_id: 'nope',
       url: 'https://x.test',
       kind: 'issue',
     })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toBe('Frame not found: "nope"')
+    expect(result.content[0].text).toBe('Request not found: "nope"')
   })
 })
 
-describe('map_list_frames filters', () => {
+describe('map_list_requests filters', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const mockGetMap = vi.mocked(getProductMapStorage)
 
-  function frame(overrides: Record<string, unknown> = {}) {
+  function request(overrides: Record<string, unknown> = {}) {
     return {
       id: 'f1',
       kind: 'pain_point',
@@ -1707,39 +1707,39 @@ describe('map_list_frames filters', () => {
     mockListRooms.mockResolvedValue([])
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [frame({ id: 'f1', areaId: 'a1' }), frame({ id: 'f2', areaId: 'a2' })],
+      requests: [request({ id: 'f1', areaId: 'a1' }), request({ id: 'f2', areaId: 'a2' })],
     })
 
-    const result = await handleListFrames(ORG_ID, { area_id: 'a1' })
+    const result = await handleListRequests(ORG_ID, { area_id: 'a1' })
 
-    const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
-    expect(parsed.frames.map((f) => f.id)).toEqual(['f1'])
+    const parsed = JSON.parse(result.content[0].text) as { requests: { id: string }[] }
+    expect(parsed.requests.map((f) => f.id)).toEqual(['f1'])
   })
 
   it('filters by Type, which is what answers "what bugs could I take"', async () => {
     mockListRooms.mockResolvedValue([])
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [frame({ id: 'f1', type: 'bug' }), frame({ id: 'f2', type: 'idea' })],
+      requests: [request({ id: 'f1', type: 'bug' }), request({ id: 'f2', type: 'idea' })],
     })
 
-    const result = await handleListFrames(ORG_ID, { type: 'bug' })
+    const result = await handleListRequests(ORG_ID, { type: 'bug' })
 
-    const parsed = JSON.parse(result.content[0].text) as { frames: { id: string }[] }
-    expect(parsed.frames.map((f) => f.id)).toEqual(['f1'])
+    const parsed = JSON.parse(result.content[0].text) as { requests: { id: string }[] }
+    expect(parsed.requests.map((f) => f.id)).toEqual(['f1'])
   })
 
   // An unfiltered list somebody grooms is a backlog. The friction is the
   // feature (ADR 0024).
   it('refuses an unfiltered dormant listing', async () => {
-    const result = await handleListFrames(ORG_ID, { include_dormant: true })
+    const result = await handleListRequests(ORG_ID, { include_dormant: true })
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('filter')
     expect(mockGetMap).not.toHaveBeenCalled()
   })
 
-  it('returns dormant frames once the caller names a filter', async () => {
+  it('returns dormant requests once the caller names a filter', async () => {
     mockCycleWindows.mockResolvedValue([
       {
         slug: 'c1',
@@ -1758,25 +1758,25 @@ describe('map_list_frames filters', () => {
     ])
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [frame({ id: 'f1', type: 'bug', last_woken: '2026-01-20' })],
+      requests: [request({ id: 'f1', type: 'bug', last_woken: '2026-01-20' })],
     })
     // Pin the clock: dormancy is derived against "today", so a wall-clock test
     // would start passing or failing on its own as the calendar moves.
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-01T12:00:00Z'))
 
-    const awake = await handleListFrames(ORG_ID, { type: 'bug' })
-    expect((JSON.parse(awake.content[0].text) as { frames: unknown[] }).frames).toEqual([])
+    const awake = await handleListRequests(ORG_ID, { type: 'bug' })
+    expect((JSON.parse(awake.content[0].text) as { requests: unknown[] }).requests).toEqual([])
 
-    const withDormant = await handleListFrames(ORG_ID, {
+    const withDormant = await handleListRequests(ORG_ID, {
       type: 'bug',
       include_dormant: true,
     })
     const parsed = JSON.parse(withDormant.content[0].text) as {
-      frames: { id: string; dormant: boolean }[]
+      requests: { id: string; dormant: boolean }[]
     }
-    expect(parsed.frames).toHaveLength(1)
-    expect(parsed.frames[0].dormant).toBe(true)
+    expect(parsed.requests).toHaveLength(1)
+    expect(parsed.requests[0].dormant).toBe(true)
     vi.useRealTimers()
   })
 
@@ -1786,58 +1786,58 @@ describe('map_list_frames filters', () => {
     mockCycleWindows.mockResolvedValue([])
     mockGetMap.mockResolvedValue({
       areas: [],
-      frames: [frame({ id: 'f1', last_woken: '2019-01-01' })],
+      requests: [request({ id: 'f1', last_woken: '2019-01-01' })],
     })
 
-    const result = await handleListFrames(ORG_ID)
+    const result = await handleListRequests(ORG_ID)
 
-    const parsed = JSON.parse(result.content[0].text) as { frames: unknown[] }
-    expect(parsed.frames).toHaveLength(1)
+    const parsed = JSON.parse(result.content[0].text) as { requests: unknown[] }
+    expect(parsed.requests).toHaveLength(1)
   })
 })
 
-describe('handleWakeFrame', () => {
+describe('handleWakeRequest', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  const mockWakeFrame = vi.mocked(wakeFrame)
+  const mockWakeRequest = vi.mocked(wakeRequest)
 
-  it('wakes a frame by id', async () => {
-    mockWakeFrame.mockResolvedValue({ frameId: 'f1', wokenOn: '2026-09-02' })
+  it('wakes a request by id', async () => {
+    mockWakeRequest.mockResolvedValue({ requestId: 'f1', wokenOn: '2026-09-02' })
 
-    const result = await handleWakeFrame(ORG_ID, { frame_id: 'f1', date: '2026-09-02' })
+    const result = await handleWakeRequest(ORG_ID, { request_id: 'f1', date: '2026-09-02' })
 
-    expect(mockWakeFrame).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
-      frameId: 'f1',
+    expect(mockWakeRequest).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      requestId: 'f1',
       date: '2026-09-02',
     })
     expect(JSON.parse(result.content[0].text)).toEqual({
-      frameId: 'f1',
+      requestId: 'f1',
       wokenOn: '2026-09-02',
     })
   })
 
-  it('rejects a wake with no frame, and writes nothing', async () => {
-    const result = await handleWakeFrame(ORG_ID, {})
+  it('rejects a wake with no request, and writes nothing', async () => {
+    const result = await handleWakeRequest(ORG_ID, {})
 
     expect(result.isError).toBe(true)
-    expect(mockWakeFrame).not.toHaveBeenCalled()
+    expect(mockWakeRequest).not.toHaveBeenCalled()
   })
 
   it('lets the date be omitted, so the writer picks today (ADR 0011)', async () => {
-    mockWakeFrame.mockResolvedValue({ frameId: 'f1', wokenOn: '2026-09-02' })
+    mockWakeRequest.mockResolvedValue({ requestId: 'f1', wokenOn: '2026-09-02' })
 
-    await handleWakeFrame(ORG_ID, { frame_id: 'f1' })
+    await handleWakeRequest(ORG_ID, { request_id: 'f1' })
 
-    expect(mockWakeFrame.mock.calls[0][1].date).toBeUndefined()
+    expect(mockWakeRequest.mock.calls[0][1].date).toBeUndefined()
   })
 
   it('reports a writer failure as an error, not a success', async () => {
-    mockWakeFrame.mockRejectedValue(new Error('Frame not found: "nope"'))
+    mockWakeRequest.mockRejectedValue(new Error('Request not found: "nope"'))
 
-    const result = await handleWakeFrame(ORG_ID, { frame_id: 'nope' })
+    const result = await handleWakeRequest(ORG_ID, { request_id: 'nope' })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toBe('Frame not found: "nope"')
+    expect(result.content[0].text).toBe('Request not found: "nope"')
   })
 })
 
@@ -1846,11 +1846,11 @@ describe('handleWriteBrief', () => {
 
   const mockWriteBrief = vi.mocked(writeBrief)
 
-  it('leaves a brief on the frame, naming who wrote it', async () => {
-    mockWriteBrief.mockResolvedValue({ frameId: 'f1', writtenOn: '2026-09-03' })
+  it('leaves a brief on the request, naming who wrote it', async () => {
+    mockWriteBrief.mockResolvedValue({ requestId: 'f1', writtenOn: '2026-09-03' })
 
     const result = await handleWriteBrief(ORG_ID, {
-      frame_id: 'f1',
+      request_id: 'f1',
       headline: 'Building this cycle',
       where_we_are: 'Over the hill.',
       next_step: 'Link the pull request.',
@@ -1858,7 +1858,7 @@ describe('handleWriteBrief', () => {
     })
 
     expect(mockWriteBrief).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
-      frameId: 'f1',
+      requestId: 'f1',
       headline: 'Building this cycle',
       whereWeAre: 'Over the hill.',
       nextStep: 'Link the pull request.',
@@ -1866,10 +1866,10 @@ describe('handleWriteBrief', () => {
       watch: undefined,
       writtenBy: 'paulo',
     })
-    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', writtenOn: '2026-09-03' })
+    expect(JSON.parse(result.content[0].text)).toEqual({ requestId: 'f1', writtenOn: '2026-09-03' })
   })
 
-  it('rejects a brief with no frame, and writes nothing', async () => {
+  it('rejects a brief with no request, and writes nothing', async () => {
     const result = await handleWriteBrief(ORG_ID, { headline: 'x', next_step: 'y', written_by: 'paulo' })
 
     expect(result.isError).toBe(true)
@@ -1879,14 +1879,14 @@ describe('handleWriteBrief', () => {
   it('reports a writer failure as an error, not a success', async () => {
     mockWriteBrief.mockRejectedValue(new Error('A brief needs a headline.'))
 
-    const result = await handleWriteBrief(ORG_ID, { frame_id: 'f1', written_by: 'paulo' })
+    const result = await handleWriteBrief(ORG_ID, { request_id: 'f1', written_by: 'paulo' })
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toBe('A brief needs a headline.')
   })
 })
 
-describe('upsert_pitch frame pointer', () => {
+describe('upsert_pitch request pointer', () => {
   beforeEach(() => vi.clearAllMocks())
 
   function schemaFor(toolName: string): Record<string, z.ZodTypeAny> {
@@ -1901,83 +1901,83 @@ describe('upsert_pitch frame pointer', () => {
     return captured
   }
 
-  it('takes an optional frame_id, so a shape with no frame stays valid', () => {
+  it('takes an optional request_id, so a shape with no request stays valid', () => {
     const schema = z.object(schemaFor('upsert_pitch'))
 
     const base = { cycle_slug: '2026-q3', title: 'x', stage: 'shaping' as const }
 
-    expect(schema.parse(base).frame_id).toBeUndefined()
-    expect(schema.parse({ ...base, frame_id: 'f1' }).frame_id).toBe('f1')
+    expect(schema.parse(base).request_id).toBeUndefined()
+    expect(schema.parse({ ...base, request_id: 'f1' }).request_id).toBe('f1')
   })
 })
 
-describe('handleResolveFrame', () => {
+describe('handleResolveRequest', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  const mockResolveFrame = vi.mocked(resolveFrame)
+  const mockResolveRequest = vi.mocked(resolveRequest)
 
-  it('resolves a frame by id', async () => {
-    mockResolveFrame.mockResolvedValue({ frameId: 'f1', resolved: true })
+  it('resolves a request by id', async () => {
+    mockResolveRequest.mockResolvedValue({ requestId: 'f1', resolved: true })
 
-    const result = await handleResolveFrame(ORG_ID, { frame_id: 'f1' })
+    const result = await handleResolveRequest(ORG_ID, { request_id: 'f1' })
 
-    expect(mockResolveFrame).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
-      frameId: 'f1',
+    expect(mockResolveRequest).toHaveBeenCalledWith(`${ORG_ID}:product-map`, {
+      requestId: 'f1',
       resolved: undefined,
     })
-    expect(JSON.parse(result.content[0].text)).toEqual({ frameId: 'f1', resolved: true })
+    expect(JSON.parse(result.content[0].text)).toEqual({ requestId: 'f1', resolved: true })
   })
 
-  it('rejects a resolve with no frame, and writes nothing', async () => {
-    const result = await handleResolveFrame(ORG_ID, {})
+  it('rejects a resolve with no request, and writes nothing', async () => {
+    const result = await handleResolveRequest(ORG_ID, {})
 
     expect(result.isError).toBe(true)
-    expect(mockResolveFrame).not.toHaveBeenCalled()
+    expect(mockResolveRequest).not.toHaveBeenCalled()
   })
 
-  it('passes false through, so a frame can come back onto the Product Map', async () => {
-    mockResolveFrame.mockResolvedValue({ frameId: 'f1', resolved: false })
+  it('passes false through, so a request can come back onto the Product Map', async () => {
+    mockResolveRequest.mockResolvedValue({ requestId: 'f1', resolved: false })
 
-    await handleResolveFrame(ORG_ID, { frame_id: 'f1', resolved: false })
+    await handleResolveRequest(ORG_ID, { request_id: 'f1', resolved: false })
 
-    expect(mockResolveFrame.mock.calls[0][1].resolved).toBe(false)
+    expect(mockResolveRequest.mock.calls[0][1].resolved).toBe(false)
   })
 
   it('reports a writer failure as an error, not a success', async () => {
-    mockResolveFrame.mockRejectedValue(new Error('Frame not found: "nope"'))
+    mockResolveRequest.mockRejectedValue(new Error('Request not found: "nope"'))
 
-    const result = await handleResolveFrame(ORG_ID, { frame_id: 'nope' })
+    const result = await handleResolveRequest(ORG_ID, { request_id: 'nope' })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toBe('Frame not found: "nope"')
+    expect(result.content[0].text).toBe('Request not found: "nope"')
   })
 })
 
 describe('map_update_report and map_delete_report', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('needs the frame and the report', async () => {
+  it('needs the request and the report', async () => {
     expect((await handleUpdateReport(ORG_ID, { report_id: 'r1' })).isError).toBe(true)
-    expect((await handleUpdateReport(ORG_ID, { frame_id: 'f1' })).isError).toBe(true)
-    expect((await handleDeleteReport(ORG_ID, { frame_id: 'f1' })).isError).toBe(true)
+    expect((await handleUpdateReport(ORG_ID, { request_id: 'f1' })).isError).toBe(true)
+    expect((await handleDeleteReport(ORG_ID, { request_id: 'f1' })).isError).toBe(true)
   })
 
   it('passes only the fields the caller sent, with the editor', async () => {
-    vi.mocked(updateReport).mockResolvedValue({ frameId: 'f1', reportId: 'r1' })
+    vi.mocked(updateReport).mockResolvedValue({ requestId: 'f1', reportId: 'r1' })
 
-    await handleUpdateReport(ORG_ID, { frame_id: 'f1', report_id: 'r1', editor: 'user_2', text: 'x' })
+    await handleUpdateReport(ORG_ID, { request_id: 'f1', report_id: 'r1', editor: 'user_2', text: 'x' })
 
     const [, params] = vi.mocked(updateReport).mock.calls[0]
-    expect(params).toMatchObject({ frameId: 'f1', reportId: 'r1', editor: 'user_2', text: 'x' })
+    expect(params).toMatchObject({ requestId: 'f1', reportId: 'r1', editor: 'user_2', text: 'x' })
     expect(params.link).toBeUndefined()
     expect(params.source).toBeUndefined()
   })
 
   it('returns the new count after a delete', async () => {
-    vi.mocked(deleteReport).mockResolvedValue({ frameId: 'f1', reportCount: 3 })
+    vi.mocked(deleteReport).mockResolvedValue({ requestId: 'f1', reportCount: 3 })
 
-    const result = await handleDeleteReport(ORG_ID, { frame_id: 'f1', report_id: 'r1' })
+    const result = await handleDeleteReport(ORG_ID, { request_id: 'f1', report_id: 'r1' })
 
-    expect(JSON.parse(result.content[0].text)).toEqual({ deleted: true, frameId: 'f1', reportCount: 3 })
+    expect(JSON.parse(result.content[0].text)).toEqual({ deleted: true, requestId: 'f1', reportCount: 3 })
   })
 })

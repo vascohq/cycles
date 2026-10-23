@@ -5,5 +5,5 @@
  */
 export const UI_PREF_COOKIES = {
   sidebarClosed: 'ui-sidebar-closed',
-  framesHidden: 'ui-frames-hidden',
+  requestsHidden: 'ui-requests-hidden',
 } as const

@@ -17,6 +17,6 @@ export const {
 export function productMapInitialStorage(): ProductMapStorage {
   return {
     areas: new LiveList([]),
-    frames: new LiveList([]),
+    requests: new LiveList([]),
   }
 }

@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Frame page', () => {
-  test('shows the brief Paulo left, and where the frame stands', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f1')
+test.describe('Request page', () => {
+  test('shows the brief Paulo left, and where the request stands', async ({ page }) => {
+    await page.goto('/e2e/product-map/requests/f1')
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       'Capture from Slack loses the thread link'
@@ -17,28 +17,28 @@ test.describe('Frame page', () => {
     )
   })
 
-  // Nobody asks Paulo live: the button opens a new Claude chat with the frame typed in.
-  test('asks Paulo again through a new chat that names the frame', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f1')
+  // Nobody asks Paulo live: the button opens a new Claude chat with the request typed in.
+  test('asks Paulo again through a new chat that names the request', async ({ page }) => {
+    await page.goto('/e2e/product-map/requests/f1')
 
     const href = await page.getByRole('link', { name: /Ask Paulo again/ }).getAttribute('href')
     const prompt = new URL(href!).searchParams.get('q')
     expect(prompt).toContain('/paulo')
-    expect(prompt).toContain('frame f1')
+    expect(prompt).toContain('request f1')
   })
 
   // Written before anything ships, so it reads as a draft while work is in flight.
   test('shows the release announcement as a draft until it ships', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f1')
+    await page.goto('/e2e/product-map/requests/f1')
 
     const note = page.getByRole('region', { name: 'Release announcement' })
     await expect(note).toContainText('links back to its thread')
     await expect(note).toContainText('Draft')
   })
 
-  // The business case is written in Markdown, so a frame in sections reads as sections.
+  // The business case is written in Markdown, so a request in sections reads as sections.
   test('renders the business case as Markdown', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f1')
+    await page.goto('/e2e/product-map/requests/f1')
 
     const framing = page.locator('section', { hasText: 'What hurts, and what changes' })
     await expect(framing.locator('strong', { hasText: 'Context:' })).toBeVisible()
@@ -52,7 +52,7 @@ test.describe('Frame page', () => {
 
   // Each part of the breadcrumb opens that area's own page.
   test('links every part of the breadcrumb to its area page', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f1')
+    await page.goto('/e2e/product-map/requests/f1')
 
     const crumbs = page
       .getByRole('navigation', { name: 'Breadcrumb' })
@@ -63,32 +63,32 @@ test.describe('Frame page', () => {
     await expect(crumbs.last()).toHaveAttribute('href', /\/product\/areas\/slack$/)
   })
 
-  test('opens an area page with its own frames, and the Area filter for its sub-areas', async ({
+  test('opens an area page with its own requests, and the Area filter for its sub-areas', async ({
     page,
   }) => {
     await page.goto('/e2e/product-map/areas/front-office')
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Front office')
     await expect(page.getByRole('group', { name: 'Filters' })).toContainText('Area')
-    const rows = page.getByRole('region', { name: 'Frames' }).locator('li')
+    const rows = page.getByRole('region', { name: 'Requests' }).locator('li')
     await expect(rows).toHaveCount(6)
-    await expect(page.getByRole('region', { name: 'Frames' })).not.toContainText(
+    await expect(page.getByRole('region', { name: 'Requests' })).not.toContainText(
       'Batch writes drop the assignee'
     )
   })
 
-  // Unmapped is a special area: the holding area for frames with no home.
-  test('opens Unmapped as an area page with the frames that have no area', async ({ page }) => {
+  // Unmapped is a special area: the holding area for requests with no home.
+  test('opens Unmapped as an area page with the requests that have no area', async ({ page }) => {
     await page.goto('/e2e/product-map/areas/unmapped')
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Unmapped')
-    const list = page.getByRole('region', { name: 'Frames' })
+    const list = page.getByRole('region', { name: 'Requests' })
     await expect(list.locator('li')).toHaveCount(1)
     await expect(list).toContainText('Somebody should own the glossary')
   })
 
   test('says so when nobody has left a brief or an announcement yet', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f2')
+    await page.goto('/e2e/product-map/requests/f2')
 
     await expect(page.getByText('No release announcement yet.')).toBeVisible()
     await expect(page.getByText('No brief yet.')).toBeVisible()
@@ -97,7 +97,7 @@ test.describe('Frame page', () => {
 
   // Reports and the cycle a shape started in share one timeline, newest first.
   test('puts the reports and the work on one timeline, newest first', async ({ page }) => {
-    await page.goto('/e2e/product-map/frames/f1')
+    await page.goto('/e2e/product-map/requests/f1')
 
     const items = page.locator('ol.border-l li')
     await expect(items.first()).toContainText('24 Aug 2026')
@@ -109,7 +109,7 @@ test.describe('Frame page', () => {
     await page.setViewportSize({ width: 1600, height: 1000 })
     await page.goto('/e2e/product-map/workspace?type=security')
 
-    const list = page.getByRole('region', { name: 'Frames' })
+    const list = page.getByRole('region', { name: 'Requests' })
     await expect(list.locator('li')).toHaveCount(1)
     const pins = page.locator(
       'svg[aria-label="Product Map"] [role="button"]:not([aria-label$="Zoom in."])'
@@ -123,8 +123,8 @@ test.describe('Frame page', () => {
     await page.goto('/e2e/product-map/workspace')
 
     await page.getByRole('button', { name: 'Hide the list' }).click()
-    await expect(page.getByRole('region', { name: 'Frames' })).toHaveCount(0)
-    await page.getByRole('button', { name: /Frames · 20/ }).click()
-    await expect(page.getByRole('region', { name: 'Frames' }).locator('li')).toHaveCount(20)
+    await expect(page.getByRole('region', { name: 'Requests' })).toHaveCount(0)
+    await page.getByRole('button', { name: /Requests · 20/ }).click()
+    await expect(page.getByRole('region', { name: 'Requests' }).locator('li')).toHaveCount(20)
   })
 })

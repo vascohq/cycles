@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted. The vocabulary is superseded by [ADR 0032](0032-the-map-holds-requests-and-framing-returns-to-the-pitch.md): the frame on the map is now a **Request**.
 
 ## Context
 

@@ -31,27 +31,27 @@ export type Area = {
    * before this existed still renders and nothing needs migrating.
    */
   outline?: [number, number][]
-  /** Clerk user id. The suggested Frame owner for this area, and nothing more. */
+  /** Clerk user id. The suggested Request owner for this area, and nothing more. */
   owner?: string
 }
 
 /** How much a problem hurts. The only axis with a color on the map. */
-export type FrameKind = 'brand_burn' | 'pain_point' | 'unlock_win'
+export type RequestKind = 'brand_burn' | 'pain_point' | 'unlock_win'
 
 /** Where a problem came from and how it gets worked. Type selects the playbook (ADR 0025). */
-export type FrameType = 'bug' | 'idea' | 'request' | 'security' | 'irritant'
+export type RequestType = 'bug' | 'idea' | 'ask' | 'security' | 'irritant'
 
 /**
- * One record of the problem happening. Nothing reaches a frame unmediated.
+ * One record of the problem happening. Nothing reaches a request unmediated.
  *
  * A report can be corrected: an edit replaces it in place and a delete removes
  * it, so a badly written report never has to be fixed by adding another one
  * that counts as the problem happening again (ADR 0030).
  */
-export type FrameReport = {
+export type RequestReport = {
   /**
    * Absent on reports written before ids existed. Read it through `withReportIds`,
-   * which derives one; the first correction on the frame stores it.
+   * which derives one; the first correction on the request stores it.
    */
   id?: string
   /** A Clerk user id or an agent id. Provenance is never anonymous. */
@@ -70,10 +70,10 @@ export type FrameReport = {
 }
 
 /**
- * The kind of artifact a pointer points at. A frame's Type selects a playbook,
+ * The kind of artifact a pointer points at. A request's Type selects a playbook,
  * and the playbook names which of these it expects (product-map-engine).
  *
- * There is deliberately no kind for a Shape: a shape points at its frame, never
+ * There is deliberately no kind for a Shape: a shape points at its request, never
  * the reverse (ADR 0022).
  */
 export type PointerKind =
@@ -85,7 +85,7 @@ export type PointerKind =
   | 'conversation'
 
 /**
- * One observable change the frame says must be true afterwards. Each outcome is
+ * One observable change the request says must be true afterwards. Each outcome is
  * ONE item, because the shape is checked against them one at a time: a reader
  * has to be able to tell whether each one happened.
  *
@@ -93,22 +93,22 @@ export type PointerKind =
  * gym owner knows on the day a payment fails" is an outcome; "the user can
  * filter the table" is a mechanism.
  */
-export type FrameOutcome = {
+export type RequestOutcome = {
   id: string
   text: string
 }
 
 /**
  * A short written answer to "where are we, and what is next?", left on the
- * frame by an agent or a person. The page never asks an agent live: it shows
+ * request by an agent or a person. The page never asks an agent live: it shows
  * the last brief somebody wrote, with its date, and every write replaces the
- * whole brief (ADR 0029). Writing a brief does not wake the frame.
+ * whole brief (ADR 0029). Writing a brief does not wake the request.
  */
-export type FrameBrief = {
-  /** One line: where the frame stands, in plain words. */
+export type RequestBrief = {
+  /** One line: where the request stands, in plain words. */
   headline: string
   where_we_are: string
-  /** The one move that gets the frame to its next state. */
+  /** The one move that gets the request to its next state. */
   next_step: string
   /** Clerk user id of the person who takes the next step. */
   next_step_owner?: string
@@ -120,31 +120,31 @@ export type FrameBrief = {
   written_on: string
 }
 
-/** An outbound link a frame packages. The artifact itself is never stored. */
-export type FramePointer = {
+/** An outbound link a request packages. The artifact itself is never stored. */
+export type RequestPointer = {
   url: string
   label: string
   kind: PointerKind
 }
 
 /**
- * One frame is one problem. The unit of capture and the central object of the
- * Product Map. A frame is not a piece of work: work is a Shape in a cycle that
- * points home to the frame (ADR 0022).
+ * One request is one problem. The unit of capture and the central object of the
+ * Product Map. A request is not a piece of work: work is a Shape in a cycle that
+ * points home to the request (ADR 0022).
  *
- * A frame holds its OUTCOMES: what must be true afterwards. Framing decides
- * that, not shaping, so two shapes attacking one frame chase the same win.
- * Sharpness, frame state, the candidate statement and the gap list are all
+ * A request holds its OUTCOMES: what must be true afterwards. Framing decides
+ * that, not shaping, so two shapes attacking one request chase the same win.
+ * Sharpness, request state, the candidate statement and the gap list are all
  * DERIVED in product-map-engine, never stored.
  */
-export type Frame = {
+export type ProductRequest = {
   id: string
-  /** Empty when the frame is Unmapped — always a valid result. */
+  /** Empty when the request is Unmapped — always a valid result. */
   areaId?: string
-  kind: FrameKind
-  type: FrameType
+  kind: RequestKind
+  type: RequestType
   problem: string
-  /** The time the business will spend. A frame with no appetite is rough. */
+  /** The time the business will spend. A request with no appetite is rough. */
   appetite: string
   /** Free text: who is affected, what it is worth, why now. */
   business_case: string
@@ -156,39 +156,39 @@ export type Frame = {
    * who often records a problem somebody else raised.
    */
   raised_by?: string
-  /** The frame whose monitoring surfaced this one (ADR 0025). */
-  originFrameId?: string
+  /** The request whose monitoring surfaced this one (ADR 0025). */
+  originRequestId?: string
   /**
-   * Frames related to this one. The relation goes both ways, and every writer
-   * stores it on both frames (`relateFrames`). Absent when there are none.
+   * Requests related to this one. The relation goes both ways, and every writer
+   * stores it on both requests (`relateRequests`). Absent when there are none.
    */
-  related_frame_ids?: string[]
-  reports: FrameReport[]
-  pointers: FramePointer[]
+  related_request_ids?: string[]
+  reports: RequestReport[]
+  pointers: RequestPointer[]
   /**
-   * What must be true afterwards. A frame with none is not sharp: nobody bets
-   * on a frame that never says what changes. Frames captured before outcomes
+   * What must be true afterwards. A request with none is not sharp: nobody bets
+   * on a request that never says what changes. Requests captured before outcomes
    * existed have no such field, so every reader treats it as possibly absent.
    */
-  outcomes: FrameOutcome[]
+  outcomes: RequestOutcome[]
   /**
    * The release announcement customers would read once the problem is solved.
-   * Written as a draft long before anything ships, so the frame says in the
+   * Written as a draft long before anything ships, so the request says in the
    * customer's words what solving it means (ADR 0029). Absent when unwritten.
    */
   announcement?: string
   /** The last brief somebody left. Absent until the first one is written. */
-  brief?: FrameBrief
+  brief?: RequestBrief
   /**
    * ISO date (YYYY-MM-DD) of the last wake. Only three things set it: a new
    * report, a wake call, and an explicit "still hurts" click (ADR 0024).
    */
   last_woken: string
-  /** Only a person resolves a frame. Nothing resolves on a timer. */
+  /** Only a person resolves a request. Nothing resolves on a timer. */
   resolved: boolean
 }
 
 export type ProductMapStorage = {
   areas: LiveList<LiveObject<Area>>
-  frames: LiveList<LiveObject<Frame>>
+  requests: LiveList<LiveObject<ProductRequest>>
 }

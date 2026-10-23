@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  relateFrames,
-  relatedFrames,
+  relateRequests,
+  relatedRequests,
   withReportIds,
   AREA_GAP,
-  FRAME_KINDS,
-  FRAME_TYPES,
+  REQUEST_KINDS,
+  REQUEST_TYPES,
   KIND_COLORS,
   DEFAULT_FRESHNESS,
   FALLBACK_CYCLE_DAYS,
@@ -17,7 +17,7 @@ import {
   PIN_MIN_SIZE,
   candidateStatement,
   clusterForViewport,
-  frameState,
+  requestState,
   cyclesSinceWoken,
   gapList,
   inCooldown,
@@ -28,22 +28,22 @@ import {
   pinOpacity,
   pinSize,
   reportCount,
-  isFrameKind,
-  isFrameType,
+  isRequestKind,
+  isRequestType,
   isSharp,
-  renderFrame,
+  renderRequest,
   renderProductMap,
   type CycleWindow,
   type LinkedShape,
 } from './product-map-engine'
 import type {
   Area,
-  Frame,
-  FramePointer,
-  FrameReport,
+  ProductRequest,
+  RequestPointer,
+  RequestReport,
 } from '@/product-map-liveblocks.config'
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeRequest(overrides: Partial<ProductRequest> = {}): ProductRequest {
   return {
     id: 'f1',
     kind: 'pain_point',
@@ -60,10 +60,10 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
   }
 }
 
-/** Enough of an outcome to sharpen a frame. */
+/** Enough of an outcome to sharpen a request. */
 const OUTCOMES = [{ id: 'o1', text: 'A failed import tells the importer why' }]
 
-function makeReport(overrides: Partial<FrameReport> = {}): FrameReport {
+function makeReport(overrides: Partial<RequestReport> = {}): RequestReport {
   return {
     capturer: 'user_1',
     source: 'internal',
@@ -82,7 +82,7 @@ const CYCLES: CycleWindow[] = [
 
 function makeShape(overrides: Partial<LinkedShape> = {}): LinkedShape {
   return {
-    frameId: 'f1',
+    requestId: 'f1',
     shapeId: 's1',
     title: 'Silent import failures',
     stage: 'building',
@@ -95,50 +95,50 @@ function makeShape(overrides: Partial<LinkedShape> = {}): LinkedShape {
 
 describe('the Kind and Type vocabularies', () => {
   it('names the three Kinds', () => {
-    expect([...FRAME_KINDS]).toEqual(['brand_burn', 'pain_point', 'unlock_win'])
+    expect([...REQUEST_KINDS]).toEqual(['brand_burn', 'pain_point', 'unlock_win'])
   })
 
   it('names the five Types', () => {
-    expect([...FRAME_TYPES]).toEqual(['bug', 'idea', 'request', 'security', 'irritant'])
+    expect([...REQUEST_TYPES]).toEqual(['bug', 'idea', 'ask', 'security', 'irritant'])
   })
 
   it('gives every Kind its own color, so no two Kinds read alike', () => {
-    const colors = FRAME_KINDS.map((k) => KIND_COLORS[k])
-    expect(new Set(colors).size).toBe(FRAME_KINDS.length)
+    const colors = REQUEST_KINDS.map((k) => KIND_COLORS[k])
+    expect(new Set(colors).size).toBe(REQUEST_KINDS.length)
   })
 
   it('recognizes a valid Kind and refuses anything else', () => {
-    expect(isFrameKind('brand_burn')).toBe(true)
-    expect(isFrameKind('severity')).toBe(false)
-    expect(isFrameKind(undefined)).toBe(false)
+    expect(isRequestKind('brand_burn')).toBe(true)
+    expect(isRequestKind('severity')).toBe(false)
+    expect(isRequestKind(undefined)).toBe(false)
   })
 
   it('recognizes a valid Type and refuses anything else', () => {
-    expect(isFrameType('security')).toBe(true)
-    expect(isFrameType('feature')).toBe(false)
-    expect(isFrameType('')).toBe(false)
+    expect(isRequestType('security')).toBe(true)
+    expect(isRequestType('feature')).toBe(false)
+    expect(isRequestType('')).toBe(false)
   })
 })
 
 describe('renderProductMap', () => {
-  it('returns one pin per frame', () => {
+  it('returns one pin per request', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'f1' }), makeFrame({ id: 'f2' })],
+      requests: [makeRequest({ id: 'f1' }), makeRequest({ id: 'f2' })],
       today: '2026-09-02',
     })
-    expect(model.pins.map((p) => p.frameId)).toEqual(['f1', 'f2'])
+    expect(model.pins.map((p) => p.requestId)).toEqual(['f1', 'f2'])
   })
 
   it('gives an empty map no pins', () => {
-    expect(renderProductMap({ frames: [], today: '2026-09-02' }).pins).toEqual([])
+    expect(renderProductMap({ requests: [], today: '2026-09-02' }).pins).toEqual([])
   })
 
-  it("takes a pin's color from the frame's Kind", () => {
+  it("takes a pin's color from the request's Kind", () => {
     const model = renderProductMap({
-      frames: [
-        makeFrame({ id: 'burn', kind: 'brand_burn' }),
-        makeFrame({ id: 'pain', kind: 'pain_point' }),
-        makeFrame({ id: 'win', kind: 'unlock_win' }),
+      requests: [
+        makeRequest({ id: 'burn', kind: 'brand_burn' }),
+        makeRequest({ id: 'pain', kind: 'pain_point' }),
+        makeRequest({ id: 'win', kind: 'unlock_win' }),
       ],
       today: '2026-09-02',
     })
@@ -149,13 +149,13 @@ describe('renderProductMap', () => {
     ])
   })
 
-  // Type is routing, not decoration. It rides on the model for the frame detail
+  // Type is routing, not decoration. It rides on the model for the request detail
   // and the filters, and it never reaches a pin channel (ADR 0025).
   it('carries the Type through without giving it a visual channel', () => {
     const model = renderProductMap({
-      frames: [
-        makeFrame({ id: 'a', type: 'bug', kind: 'pain_point' }),
-        makeFrame({ id: 'b', type: 'security', kind: 'pain_point' }),
+      requests: [
+        makeRequest({ id: 'a', type: 'bug', kind: 'pain_point' }),
+        makeRequest({ id: 'b', type: 'security', kind: 'pain_point' }),
       ],
       today: '2026-09-02',
     })
@@ -165,25 +165,25 @@ describe('renderProductMap', () => {
 
   it('falls back to pain_point when a stored Kind is unreadable', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ kind: 'catastrophe' as never })],
+      requests: [makeRequest({ kind: 'catastrophe' as never })],
       today: '2026-09-02',
     })
     expect(model.pins[0].kind).toBe('pain_point')
     expect(model.pins[0].color).toBe(KIND_COLORS.pain_point)
   })
 
-  it('leaves an Unmapped frame with no area', () => {
-    const model = renderProductMap({ frames: [makeFrame()], today: '2026-09-02' })
+  it('leaves an Unmapped request with no area', () => {
+    const model = renderProductMap({ requests: [makeRequest()], today: '2026-09-02' })
     expect(model.pins[0].areaId).toBe('')
   })
 
   // Resolve is the only way off the Product Map, and only a person does it (ADR 0025).
-  it('drops a resolved frame from the Product Map', () => {
+  it('drops a resolved request from the Product Map', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'open' }), makeFrame({ id: 'gone', resolved: true })],
+      requests: [makeRequest({ id: 'open' }), makeRequest({ id: 'gone', resolved: true })],
       today: '2026-09-02',
     })
-    expect(model.pins.map((p) => p.frameId)).toEqual(['open'])
+    expect(model.pins.map((p) => p.requestId)).toEqual(['open'])
   })
 
   describe('daysSinceWoken', () => {
@@ -191,23 +191,23 @@ describe('renderProductMap', () => {
     // engine holds no clock, so a test never has to freeze one.
     it('counts whole days from the last wake to today', () => {
       const model = renderProductMap({
-        frames: [makeFrame({ last_woken: '2026-08-20' })],
+        requests: [makeRequest({ last_woken: '2026-08-20' })],
         today: '2026-09-02',
       })
       expect(model.pins[0].daysSinceWoken).toBe(13)
     })
 
-    it('is zero on the day the frame was woken', () => {
+    it('is zero on the day the request was woken', () => {
       const model = renderProductMap({
-        frames: [makeFrame({ last_woken: '2026-09-02' })],
+        requests: [makeRequest({ last_woken: '2026-09-02' })],
         today: '2026-09-02',
       })
       expect(model.pins[0].daysSinceWoken).toBe(0)
     })
 
-    it('is null for a frame that was never woken', () => {
+    it('is null for a request that was never woken', () => {
       const model = renderProductMap({
-        frames: [makeFrame({ last_woken: '' })],
+        requests: [makeRequest({ last_woken: '' })],
         today: '2026-09-02',
       })
       expect(model.pins[0].daysSinceWoken).toBeNull()
@@ -222,25 +222,25 @@ function makeArea(overrides: Partial<Area> = {}): Area {
 }
 
 describe('area grouping', () => {
-  it('groups each frame under the area it is filed in', () => {
+  it('groups each request under the area it is filed in', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', name: 'Integrations' }), makeArea({ id: 'a2', name: 'Billing' })],
-      frames: [
-        makeFrame({ id: 'f1', areaId: 'a1' }),
-        makeFrame({ id: 'f2', areaId: 'a2' }),
-        makeFrame({ id: 'f3', areaId: 'a1' }),
+      requests: [
+        makeRequest({ id: 'f1', areaId: 'a1' }),
+        makeRequest({ id: 'f2', areaId: 'a2' }),
+        makeRequest({ id: 'f3', areaId: 'a1' }),
       ],
       today: '2026-09-02',
     })
     expect(model.areas.map((a) => a.name)).toEqual(['Integrations', 'Billing'])
-    expect(model.areas[0].pins.map((p) => p.frameId)).toEqual(['f1', 'f3'])
-    expect(model.areas[1].pins.map((p) => p.frameId)).toEqual(['f2'])
+    expect(model.areas[0].pins.map((p) => p.requestId)).toEqual(['f1', 'f3'])
+    expect(model.areas[1].pins.map((p) => p.requestId)).toEqual(['f2'])
   })
 
-  it('keeps an area with no frames, because an empty area is still land', () => {
+  it('keeps an area with no requests, because an empty area is still land', () => {
     const model = renderProductMap({
       areas: [makeArea()],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     expect(model.areas).toHaveLength(1)
@@ -250,7 +250,7 @@ describe('area grouping', () => {
   it('carries the area owner through, as a default and nothing more', () => {
     const model = renderProductMap({
       areas: [makeArea({ owner: 'user_9' }), makeArea({ id: 'a2', name: 'Billing' })],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     expect(model.areas[0].owner).toBe('user_9')
@@ -261,50 +261,50 @@ describe('area grouping', () => {
   it('never gives an area a color of its own', () => {
     const model = renderProductMap({
       areas: [makeArea()],
-      frames: [makeFrame({ areaId: 'a1', kind: 'brand_burn' })],
+      requests: [makeRequest({ areaId: 'a1', kind: 'brand_burn' })],
       today: '2026-09-02',
     })
     expect(Object.keys(model.areas[0])).not.toContain('color')
   })
 
-  it('leaves a resolved frame off its area', () => {
+  it('leaves a resolved request off its area', () => {
     const model = renderProductMap({
       areas: [makeArea()],
-      frames: [
-        makeFrame({ id: 'open', areaId: 'a1' }),
-        makeFrame({ id: 'gone', areaId: 'a1', resolved: true }),
+      requests: [
+        makeRequest({ id: 'open', areaId: 'a1' }),
+        makeRequest({ id: 'gone', areaId: 'a1', resolved: true }),
       ],
       today: '2026-09-02',
     })
-    expect(model.areas[0].pins.map((p) => p.frameId)).toEqual(['open'])
+    expect(model.areas[0].pins.map((p) => p.requestId)).toEqual(['open'])
   })
 })
 
 describe('the Unmapped group', () => {
-  it('collects the frames that belong to no area', () => {
+  it('collects the requests that belong to no area', () => {
     const model = renderProductMap({
       areas: [makeArea()],
-      frames: [makeFrame({ id: 'filed', areaId: 'a1' }), makeFrame({ id: 'homeless' })],
+      requests: [makeRequest({ id: 'filed', areaId: 'a1' }), makeRequest({ id: 'homeless' })],
       today: '2026-09-02',
     })
-    expect(model.unmapped.map((p) => p.frameId)).toEqual(['homeless'])
+    expect(model.unmapped.map((p) => p.requestId)).toEqual(['homeless'])
   })
 
   // A dangling area id is not a home. Unmapped is always a valid result, so the
-  // frame stays visible rather than disappearing with the area that held it.
-  it('collects a frame whose area no longer exists', () => {
+  // request stays visible rather than disappearing with the area that held it.
+  it('collects a request whose area no longer exists', () => {
     const model = renderProductMap({
       areas: [],
-      frames: [makeFrame({ id: 'orphan', areaId: 'deleted' })],
+      requests: [makeRequest({ id: 'orphan', areaId: 'deleted' })],
       today: '2026-09-02',
     })
-    expect(model.unmapped.map((p) => p.frameId)).toEqual(['orphan'])
+    expect(model.unmapped.map((p) => p.requestId)).toEqual(['orphan'])
   })
 
-  it('is empty when every frame is filed', () => {
+  it('is empty when every request is filed', () => {
     const model = renderProductMap({
       areas: [makeArea()],
-      frames: [makeFrame({ areaId: 'a1' })],
+      requests: [makeRequest({ areaId: 'a1' })],
       today: '2026-09-02',
     })
     expect(model.unmapped).toEqual([])
@@ -318,13 +318,13 @@ describe('sub-areas', () => {
         makeArea({ id: 'a1', name: 'Integrations' }),
         makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'a1' }),
       ],
-      frames: [makeFrame({ id: 'f1', areaId: 'a2' })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a2' })],
       today: '2026-09-02',
     })
     expect(model.areas.map((a) => a.name)).toEqual(['Integrations'])
     expect(model.areas[0].children.map((a) => a.name)).toEqual(['HubSpot'])
-    expect(model.areas[0].children[0].pins.map((p) => p.frameId)).toEqual(['f1'])
-    // The frames of a sub-area belong to the sub-area, not to the parent.
+    expect(model.areas[0].children[0].pins.map((p) => p.requestId)).toEqual(['f1'])
+    // The requests of a sub-area belong to the sub-area, not to the parent.
     expect(model.areas[0].pins).toEqual([])
   })
 
@@ -335,7 +335,7 @@ describe('sub-areas', () => {
         makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'a1' }),
         makeArea({ id: 'a3', name: 'Deals sync', parentAreaId: 'a2' }),
       ],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     expect(model.areas[0].children[0].children.map((a) => a.name)).toEqual(['Deals sync'])
@@ -344,7 +344,7 @@ describe('sub-areas', () => {
   it('promotes an area whose parent no longer exists, rather than losing it', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'deleted' })],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     expect(model.areas.map((a) => a.name)).toEqual(['HubSpot'])
@@ -357,7 +357,7 @@ describe('sub-areas', () => {
         makeArea({ id: 'a1', name: 'One', parentAreaId: 'a2' }),
         makeArea({ id: 'a2', name: 'Two', parentAreaId: 'a1' }),
       ],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     const drawn = model.areas.flatMap((a) => [a.name, ...a.children.map((c) => c.name)])
@@ -371,7 +371,7 @@ describe("an area's generated shape", () => {
   it('places the shape from the position, not from stored geometry', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', x: 0, y: 0 }), makeArea({ id: 'a2', x: 2, y: 1 })],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     const [first, second] = model.areas
@@ -384,7 +384,7 @@ describe("an area's generated shape", () => {
   it('gives two areas at the same position the same shape', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', x: 1, y: 1 }), makeArea({ id: 'a2', x: 1, y: 1 })],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     expect(model.areas[0].shape).toEqual(model.areas[1].shape)
@@ -396,7 +396,7 @@ describe("an area's generated shape", () => {
         makeArea({ id: 'a1' }),
         makeArea({ id: 'a2', name: 'HubSpot', parentAreaId: 'a1' }),
       ],
-      frames: [],
+      requests: [],
       today: '2026-09-02',
     })
     expect(model.areas[0].children[0].shape.width).toBeLessThan(model.areas[0].shape.width)
@@ -404,93 +404,93 @@ describe("an area's generated shape", () => {
 })
 
 describe('sharp', () => {
-  it('is false with no outcome, so nobody bets on a frame that never says what changes', () => {
+  it('is false with no outcome, so nobody bets on a request that never says what changes', () => {
     expect(
-      isSharp(makeFrame({ problem: 'Imports fail', appetite: '2 weeks', outcomes: [] }))
+      isSharp(makeRequest({ problem: 'Imports fail', appetite: '2 weeks', outcomes: [] }))
     ).toBe(false)
   })
 
   it('is true with a problem, an appetite and an outcome', () => {
     expect(
-      isSharp(makeFrame({ problem: 'Imports fail', appetite: '2 weeks', outcomes: OUTCOMES }))
+      isSharp(makeRequest({ problem: 'Imports fail', appetite: '2 weeks', outcomes: OUTCOMES }))
     ).toBe(true)
   })
 
   it('is false for a problem with no appetite', () => {
-    expect(isSharp(makeFrame({ problem: 'Imports fail', appetite: '' }))).toBe(false)
+    expect(isSharp(makeRequest({ problem: 'Imports fail', appetite: '' }))).toBe(false)
   })
 
   it('is false for an appetite with no problem', () => {
-    expect(isSharp(makeFrame({ problem: '', appetite: '2 weeks' }))).toBe(false)
+    expect(isSharp(makeRequest({ problem: '', appetite: '2 weeks' }))).toBe(false)
   })
 
-  it('is false for whitespace, so a stray space never sharpens a frame', () => {
-    expect(isSharp(makeFrame({ problem: 'Imports fail', appetite: '   ' }))).toBe(false)
+  it('is false for whitespace, so a stray space never sharpens a request', () => {
+    expect(isSharp(makeRequest({ problem: 'Imports fail', appetite: '   ' }))).toBe(false)
   })
 })
 
 describe('the candidate statement', () => {
   it('is built from the appetite, so nobody types it', () => {
-    expect(candidateStatement(makeFrame({ appetite: '6 weeks', outcomes: OUTCOMES }))).toBe(
+    expect(candidateStatement(makeRequest({ appetite: '6 weeks', outcomes: OUTCOMES }))).toBe(
       'If we can shape this into something doable in 6 weeks, that is meaningful to us.'
     )
   })
 
-  it('is absent for a rough frame: there is no commitment to state yet', () => {
-    expect(candidateStatement(makeFrame({ appetite: '' }))).toBeNull()
+  it('is absent for a rough request: there is no commitment to state yet', () => {
+    expect(candidateStatement(makeRequest({ appetite: '' }))).toBeNull()
   })
 })
 
-describe('frame state', () => {
+describe('request state', () => {
   it('reads rough with no appetite', () => {
-    expect(frameState(makeFrame({ appetite: '' }))).toBe('rough')
+    expect(requestState(makeRequest({ appetite: '' }))).toBe('rough')
   })
 
   it('reads candidate when sharp with no shape yet', () => {
-    expect(frameState(makeFrame({ appetite: '2 weeks', outcomes: OUTCOMES }), [])).toBe('candidate')
+    expect(requestState(makeRequest({ appetite: '2 weeks', outcomes: OUTCOMES }), [])).toBe('candidate')
   })
 
   it('reads in_flight while a linked shape is not done', () => {
-    const frame = makeFrame({ appetite: '2 weeks' })
-    expect(frameState(frame, [makeShape({ stage: 'shaping' })])).toBe('in_flight')
-    expect(frameState(frame, [makeShape({ stage: 'building' })])).toBe('in_flight')
+    const request = makeRequest({ appetite: '2 weeks' })
+    expect(requestState(request, [makeShape({ stage: 'shaping' })])).toBe('in_flight')
+    expect(requestState(request, [makeShape({ stage: 'building' })])).toBe('in_flight')
   })
 
   it('reads released once the shape is done in the current cycle', () => {
-    const frame = makeFrame({ appetite: '2 weeks' })
-    expect(frameState(frame, [makeShape({ stage: 'done', currentCycle: true })])).toBe(
+    const request = makeRequest({ appetite: '2 weeks' })
+    expect(requestState(request, [makeShape({ stage: 'done', currentCycle: true })])).toBe(
       'released'
     )
   })
 
   it('reads monitoring once the release is behind us, and never ends by itself', () => {
-    const frame = makeFrame({ appetite: '2 weeks' })
-    expect(frameState(frame, [makeShape({ stage: 'done', currentCycle: false })])).toBe(
+    const request = makeRequest({ appetite: '2 weeks' })
+    expect(requestState(request, [makeShape({ stage: 'done', currentCycle: false })])).toBe(
       'monitoring'
     )
   })
 
-  it('reads in_flight when a new shape attacks a frame released years ago', () => {
-    const frame = makeFrame({ appetite: '2 weeks' })
+  it('reads in_flight when a new shape attacks a request released years ago', () => {
+    const request = makeRequest({ appetite: '2 weeks' })
     const shapes = [
       makeShape({ shapeId: 's1', stage: 'done', currentCycle: false, cycleSlug: '2024-q1' }),
       makeShape({ shapeId: 's2', stage: 'shaping', currentCycle: true }),
     ]
-    expect(frameState(frame, shapes)).toBe('in_flight')
+    expect(requestState(request, shapes)).toBe('in_flight')
   })
 
   it('reads resolved whatever the shapes say, because a person decided', () => {
-    const frame = makeFrame({ appetite: '2 weeks', resolved: true })
-    expect(frameState(frame, [makeShape({ stage: 'building' })])).toBe('resolved')
-    expect(frameState(makeFrame({ appetite: '', resolved: true }))).toBe('resolved')
+    const request = makeRequest({ appetite: '2 weeks', resolved: true })
+    expect(requestState(request, [makeShape({ stage: 'building' })])).toBe('resolved')
+    expect(requestState(makeRequest({ appetite: '', resolved: true }))).toBe('resolved')
   })
 })
 
-describe('the rendered pin carries the derived frame fields', () => {
-  it('marks a sharp frame sharp and hands over its candidate statement', () => {
+describe('the rendered pin carries the derived request fields', () => {
+  it('marks a sharp request sharp and hands over its candidate statement', () => {
     const model = renderProductMap({
-      frames: [
-        makeFrame({ appetite: '6 weeks', business_case: 'Two customers churned', outcomes: OUTCOMES }),
+      requests: [
+        makeRequest({ appetite: '6 weeks', business_case: 'Two customers churned', outcomes: OUTCOMES }),
       ],
       today: '2026-09-02',
     })
@@ -503,8 +503,8 @@ describe('the rendered pin carries the derived frame fields', () => {
 
   it('hands over the stated outcomes, dropping the blank ones', () => {
     const model = renderProductMap({
-      frames: [
-        makeFrame({
+      requests: [
+        makeRequest({
           outcomes: [
             { id: 'o1', text: 'A failed import tells the importer why' },
             { id: 'o2', text: '   ' },
@@ -519,19 +519,19 @@ describe('the rendered pin carries the derived frame fields', () => {
   })
 
   it('marks a raw capture rough, so it never reads as agreed work', () => {
-    const model = renderProductMap({ frames: [makeFrame()], today: '2026-09-02' })
+    const model = renderProductMap({ requests: [makeRequest()], today: '2026-09-02' })
     expect(model.pins[0].sharp).toBe(false)
     expect(model.pins[0].state).toBe('rough')
     expect(model.pins[0].candidateStatement).toBeNull()
   })
 
-  it('reads the shapes of that frame only, never a neighbour frame shapes', () => {
+  it('reads the shapes of that request only, never a neighbour request shapes', () => {
     const model = renderProductMap({
-      frames: [
-        makeFrame({ id: 'f1', appetite: '2 weeks', outcomes: OUTCOMES }),
-        makeFrame({ id: 'f2', appetite: '2 weeks', outcomes: OUTCOMES }),
+      requests: [
+        makeRequest({ id: 'f1', appetite: '2 weeks', outcomes: OUTCOMES }),
+        makeRequest({ id: 'f2', appetite: '2 weeks', outcomes: OUTCOMES }),
       ],
-      shapes: [makeShape({ frameId: 'f1', stage: 'building' })],
+      shapes: [makeShape({ requestId: 'f1', stage: 'building' })],
       today: '2026-09-02',
     })
     expect(model.pins[0].state).toBe('in_flight')
@@ -539,7 +539,7 @@ describe('the rendered pin carries the derived frame fields', () => {
   })
 
   it('reports no owner as null rather than an empty string', () => {
-    const model = renderProductMap({ frames: [makeFrame()], today: '2026-09-02' })
+    const model = renderProductMap({ requests: [makeRequest()], today: '2026-09-02' })
     expect(model.pins[0].owner).toBeNull()
   })
 })
@@ -549,7 +549,7 @@ describe('the heat lens', () => {
     expect([...HEAT_LENSES]).toEqual(['all', 'internal', 'customer'])
   })
 
-  const frame = makeFrame({
+  const request = makeRequest({
     reports: [
       makeReport({ source: 'customer' }),
       makeReport({ source: 'customer' }),
@@ -559,24 +559,24 @@ describe('the heat lens', () => {
   })
 
   it('counts every report under the all lens', () => {
-    expect(reportCount(frame, 'all')).toBe(4)
+    expect(reportCount(request, 'all')).toBe(4)
   })
 
   it('counts only what customers raised under the customer lens', () => {
-    expect(reportCount(frame, 'customer')).toBe(3)
+    expect(reportCount(request, 'customer')).toBe(3)
   })
 
   it('counts only what the team raised under the internal lens', () => {
-    expect(reportCount(frame, 'internal')).toBe(1)
+    expect(reportCount(request, 'internal')).toBe(1)
   })
 
-  it('counts nothing on a frame nobody has reported', () => {
-    expect(reportCount(makeFrame(), 'all')).toBe(0)
+  it('counts nothing on a request nobody has reported', () => {
+    expect(reportCount(makeRequest(), 'all')).toBe(0)
   })
 })
 
 describe('pin size', () => {
-  it('draws the smallest pin for a frame with no reports', () => {
+  it('draws the smallest pin for a request with no reports', () => {
     expect(pinSize(0)).toBe(PIN_MIN_SIZE)
   })
 
@@ -585,13 +585,13 @@ describe('pin size', () => {
     expect(pinSize(1)).toBeGreaterThan(pinSize(0))
   })
 
-  it('caps, so one shouty frame never swallows its area', () => {
+  it('caps, so one shouty request never swallows its area', () => {
     expect(pinSize(500)).toBe(PIN_MAX_SIZE)
   })
 })
 
 describe('the rendered pin under each lens', () => {
-  const hotWithCustomers = makeFrame({
+  const hotWithCustomers = makeRequest({
     reports: [
       makeReport({ source: 'customer' }),
       makeReport({ source: 'customer' }),
@@ -600,14 +600,14 @@ describe('the rendered pin under each lens', () => {
     ],
   })
 
-  it('draws a frame hot with customers and cold internally at two sizes', () => {
+  it('draws a request hot with customers and cold internally at two sizes', () => {
     const customerLens = renderProductMap({
-      frames: [hotWithCustomers],
+      requests: [hotWithCustomers],
       lens: 'customer',
       today: '2026-09-02',
     })
     const internalLens = renderProductMap({
-      frames: [hotWithCustomers],
+      requests: [hotWithCustomers],
       lens: 'internal',
       today: '2026-09-02',
     })
@@ -617,13 +617,13 @@ describe('the rendered pin under each lens', () => {
   })
 
   it('counts every report when no lens is named', () => {
-    const model = renderProductMap({ frames: [hotWithCustomers], today: '2026-09-02' })
+    const model = renderProductMap({ requests: [hotWithCustomers], today: '2026-09-02' })
     expect(model.pins[0].reportCount).toBe(4)
   })
 
   it('hands the detail every report, whatever the lens filters out', () => {
     const model = renderProductMap({
-      frames: [hotWithCustomers],
+      requests: [hotWithCustomers],
       lens: 'internal',
       today: '2026-09-02',
     })
@@ -632,12 +632,12 @@ describe('the rendered pin under each lens', () => {
 })
 
 describe('playbooks and the gap list', () => {
-  function pointer(kind: FramePointer['kind']): FramePointer {
+  function pointer(kind: RequestPointer['kind']): RequestPointer {
     return { url: 'https://example.test/1', label: 'x', kind }
   }
 
   it('gives every Type a playbook, so a Type with none would be a bug', () => {
-    for (const type of FRAME_TYPES) {
+    for (const type of REQUEST_TYPES) {
       expect(PLAYBOOKS[type]).toBeDefined()
     }
   })
@@ -646,46 +646,46 @@ describe('playbooks and the gap list', () => {
     expect(PLAYBOOKS.bug.expects.length).toBeLessThan(PLAYBOOKS.idea.expects.length)
   })
 
-  it('expects a pull request on a security frame', () => {
+  it('expects a pull request on a security request', () => {
     expect(PLAYBOOKS.security.expects).toContain('pull_request')
   })
 
-  it('names no pointer kind for a Shape, because a shape points at its frame', () => {
+  it('names no pointer kind for a Shape, because a shape points at its request', () => {
     expect(isPointerKind('shape')).toBe(false)
     expect([...POINTER_KINDS]).not.toContain('shape')
   })
 
-  it('lists what the playbook expects and the frame lacks', () => {
-    const frame = makeFrame({ type: 'bug', pointers: [pointer('issue')] })
-    expect(gapList(frame)).toEqual(['pull_request'])
+  it('lists what the playbook expects and the request lacks', () => {
+    const request = makeRequest({ type: 'bug', pointers: [pointer('issue')] })
+    expect(gapList(request)).toEqual(['pull_request'])
   })
 
-  it('lists nothing once the frame points at everything expected', () => {
-    const frame = makeFrame({
+  it('lists nothing once the request points at everything expected', () => {
+    const request = makeRequest({
       type: 'bug',
       pointers: [pointer('issue'), pointer('pull_request')],
     })
-    expect(gapList(frame)).toEqual([])
+    expect(gapList(request)).toEqual([])
   })
 
   it('lists nothing for a Type whose playbook expects nothing', () => {
-    expect(gapList(makeFrame({ type: 'irritant', pointers: [] }))).toEqual([])
+    expect(gapList(makeRequest({ type: 'irritant', pointers: [] }))).toEqual([])
   })
 
   it('ignores a pointer the playbook never asked for', () => {
-    const frame = makeFrame({ type: 'irritant', pointers: [pointer('wayfinder')] })
-    expect(gapList(frame)).toEqual([])
+    const request = makeRequest({ type: 'irritant', pointers: [pointer('wayfinder')] })
+    expect(gapList(request)).toEqual([])
   })
 
-  it('reads a frame stored before pointers existed as one full gap list', () => {
-    const frame = makeFrame({ type: 'bug' })
-    delete (frame as Partial<Frame>).pointers
-    expect(gapList(frame)).toEqual(['issue', 'pull_request'])
+  it('reads a request stored before pointers existed as one full gap list', () => {
+    const request = makeRequest({ type: 'bug' })
+    delete (request as Partial<ProductRequest>).pointers
+    expect(gapList(request)).toEqual(['issue', 'pull_request'])
   })
 
   it('hands the pin its pointers and its gaps', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ type: 'bug', pointers: [pointer('issue')] })],
+      requests: [makeRequest({ type: 'bug', pointers: [pointer('issue')] })],
       today: '2026-09-02',
     })
     expect(model.pins[0].pointers).toHaveLength(1)
@@ -694,7 +694,7 @@ describe('playbooks and the gap list', () => {
 })
 
 describe('counting cycles since the last wake', () => {
-  it('counts nothing while the frame\'s own cycle is still running', () => {
+  it('counts nothing while the request\'s own cycle is still running', () => {
     expect(cyclesSinceWoken('2026-01-20', CYCLES, '2026-02-01')).toBe(0)
   })
 
@@ -719,16 +719,16 @@ describe('counting cycles since the last wake', () => {
     expect(cyclesSinceWoken('2026-01-20', undated, '2026-09-02')).toBe(0)
   })
 
-  // A cooldown is its own room here, so counting it would put a frame to sleep
+  // A cooldown is its own room here, so counting it would put a request to sleep
   // after one build cycle instead of two — half the window ADR 0024 asks for.
-  it('does not age a frame for a cooldown, only for a build cycle', () => {
+  it('does not age a request for a cooldown, only for a build cycle', () => {
     // Woken in cycle two; today is after the cooldown that followed it.
     expect(cyclesSinceWoken('2026-03-01', CYCLES, '2026-04-10')).toBe(1)
   })
 })
 
 describe('pin opacity', () => {
-  it('draws a frame woken today at full strength', () => {
+  it('draws a request woken today at full strength', () => {
     expect(pinOpacity(0, CYCLES, DEFAULT_FRESHNESS)).toBe(1)
   })
 
@@ -753,21 +753,21 @@ describe('pin opacity', () => {
 describe('the dormant boundary', () => {
   function render(lastWoken: string, today: string, overrides = {}) {
     return renderProductMap({
-      frames: [makeFrame({ last_woken: lastWoken })],
+      requests: [makeRequest({ last_woken: lastWoken })],
       cycles: CYCLES,
       today,
       ...overrides,
     })
   }
 
-  it('keeps a frame on the Product Map after one cycle with no wake', () => {
+  it('keeps a request on the Product Map after one cycle with no wake', () => {
     const model = render('2026-01-20', '2026-03-01')
     expect(model.pins).toHaveLength(1)
     expect(model.pins[0].dim).toBe(true)
     expect(model.pins[0].dormant).toBe(false)
   })
 
-  it('takes a frame off the Product Map after two cycles with no wake', () => {
+  it('takes a request off the Product Map after two cycles with no wake', () => {
     const model = render('2026-01-20', '2026-03-30')
     expect(model.pins).toHaveLength(0)
     expect(model.unmapped).toHaveLength(0)
@@ -783,7 +783,7 @@ describe('the dormant boundary', () => {
   // Sunk cost must never set priority (ADR 0024).
   it('lets past investment make no difference to the boundary', () => {
     const worked = renderProductMap({
-      frames: [makeFrame({ last_woken: '2026-01-20', appetite: '2 weeks' })],
+      requests: [makeRequest({ last_woken: '2026-01-20', appetite: '2 weeks' })],
       shapes: [makeShape({ stage: 'done', currentCycle: false })],
       cycles: CYCLES,
       today: '2026-03-30',
@@ -791,14 +791,14 @@ describe('the dormant boundary', () => {
     expect(worked.pins).toHaveLength(0)
   })
 
-  it('brings a frame back onto the Product Map when somebody wakes it', () => {
+  it('brings a request back onto the Product Map when somebody wakes it', () => {
     const model = render('2026-03-29', '2026-03-30')
     expect(model.pins).toHaveLength(1)
   })
 
   it('ages nothing for a team with no cycle, so the Product Map works before the first one', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ last_woken: '2019-01-01' })],
+      requests: [makeRequest({ last_woken: '2019-01-01' })],
       cycles: [],
       today: '2026-09-02',
     })
@@ -809,12 +809,12 @@ describe('the dormant boundary', () => {
 
 describe('the sweep', () => {
   const asleep = Array.from({ length: 15 }, (_, i) =>
-    makeFrame({ id: `f${i}`, last_woken: '2026-01-20' })
+    makeRequest({ id: `f${i}`, last_woken: '2026-01-20' })
   )
 
   it('runs at the end of a cycle, in cooldown, where somebody is looking', () => {
     const model = renderProductMap({
-      frames: asleep,
+      requests: asleep,
       cycles: CYCLES,
       today: '2026-03-31',
     })
@@ -823,7 +823,7 @@ describe('the sweep', () => {
 
   it('caps the review queue', () => {
     const model = renderProductMap({
-      frames: asleep,
+      requests: asleep,
       cycles: CYCLES,
       today: '2026-03-31',
     })
@@ -832,7 +832,7 @@ describe('the sweep', () => {
 
   it('shows no queue mid-cycle, because the sweep is a cycle-end ritual', () => {
     const model = renderProductMap({
-      frames: asleep,
+      requests: asleep,
       cycles: CYCLES,
       today: '2026-03-01',
     })
@@ -845,11 +845,11 @@ describe('the sweep', () => {
     expect(inCooldown([], '2026-03-31')).toBe(false)
   })
 
-  // Nothing is ever deleted on a timer: a dormant frame keeps everything.
-  it('keeps every field and every report on a sleeping frame', () => {
+  // Nothing is ever deleted on a timer: a dormant request keeps everything.
+  it('keeps every field and every report on a sleeping request', () => {
     const model = renderProductMap({
-      frames: [
-        makeFrame({
+      requests: [
+        makeRequest({
           last_woken: '2026-01-20',
           appetite: '6 weeks',
           business_case: 'Two customers churned',
@@ -869,7 +869,7 @@ describe('the sweep', () => {
 })
 
 describe('the engagement ring', () => {
-  it('draws nothing when nobody is working on the frame', () => {
+  it('draws nothing when nobody is working on the request', () => {
     expect(pinOutline([])).toBe('none')
   })
 
@@ -889,7 +889,7 @@ describe('the engagement ring', () => {
     expect(pinOutline([makeShape({ stage: 'done', currentCycle: false })])).toBe('none')
   })
 
-  it('prefers the current cycle when a frame carries an old shape too', () => {
+  it('prefers the current cycle when a request carries an old shape too', () => {
     const shapes = [
       makeShape({ shapeId: 's1', stage: 'shaping', currentCycle: false }),
       makeShape({ shapeId: 's2', stage: 'building', currentCycle: true }),
@@ -901,13 +901,13 @@ describe('the engagement ring', () => {
 describe('reading the shapes out of the cycle rooms', () => {
   const cycle = CYCLES[1]
 
-  it('keeps only the shapes that point at a frame', () => {
+  it('keeps only the shapes that point at a request', () => {
     const shapes = linkedShapesFrom(
       [
         {
           cycle,
           shapes: [
-            { id: 's1', title: 'Fix imports', stage: 'building', frame_id: 'f1' },
+            { id: 's1', title: 'Fix imports', stage: 'building', request_id: 'f1' },
             { id: 's2', title: 'Something else', stage: 'building' },
           ],
         },
@@ -915,11 +915,11 @@ describe('reading the shapes out of the cycle rooms', () => {
       '2026-03-01'
     )
     expect(shapes.map((s) => s.shapeId)).toEqual(['s1'])
-    expect(shapes[0].frameId).toBe('f1')
+    expect(shapes[0].requestId).toBe('f1')
   })
 
-  // The frame page names who is on it and links the pitch. Both live on the
-  // shape in its cycle room, never on the frame.
+  // The request page names who is on it and links the pitch. Both live on the
+  // shape in its cycle room, never on the request.
   it('carries the squad and the Notion pitch, and drops a squad that is gone', () => {
     const shapes = linkedShapesFrom(
       [
@@ -927,8 +927,8 @@ describe('reading the shapes out of the cycle rooms', () => {
           cycle,
           squads: [{ id: 'q1', name: 'Capture', color: '#8e4ec6' }],
           shapes: [
-            { id: 's1', title: 'a', stage: 'building', frame_id: 'f1', squadId: 'q1', notion_url: 'https://notion.so/p' },
-            { id: 's2', title: 'b', stage: 'building', frame_id: 'f1', squadId: 'gone', notion_url: '' },
+            { id: 's1', title: 'a', stage: 'building', request_id: 'f1', squadId: 'q1', notion_url: 'https://notion.so/p' },
+            { id: 's2', title: 'b', stage: 'building', request_id: 'f1', squadId: 'gone', notion_url: '' },
           ],
         },
       ],
@@ -940,9 +940,9 @@ describe('reading the shapes out of the cycle rooms', () => {
     expect(shapes[1].notionUrl).toBeUndefined()
   })
 
-  it('names the cycle, so the frame detail reads a title and not a slug', () => {
+  it('names the cycle, so the request detail reads a title and not a slug', () => {
     const [shape] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', frame_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'done', request_id: 'f1' }] }],
       '2026-03-01'
     )
     expect(shape.cycleTitle).toBe('Two')
@@ -950,11 +950,11 @@ describe('reading the shapes out of the cycle rooms', () => {
 
   it('marks a shape in the cycle running today as current', () => {
     const [inside] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frame_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', request_id: 'f1' }] }],
       '2026-03-01'
     )
     const [outside] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', frame_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'building', request_id: 'f1' }] }],
       '2026-09-02'
     )
     expect(inside.currentCycle).toBe(true)
@@ -965,18 +965,18 @@ describe('reading the shapes out of the cycle rooms', () => {
   // still holds `framing`, and losing the shape over it would be worse.
   it('reads a stored framing stage as shaping', () => {
     const [shape] = linkedShapesFrom(
-      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', frame_id: 'f1' }] }],
+      [{ cycle, shapes: [{ id: 's1', title: 'x', stage: 'framing', request_id: 'f1' }] }],
       '2026-03-01'
     )
     expect(shape.stage).toBe('shaping')
   })
 })
 
-describe('a frame that has been bet on', () => {
+describe('a request that has been bet on', () => {
   it('carries its shapes, its ring and its investment mark', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'f1', appetite: '6 weeks' })],
-      shapes: [makeShape({ frameId: 'f1', stage: 'building', currentCycle: true })],
+      requests: [makeRequest({ id: 'f1', appetite: '6 weeks' })],
+      shapes: [makeShape({ requestId: 'f1', stage: 'building', currentCycle: true })],
       today: '2026-09-02',
     })
     expect(model.pins[0].shapes).toHaveLength(1)
@@ -987,19 +987,19 @@ describe('a frame that has been bet on', () => {
 
   it('carries no mark and no ring when nobody has bet on it', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ appetite: '6 weeks' })],
+      requests: [makeRequest({ appetite: '6 weeks' })],
       today: '2026-09-02',
     })
     expect(model.pins[0].worked).toBe(false)
     expect(model.pins[0].outline).toBe('none')
   })
 
-  it('lists both bets when the same frame is attacked again later', () => {
+  it('lists both bets when the same request is attacked again later', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'f1', appetite: '6 weeks' })],
+      requests: [makeRequest({ id: 'f1', appetite: '6 weeks' })],
       shapes: [
-        makeShape({ frameId: 'f1', shapeId: 's1', stage: 'done', cycleSlug: '2024-q1', currentCycle: false }),
-        makeShape({ frameId: 'f1', shapeId: 's2', stage: 'shaping', currentCycle: true }),
+        makeShape({ requestId: 'f1', shapeId: 's1', stage: 'done', cycleSlug: '2024-q1', currentCycle: false }),
+        makeShape({ requestId: 'f1', shapeId: 's2', stage: 'shaping', currentCycle: true }),
       ],
       today: '2026-09-02',
     })
@@ -1010,23 +1010,23 @@ describe('a frame that has been bet on', () => {
 describe('monitoring', () => {
   const released = makeShape({ stage: 'done', currentCycle: false })
 
-  it('has no end condition: a released frame stays there until a person acts', () => {
-    const frame = makeFrame({ appetite: '6 weeks' })
-    expect(frameState(frame, [released])).toBe('monitoring')
+  it('has no end condition: a released request stays there until a person acts', () => {
+    const request = makeRequest({ appetite: '6 weeks' })
+    expect(requestState(request, [released])).toBe('monitoring')
     // Years later, nothing has moved it on by itself.
-    expect(frameState(frame, [released])).toBe('monitoring')
+    expect(requestState(request, [released])).toBe('monitoring')
   })
 
-  it('ends only when a person resolves the frame', () => {
-    const frame = makeFrame({ appetite: '6 weeks', resolved: true })
-    expect(frameState(frame, [released])).toBe('resolved')
+  it('ends only when a person resolves the request', () => {
+    const request = makeRequest({ appetite: '6 weeks', resolved: true })
+    expect(requestState(request, [released])).toBe('resolved')
   })
 
   // A quiet release leaves the Product Map quietly (ADR 0024).
   it('keeps the dormancy clock running, so a quiet release goes to sleep', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'f1', appetite: '6 weeks', last_woken: '2026-01-20' })],
-      shapes: [makeShape({ frameId: 'f1', stage: 'done', currentCycle: false })],
+      requests: [makeRequest({ id: 'f1', appetite: '6 weeks', last_woken: '2026-01-20' })],
+      shapes: [makeShape({ requestId: 'f1', stage: 'done', currentCycle: false })],
       cycles: CYCLES,
       today: '2026-03-31',
     })
@@ -1036,62 +1036,62 @@ describe('monitoring', () => {
 })
 
 describe('the origin chain', () => {
-  const origin = makeFrame({ id: 'f1', problem: 'Imports fail silently' })
-  const followOn = makeFrame({
+  const origin = makeRequest({ id: 'f1', problem: 'Imports fail silently' })
+  const followOn = makeRequest({
     id: 'f2',
     problem: 'The new importer is too slow',
-    originFrameId: 'f1',
+    originRequestId: 'f1',
   })
 
-  it('names the frame whose monitoring surfaced this one', () => {
+  it('names the request whose monitoring surfaced this one', () => {
     expect(originChain(followOn, [origin, followOn])).toEqual([
-      { frameId: 'f1', problem: 'Imports fail silently' },
+      { requestId: 'f1', problem: 'Imports fail silently' },
     ])
   })
 
-  it('is empty for a frame nothing surfaced', () => {
+  it('is empty for a request nothing surfaced', () => {
     expect(originChain(origin, [origin, followOn])).toEqual([])
   })
 
   it('walks two links back, nearest first', () => {
-    const third = makeFrame({ id: 'f3', problem: 'Nobody uses the new importer', originFrameId: 'f2' })
-    expect(originChain(third, [origin, followOn, third]).map((l) => l.frameId)).toEqual([
+    const third = makeRequest({ id: 'f3', problem: 'Nobody uses the new importer', originRequestId: 'f2' })
+    expect(originChain(third, [origin, followOn, third]).map((l) => l.requestId)).toEqual([
       'f2',
       'f1',
     ])
   })
 
   it('stops at a missing origin rather than throwing', () => {
-    const orphan = makeFrame({ id: 'f9', originFrameId: 'gone' })
+    const orphan = makeRequest({ id: 'f9', originRequestId: 'gone' })
     expect(originChain(orphan, [orphan])).toEqual([])
   })
 
   it('stops on a chain that loops, so bad data cannot hang the Product Map', () => {
-    const a = makeFrame({ id: 'a', originFrameId: 'b' })
-    const b = makeFrame({ id: 'b', originFrameId: 'a' })
-    expect(originChain(a, [a, b]).map((l) => l.frameId)).toEqual(['b'])
+    const a = makeRequest({ id: 'a', originRequestId: 'b' })
+    const b = makeRequest({ id: 'b', originRequestId: 'a' })
+    expect(originChain(a, [a, b]).map((l) => l.requestId)).toEqual(['b'])
   })
 
-  // Creating the follow-on frame never reopens the origin (ADR 0025).
-  it('leaves the origin frame in monitoring', () => {
+  // Creating the follow-on request never reopens the origin (ADR 0025).
+  it('leaves the origin request in monitoring', () => {
     const model = renderProductMap({
-      frames: [{ ...origin, appetite: '6 weeks' }, followOn],
-      shapes: [makeShape({ frameId: 'f1', stage: 'done', currentCycle: false })],
+      requests: [{ ...origin, appetite: '6 weeks' }, followOn],
+      shapes: [makeShape({ requestId: 'f1', stage: 'done', currentCycle: false })],
       today: '2026-09-02',
     })
     const [first, second] = model.pins
     expect(first.state).toBe('monitoring')
-    expect(second.originChain[0].frameId).toBe('f1')
+    expect(second.originChain[0].requestId).toBe('f1')
   })
 })
 
-describe('a resolved frame', () => {
+describe('a resolved request', () => {
   const area = makeArea({ id: 'a1' })
 
   it('leaves the Product Map view', () => {
     const model = renderProductMap({
       areas: [area],
-      frames: [makeFrame({ id: 'f1', areaId: 'a1', resolved: true })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a1', resolved: true })],
       today: '2026-09-02',
     })
     expect(model.pins).toEqual([])
@@ -1102,8 +1102,8 @@ describe('a resolved frame', () => {
   it('stays on its area, with the shapes that resolved it', () => {
     const model = renderProductMap({
       areas: [area],
-      frames: [makeFrame({ id: 'f1', areaId: 'a1', appetite: '6 weeks', resolved: true })],
-      shapes: [makeShape({ frameId: 'f1', stage: 'done', currentCycle: false })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a1', appetite: '6 weeks', resolved: true })],
+      shapes: [makeShape({ requestId: 'f1', stage: 'done', currentCycle: false })],
       today: '2026-09-02',
     })
     expect(model.areas[0].resolved).toHaveLength(1)
@@ -1113,7 +1113,7 @@ describe('a resolved frame', () => {
 
   it('is never deleted, so it stays readable even with no area', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'f1', resolved: true })],
+      requests: [makeRequest({ id: 'f1', resolved: true })],
       today: '2026-09-02',
     })
     expect(model.resolved).toHaveLength(1)
@@ -1124,7 +1124,7 @@ describe('a resolved frame', () => {
 
   it('never lands in the dormant review, because it is not asleep', () => {
     const model = renderProductMap({
-      frames: [makeFrame({ id: 'f1', resolved: true, last_woken: '2026-01-20' })],
+      requests: [makeRequest({ id: 'f1', resolved: true, last_woken: '2026-01-20' })],
       cycles: CYCLES,
       today: '2026-03-31',
     })
@@ -1143,7 +1143,7 @@ describe('area coastlines', () => {
   it('uses the outline an agent drew', () => {
     const model = renderProductMap({
       areas: [makeArea({ outline: ISLAND })],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     expect(model.areas[0].ring).toEqual(ISLAND)
@@ -1154,7 +1154,7 @@ describe('area coastlines', () => {
   it('generates one for an area nobody has drawn, so old land still renders', () => {
     const model = renderProductMap({
       areas: [makeArea({ outline: undefined })],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     expect(model.areas[0].ring.length).toBeGreaterThanOrEqual(3)
@@ -1164,7 +1164,7 @@ describe('area coastlines', () => {
   it('falls back rather than drawing a sliver from a truncated outline', () => {
     const model = renderProductMap({
       areas: [makeArea({ outline: [[0, 0], [10, 10]] })],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     expect(model.areas[0].ring.length).toBeGreaterThanOrEqual(3)
@@ -1173,7 +1173,7 @@ describe('area coastlines', () => {
   it('puts the label inside the coastline', () => {
     const model = renderProductMap({
       areas: [makeArea({ outline: ISLAND })],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     expect(model.areas[0].labelAt).toEqual([100, 100])
@@ -1193,7 +1193,7 @@ describe('area coastlines', () => {
           ],
         }),
       ],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     // The container's own outline is deliberately ignored: an island's coastline
@@ -1218,7 +1218,7 @@ describe('area coastlines', () => {
           ],
         }),
       ],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     const [, labelY] = model.areas[0].labelAt
@@ -1235,7 +1235,7 @@ describe('area levels', () => {
         makeArea({ id: 'isle', name: 'Owned by Vasco', parentAreaId: 'arch' }),
         makeArea({ id: 'leaf', name: 'Dashboards', parentAreaId: 'isle' }),
       ],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     const arch = model.areas[0]
@@ -1245,7 +1245,7 @@ describe('area levels', () => {
   })
 
   it('reads a lone area with no children as an area', () => {
-    const model = renderProductMap({ areas: [makeArea()], frames: [], today: '2026-09-03' })
+    const model = renderProductMap({ areas: [makeArea()], requests: [], today: '2026-09-03' })
     expect(model.areas[0].level).toBe('area')
   })
 })
@@ -1254,10 +1254,10 @@ describe('pin placement', () => {
   it('puts every pin inside the area it is filed in', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [
-        makeFrame({ id: 'f1', areaId: 'a1' }),
-        makeFrame({ id: 'f2', areaId: 'a1' }),
-        makeFrame({ id: 'f3', areaId: 'a1' }),
+      requests: [
+        makeRequest({ id: 'f1', areaId: 'a1' }),
+        makeRequest({ id: 'f2', areaId: 'a1' }),
+        makeRequest({ id: 'f3', areaId: 'a1' }),
       ],
       today: '2026-09-03',
     })
@@ -1271,34 +1271,34 @@ describe('pin placement', () => {
     }
   })
 
-  it('leaves an Unmapped frame with no position, because it lives in the tray', () => {
+  it('leaves an Unmapped request with no position, because it lives in the tray', () => {
     const model = renderProductMap({
       areas: [],
-      frames: [makeFrame({ id: 'f1' })],
+      requests: [makeRequest({ id: 'f1' })],
       today: '2026-09-03',
     })
     expect(model.unmapped[0].at).toBeNull()
   })
 
-  it('never moves a pin when another frame is captured', () => {
+  it('never moves a pin when another request is captured', () => {
     const args = { areas: [makeArea({ id: 'a1', outline: ISLAND })], today: '2026-09-03' }
-    const before = renderProductMap({ ...args, frames: [makeFrame({ id: 'f1', areaId: 'a1' })] })
+    const before = renderProductMap({ ...args, requests: [makeRequest({ id: 'f1', areaId: 'a1' })] })
     const after = renderProductMap({
       ...args,
-      frames: [
-        makeFrame({ id: 'f0', areaId: 'a1' }),
-        makeFrame({ id: 'f1', areaId: 'a1' }),
-        makeFrame({ id: 'f2', areaId: 'a1' }),
+      requests: [
+        makeRequest({ id: 'f0', areaId: 'a1' }),
+        makeRequest({ id: 'f1', areaId: 'a1' }),
+        makeRequest({ id: 'f2', areaId: 'a1' }),
       ],
     })
-    const moved = after.pins.find((p) => p.frameId === 'f1')!
+    const moved = after.pins.find((p) => p.requestId === 'f1')!
     expect(moved.at).toEqual(before.pins[0].at)
   })
 
   it('agrees between the flat pin list and the area tree', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [makeFrame({ id: 'f1', areaId: 'a1' })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a1' })],
       today: '2026-09-03',
     })
     expect(model.pins[0].at).toEqual(model.areas[0].pins[0].at)
@@ -1333,9 +1333,9 @@ describe('the zoom ladder', () => {
           ],
         }),
       ],
-      frames: [
-        makeFrame({ id: 'f1', areaId: 'leaf', kind: 'pain_point' }),
-        makeFrame({ id: 'f2', areaId: 'isle', kind: 'brand_burn' }),
+      requests: [
+        makeRequest({ id: 'f1', areaId: 'leaf', kind: 'pain_point' }),
+        makeRequest({ id: 'f2', areaId: 'isle', kind: 'brand_burn' }),
       ],
       today: '2026-09-03',
     })
@@ -1346,21 +1346,21 @@ describe('the zoom ladder', () => {
     expect(nodes[0].kind).toBe('bubble')
   })
 
-  it('counts every frame underneath the bubble, however deep', () => {
+  it('counts every request underneath the bubble, however deep', () => {
     const [node] = clusterForViewport(archipelago().areas, 0.1)
     expect(node.kind === 'bubble' && node.count).toBe(2)
   })
 
-  it('numbers frames, never reports', () => {
+  it('numbers requests, never reports', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [
-        makeFrame({
+      requests: [
+        makeRequest({
           id: 'f1',
           areaId: 'a1',
           reports: [makeReport(), makeReport(), makeReport()],
         }),
-        makeFrame({ id: 'f2', areaId: 'a1', reports: [makeReport(), makeReport()] }),
+        makeRequest({ id: 'f2', areaId: 'a1', reports: [makeReport(), makeReport()] }),
       ],
       today: '2026-09-03',
     })
@@ -1398,11 +1398,11 @@ describe('the zoom ladder', () => {
           ],
         }),
       ],
-      frames: [
-        makeFrame({ id: 'f1', areaId: 'small' }),
-        makeFrame({ id: 'f2', areaId: 'small' }),
-        makeFrame({ id: 'f3', areaId: 'big' }),
-        makeFrame({ id: 'f4', areaId: 'big' }),
+      requests: [
+        makeRequest({ id: 'f1', areaId: 'small' }),
+        makeRequest({ id: 'f2', areaId: 'small' }),
+        makeRequest({ id: 'f3', areaId: 'big' }),
+        makeRequest({ id: 'f4', areaId: 'big' }),
       ],
       today: '2026-09-03',
     })
@@ -1412,13 +1412,13 @@ describe('the zoom ladder', () => {
     expect(nodes.map((n) => n.kind)).toEqual(['area', 'area', 'bubble'])
   })
 
-  it('takes an outline when ANY frame inside has work on it', () => {
+  it('takes an outline when ANY request inside has work on it', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [makeFrame({ id: 'f1', areaId: 'a1' }), makeFrame({ id: 'f2', areaId: 'a1' })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a1' }), makeRequest({ id: 'f2', areaId: 'a1' })],
       shapes: [
         {
-          frameId: 'f2',
+          requestId: 'f2',
           shapeId: 's1',
           title: 'Fix imports',
           stage: 'building',
@@ -1433,7 +1433,7 @@ describe('the zoom ladder', () => {
     expect(node.kind === 'bubble' && node.outline).toBe('solid')
   })
 
-  it('takes its opacity from the freshest frame inside, never the mean', () => {
+  it('takes its opacity from the freshest request inside, never the mean', () => {
     const cycles: CycleWindow[] = [
       { slug: 'c1', title: 'Cycle 1', type: 'build', start_date: '2026-01-01', end_date: '2026-02-11' },
       { slug: 'c2', title: 'Cycle 2', type: 'build', start_date: '2026-02-12', end_date: '2026-03-25' },
@@ -1441,16 +1441,16 @@ describe('the zoom ladder', () => {
     ]
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [
-        // Dim, not dormant: a dormant frame leaves the map and would not count.
-        makeFrame({ id: 'stale', areaId: 'a1', last_woken: '2026-02-20' }),
-        makeFrame({ id: 'fresh', areaId: 'a1', last_woken: '2026-05-01' }),
-        makeFrame({ id: 'fresh2', areaId: 'a1', last_woken: '2026-05-02' }),
+      requests: [
+        // Dim, not dormant: a dormant request leaves the map and would not count.
+        makeRequest({ id: 'stale', areaId: 'a1', last_woken: '2026-02-20' }),
+        makeRequest({ id: 'fresh', areaId: 'a1', last_woken: '2026-05-01' }),
+        makeRequest({ id: 'fresh2', areaId: 'a1', last_woken: '2026-05-02' }),
       ],
       cycles,
       today: '2026-05-06',
     })
-    const stale = model.pins.find((p) => p.frameId === 'stale')!
+    const stale = model.pins.find((p) => p.requestId === 'stale')!
     const freshest = Math.max(...model.pins.map((p) => p.opacity))
     const [node] = clusterForViewport(model.areas, 0.1)
     expect(node.kind === 'bubble' && node.opacity).toBe(freshest)
@@ -1463,7 +1463,7 @@ describe('the zoom ladder', () => {
   it('shows the pin rather than a bubble reading one', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [makeFrame({ id: 'f1', areaId: 'a1' })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a1' })],
       today: '2026-09-03',
     })
     const nodes = clusterForViewport(model.areas, 0.1)
@@ -1473,7 +1473,7 @@ describe('the zoom ladder', () => {
   it('never bubbles an empty area', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: ISLAND })],
-      frames: [],
+      requests: [],
       today: '2026-09-03',
     })
     const nodes = clusterForViewport(model.areas, 0.1)
@@ -1496,18 +1496,18 @@ describe('the heat lens on the land', () => {
   function mapWith(lens: 'all' | 'internal' | 'customer') {
     return renderProductMap({
       areas: [makeArea({ id: 'a1', outline: AREA_RING })],
-      frames: [
-        makeFrame({
+      requests: [
+        makeRequest({
           id: 'internal-only',
           areaId: 'a1',
           reports: [makeReport({ source: 'internal' })],
         }),
-        makeFrame({
+        makeRequest({
           id: 'customer-1',
           areaId: 'a1',
           reports: [makeReport({ source: 'customer', customer: 'Northwind' })],
         }),
-        makeFrame({
+        makeRequest({
           id: 'customer-2',
           areaId: 'a1',
           reports: [makeReport({ source: 'customer', customer: 'Contoso' })],
@@ -1522,18 +1522,18 @@ describe('the heat lens on the land', () => {
     expect(mapWith('all').pins.every((p) => p.passesLens)).toBe(true)
   })
 
-  it('keeps a frame nobody has reported yet, so a fresh capture never vanishes', () => {
+  it('keeps a request nobody has reported yet, so a fresh capture never vanishes', () => {
     const model = renderProductMap({
       areas: [makeArea({ id: 'a1', outline: AREA_RING })],
-      frames: [makeFrame({ id: 'f1', areaId: 'a1', reports: [] })],
+      requests: [makeRequest({ id: 'f1', areaId: 'a1', reports: [] })],
       lens: 'all',
       today: '2026-09-03',
     })
     expect(model.pins[0].passesLens).toBe(true)
   })
 
-  it('drops a frame only the team raised, under the customer lens', () => {
-    const passing = mapWith('customer').pins.filter((p) => p.passesLens).map((p) => p.frameId)
+  it('drops a request only the team raised, under the customer lens', () => {
+    const passing = mapWith('customer').pins.filter((p) => p.passesLens).map((p) => p.requestId)
     expect(passing).toEqual(['customer-1', 'customer-2'])
   })
 
@@ -1544,27 +1544,27 @@ describe('the heat lens on the land', () => {
     expect(customers[0].kind === 'bubble' && customers[0].count).toBe(2)
   })
 
-  it('drops the customer frames under the internal lens', () => {
+  it('drops the customer requests under the internal lens', () => {
     const internal = clusterForViewport(mapWith('internal').areas, 0.1)
-    // One frame left, so it draws as a pin rather than a bubble reading "1".
+    // One request left, so it draws as a pin rather than a bubble reading "1".
     expect(internal.map((n) => n.kind)).toEqual(['area'])
   })
 })
 
-describe('renderFrame', () => {
+describe('renderRequest', () => {
   const cycles: CycleWindow[] = [
     { slug: 'c1', title: 'One', type: 'build', start_date: '2026-01-05', end_date: '2026-02-13' },
     { slug: 'c2', title: 'Two', type: 'build', start_date: '2026-02-23', end_date: '2026-04-03' },
     { slug: 'c3', title: 'Three', type: 'build', start_date: '2026-04-13', end_date: '2026-05-22' },
   ]
 
-  // A frame page has a URL, so it must open a frame the map no longer shows.
-  it('renders a dormant frame that the map leaves out', () => {
-    const frames = [makeFrame({ last_woken: '2025-12-01' })]
-    const input = { frames, cycles, today: '2026-05-01' }
+  // A request page has a URL, so it must open a request the map no longer shows.
+  it('renders a dormant request that the map leaves out', () => {
+    const requests = [makeRequest({ last_woken: '2025-12-01' })]
+    const input = { requests, cycles, today: '2026-05-01' }
 
     expect(renderProductMap(input).pins).toHaveLength(0)
-    const pin = renderFrame(input, 'f1')
+    const pin = renderRequest(input, 'f1')
     expect(pin?.dormant).toBe(true)
     expect(pin?.problem).toBe('Imports fail silently')
   })
@@ -1577,14 +1577,14 @@ describe('renderFrame', () => {
       written_by: 'paulo',
       written_on: '2026-04-01',
     }
-    const frames = [makeFrame(), makeFrame({ id: 'f2', brief })]
+    const requests = [makeRequest(), makeRequest({ id: 'f2', brief })]
 
-    expect(renderFrame({ frames, today: '2026-05-01' }, 'f1')?.brief).toBeNull()
-    expect(renderFrame({ frames, today: '2026-05-01' }, 'f2')?.brief).toEqual(brief)
+    expect(renderRequest({ requests, today: '2026-05-01' }, 'f1')?.brief).toBeNull()
+    expect(renderRequest({ requests, today: '2026-05-01' }, 'f2')?.brief).toEqual(brief)
   })
 
-  it('returns null for an unknown frame', () => {
-    expect(renderFrame({ frames: [makeFrame()], today: '2026-05-01' }, 'nope')).toBeNull()
+  it('returns null for an unknown request', () => {
+    expect(renderRequest({ requests: [makeRequest()], today: '2026-05-01' }, 'nope')).toBeNull()
   })
 })
 
@@ -1611,18 +1611,18 @@ describe('withReportIds', () => {
   })
 })
 
-describe('related frames', () => {
-  const frame = (id: string, related?: string[]) =>
-    ({ id, problem: `p-${id}`, related_frame_ids: related }) as Frame
+describe('related requests', () => {
+  const request = (id: string, related?: string[]) =>
+    ({ id, problem: `p-${id}`, related_request_ids: related }) as ProductRequest
 
-  it('reads the relation from either side and drops a frame that is gone', () => {
-    const frames = [frame('a', ['b', 'gone']), frame('b'), frame('c', ['a'])]
-    expect(relatedFrames(frames[0], frames).map((r) => r.frameId)).toEqual(['b', 'c'])
-    expect(relatedFrames(frames[1], frames)).toEqual([{ frameId: 'a', problem: 'p-a' }])
+  it('reads the relation from either side and drops a request that is gone', () => {
+    const requests = [request('a', ['b', 'gone']), request('b'), request('c', ['a'])]
+    expect(relatedRequests(requests[0], requests).map((r) => r.requestId)).toEqual(['b', 'c'])
+    expect(relatedRequests(requests[1], requests)).toEqual([{ requestId: 'a', problem: 'p-a' }])
   })
 
   it('returns only the lists that change, on both sides', () => {
-    const changes = relateFrames([frame('a', ['b']), frame('b', ['a']), frame('c')], 'a', ['c'])
+    const changes = relateRequests([request('a', ['b']), request('b', ['a']), request('c')], 'a', ['c'])
     expect(Object.fromEntries(changes)).toEqual({ a: ['c'], b: [], c: ['a'] })
   })
 })

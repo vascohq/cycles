@@ -5,7 +5,7 @@ import { slugify } from '@/lib/slugify'
 import { readStage } from '@/lib/stage-engine'
 import type { CycleWindow } from '@/lib/product-map-engine'
 import { productMapRoomId } from '@/product-map-liveblocks.config'
-import type { Area, Frame } from '@/product-map-liveblocks.config'
+import type { Area, ProductRequest } from '@/product-map-liveblocks.config'
 import type {
   Cycle,
   CyclePitch,
@@ -117,13 +117,13 @@ export async function readCycleWindows(orgPrefix: string): Promise<CycleWindow[]
 
 export type ProductMapJson = {
   areas: Area[]
-  frames: Frame[]
+  requests: ProductRequest[]
 }
 
 /**
  * Read the org's Product Map room (ADR 0021). An organization that has never
- * captured a frame has no room yet, which is not an error — it reads as an
- * empty map, so `map_list_frames` answers before anybody has written anything.
+ * captured a request has no room yet, which is not an error — it reads as an
+ * empty map, so `map_list_requests` answers before anybody has written anything.
  */
 export async function getProductMapStorage(orgId: string): Promise<ProductMapJson> {
   try {
@@ -131,8 +131,8 @@ export async function getProductMapStorage(orgId: string): Promise<ProductMapJso
       productMapRoomId(orgId),
       'json'
     )) as unknown as Partial<ProductMapJson>
-    return { areas: json.areas ?? [], frames: json.frames ?? [] }
+    return { areas: json.areas ?? [], requests: json.requests ?? [] }
   } catch {
-    return { areas: [], frames: [] }
+    return { areas: [], requests: [] }
   }
 }

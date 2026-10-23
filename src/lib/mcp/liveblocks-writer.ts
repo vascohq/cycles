@@ -11,21 +11,21 @@ import type {
 } from '@/cycle-liveblocks.config'
 import type {
   Area,
-  Frame,
-  FrameBrief,
-  FrameOutcome,
-  FramePointer,
-  FrameReport,
+  ProductRequest,
+  RequestBrief,
+  RequestOutcome,
+  RequestPointer,
+  RequestReport,
   PointerKind,
 } from '@/product-map-liveblocks.config'
 import {
   DEFAULT_KIND,
-  FRAME_KINDS,
-  FRAME_TYPES,
+  REQUEST_KINDS,
+  REQUEST_TYPES,
   POINTER_KINDS,
   POINTER_KIND_LABELS,
-  isFrameKind,
-  isFrameType,
+  isRequestKind,
+  isRequestType,
   isPointerKind,
   correctReport,
   removeReport,
@@ -252,10 +252,10 @@ export async function upsertPitch(
     squad?: string
     // Pitch view (see ADR 0018). undefined = leave unchanged / default on create.
     view?: 'scope_map' | 'kanban'
-    // The Frame on the Product Map this shape attacks (ADR 0022). '' clears it.
-    // Writing it never touches the frame: the shape points at the frame, not
+    // The Request on the Product Map this shape attacks (ADR 0022). '' clears it.
+    // Writing it never touches the request: the shape points at the request, not
     // the reverse.
-    frame_id?: string
+    request_id?: string
   },
   injectedRoot?: any
 ): Promise<UpsertResult> {
@@ -290,7 +290,7 @@ export async function upsertPitch(
         notion_url: params.notion_url ?? '',
         ...(squadId ? { squadId } : {}),
         ...(params.view ? { view: params.view } : {}),
-        ...(params.frame_id ? { frame_id: params.frame_id } : {}),
+        ...(params.request_id ? { request_id: params.request_id } : {}),
       }
       pitches.push(new LiveObject(pitch))
     } else {
@@ -311,7 +311,7 @@ export async function upsertPitch(
       if (params.emoji !== undefined) existing.set('emoji', params.emoji)
       if (params.notion_url !== undefined) existing.set('notion_url', params.notion_url)
       if (params.view !== undefined) existing.set('view', params.view)
-      setOrClear(existing, 'frame_id', params.frame_id)
+      setOrClear(existing, 'request_id', params.request_id)
       // squadId: null = clear (remove key), string = assign, undefined = leave.
       if (squadId === null) existing.delete('squadId')
       else if (squadId !== undefined) existing.set('squadId', squadId)
@@ -1147,7 +1147,7 @@ export async function deleteParkingItem(
 // ── Product Map ──
 
 // The Product Map room is org-scoped and sits outside the cycle rooms (ADR 0021).
-// An org that has never captured a frame has no room yet, and an agent must not
+// An org that has never captured a request has no room yet, and an agent must not
 // have to create one by hand, so the first write brings it into being.
 async function ensureProductMapRoom(roomId: string): Promise<void> {
   if (await roomExists(roomId)) return
@@ -1156,7 +1156,7 @@ async function ensureProductMapRoom(roomId: string): Promise<void> {
     liveblocksType: 'LiveObject',
     data: {
       areas: { liveblocksType: 'LiveList', data: [] },
-      frames: { liveblocksType: 'LiveList', data: [] },
+      requests: { liveblocksType: 'LiveList', data: [] },
     },
   })
 }
@@ -1286,9 +1286,9 @@ function nextFreeGridSlot(taken: { x: unknown; y: unknown }[]): { x: number; y: 
   }
 }
 
-type FrameFields = {
-  kind: Frame['kind']
-  type: Frame['type']
+type RequestFields = {
+  kind: ProductRequest['kind']
+  type: ProductRequest['type']
   problem: string
   appetite: string
   business_case: string
@@ -1298,9 +1298,9 @@ type FrameFields = {
   areaId: string
   owner: string
   raisedBy: string
-  originFrameId: string
-  /** The full set of frames related to this one. The writer keeps both sides. */
-  related_frame_ids: string[]
+  originRequestId: string
+  /** The full set of requests related to this one. The writer keeps both sides. */
+  related_request_ids: string[]
 }
 
 /**
@@ -1310,7 +1310,7 @@ type FrameFields = {
  * ponytail: a write replaces the list and re-mints every id. Preserve ids by
  * text once something marks a single outcome observed.
  */
-function toOutcomes(lines: string[]): FrameOutcome[] {
+function toOutcomes(lines: string[]): RequestOutcome[] {
   return lines
     .map((line) => line.trim())
     .filter((line) => line !== '')
@@ -1318,17 +1318,17 @@ function toOutcomes(lines: string[]): FrameOutcome[] {
 }
 
 /**
- * Create or partial-update a frame. Every non-identity field is optional:
+ * Create or partial-update a request. Every non-identity field is optional:
  * undefined = omitted = leave unchanged (ADR 0011). Capture needs a problem and
  * a Type and nothing else, so the rest fall back to empty on create.
  *
  * `reports`, `pointers`, `last_woken` and `resolved` are NOT writable here.
  * They belong to the tools that own them (attach_report, link_pointer, wake,
- * resolve), which is what keeps an upsert from erasing a frame's history.
+ * resolve), which is what keeps an upsert from erasing a request's history.
  */
-export async function upsertFrame(
+export async function upsertRequest(
   roomId: string,
-  params: { id?: string } & Partial<FrameFields>
+  params: { id?: string } & Partial<RequestFields>
 ): Promise<UpsertResult> {
   const id = params.id ?? nanoid()
   const created = !params.id
@@ -1337,34 +1337,34 @@ export async function upsertFrame(
   // Validate the two vocabularies HERE, not only at the tool schema. The writer
   // is the shared seam every path goes through, and a Kind or Type outside the
   // vocabulary would break the pin color and the playbook lookup downstream.
-  if (params.kind !== undefined && !isFrameKind(params.kind)) {
-    throw new Error(`Invalid kind: "${params.kind}". One of: ${FRAME_KINDS.join(', ')}.`)
+  if (params.kind !== undefined && !isRequestKind(params.kind)) {
+    throw new Error(`Invalid kind: "${params.kind}". One of: ${REQUEST_KINDS.join(', ')}.`)
   }
-  if (params.type !== undefined && !isFrameType(params.type)) {
-    throw new Error(`Invalid type: "${params.type}". One of: ${FRAME_TYPES.join(', ')}.`)
+  if (params.type !== undefined && !isRequestType(params.type)) {
+    throw new Error(`Invalid type: "${params.type}". One of: ${REQUEST_TYPES.join(', ')}.`)
   }
   if (created && params.type === undefined) {
-    throw new Error(`A new frame needs a type. One of: ${FRAME_TYPES.join(', ')}.`)
+    throw new Error(`A new request needs a type. One of: ${REQUEST_TYPES.join(', ')}.`)
   }
   // Narrowed above; held in a local so the check survives into the closure.
-  const newType = params.type as Frame['type']
+  const newType = params.type as ProductRequest['type']
   let badRelated: string | null = null
 
   await ensureProductMapRoom(roomId)
 
   await withRoot(roomId, undefined, (root: any) => {
-    const frames = root.get('frames')
+    const requests = getOrCreateList(root, 'requests')
 
-    badRelated = relatedFramesError(frames, id, params.related_frame_ids)
+    badRelated = relatedRequestsError(requests, id, params.related_request_ids)
     if (badRelated) return
 
     if (created) {
-      // Every frame wants an owner: somebody has to care that it gets
+      // Every request wants an owner: somebody has to care that it gets
       // addressed. The area owner is the default the app suggests, and nothing
       // more — the capturer can change it. The in-app capture form does the
       // same, so an agent capture is not left ownerless (#221).
       const owner = params.owner || areaOwner(root, params.areaId)
-      const frame: Frame = {
+      const request: ProductRequest = {
         id,
         kind: params.kind ?? DEFAULT_KIND,
         type: newType,
@@ -1376,25 +1376,25 @@ export async function upsertFrame(
         ...(owner ? { owner } : {}),
         // Never defaulted: the capturer is often not who raised the problem.
         ...(params.raisedBy?.trim() ? { raised_by: params.raisedBy.trim() } : {}),
-        ...(params.originFrameId ? { originFrameId: params.originFrameId } : {}),
+        ...(params.originRequestId ? { originRequestId: params.originRequestId } : {}),
         reports: [],
         pointers: [],
         outcomes: toOutcomes(params.outcomes ?? []),
-        // A frame is born awake. Its clock starts on the day it was captured.
+        // A request is born awake. Its clock starts on the day it was captured.
         last_woken: getTeamToday(new Date()),
         resolved: false,
       }
-      frames.push(new LiveObject(frame))
-      if (params.related_frame_ids !== undefined) storeRelated(frames, id, params.related_frame_ids)
+      requests.push(new LiveObject(request))
+      if (params.related_request_ids !== undefined) storeRelated(requests, id, params.related_request_ids)
       return
     }
 
-    const existing = frames.find((f: any) => getField(f, 'id') === id)
+    const existing = requests.find((f: any) => getField(f, 'id') === id)
     if (!existing) {
       notFound = true
       return
     }
-    if (params.related_frame_ids !== undefined) storeRelated(frames, id, params.related_frame_ids)
+    if (params.related_request_ids !== undefined) storeRelated(requests, id, params.related_request_ids)
     // undefined = omitted = leave unchanged. Guard every field explicitly, so an
     // omitted field is never coerced away (the timebox-nullification incident).
     if (params.kind !== undefined) existing.set('kind', params.kind)
@@ -1409,54 +1409,54 @@ export async function upsertFrame(
     setOrClear(existing, 'areaId', params.areaId)
     setOrClear(existing, 'owner', params.owner)
     setOrClear(existing, 'raised_by', params.raisedBy?.trim())
-    setOrClear(existing, 'originFrameId', params.originFrameId)
+    setOrClear(existing, 'originRequestId', params.originRequestId)
     setOrClear(existing, 'announcement', params.announcement)
   })
 
-  if (notFound) throw new Error(`Frame not found: "${id}"`)
+  if (notFound) throw new Error(`Request not found: "${id}"`)
   if (badRelated) throw new Error(badRelated)
   return { created, id }
 }
 
 /**
- * Why `ids` cannot be the related frames of `frameId`, or null when they can.
+ * Why `ids` cannot be the related requests of `requestId`, or null when they can.
  * Undefined means the caller left the relations alone.
  */
-function relatedFramesError(
-  frames: any,
-  frameId: string,
+function relatedRequestsError(
+  requests: any,
+  requestId: string,
   ids: string[] | undefined
 ): string | null {
   if (ids === undefined) return null
-  if (ids.includes(frameId)) return 'A frame cannot be related to itself.'
+  if (ids.includes(requestId)) return 'A request cannot be related to itself.'
   const known = new Set<string>()
-  for (const f of frames) known.add(getField(f, 'id'))
+  for (const f of requests) known.add(getField(f, 'id'))
   const unknown = ids.find((rid) => !known.has(rid))
-  return unknown ? `Related frame not found: "${unknown}"` : null
+  return unknown ? `Related request not found: "${unknown}"` : null
 }
 
 /**
- * Attach a report to a frame. A report is one record of the problem happening,
+ * Attach a report to a request. A report is one record of the problem happening,
  * and it is the only thing that grows a pin.
  *
  * This writes exactly two fields: the report goes onto the list, and the wake
- * clock resets. Nothing else on the frame is read or rewritten, so a report can
+ * clock resets. Nothing else on the request is read or rewritten, so a report can
  * never erase the problem, the appetite, the pointers or the owner.
  *
- * A new report is one of the three things that wake a frame (ADR 0024).
+ * A new report is one of the three things that wake a request (ADR 0024).
  */
 export async function attachReport(
   roomId: string,
   params: {
-    frameId: string
+    requestId: string
     capturer: string
-    source?: FrameReport['source']
+    source?: RequestReport['source']
     customer?: string
     link?: string
     text: string
     date?: string
   }
-): Promise<{ frameId: string; reportCount: number }> {
+): Promise<{ requestId: string; reportCount: number }> {
   if (!params.text.trim()) {
     throw new Error('A report needs text — one line saying what happened.')
   }
@@ -1469,17 +1469,17 @@ export async function attachReport(
   // Two different dates. The report carries the day the problem happened, so a
   // support person can record last week's call. The wake carries the day
   // somebody reported it, which is now — reporting an old incident is a fresh
-  // mention, and must never age the frame towards Dormant (ADR 0024).
+  // mention, and must never age the request towards Dormant (ADR 0024).
   const today = getTeamToday(new Date())
   const reportedOn = params.date?.trim() || today
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
     }
-    const report: FrameReport = {
+    const report: RequestReport = {
       id: nanoid(),
       capturer: params.capturer,
       // Internal is the quieter claim, so it is the safe default: a report only
@@ -1490,36 +1490,36 @@ export async function attachReport(
       text: params.text.trim(),
       date: reportedOn,
     }
-    const reports = (getField(existing, 'reports') ?? []) as FrameReport[]
+    const reports = (getField(existing, 'reports') ?? []) as RequestReport[]
     existing.set('reports', [...reports, report])
     existing.set('last_woken', today)
     reportCount = reports.length + 1
   })
 
-  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
-  return { frameId: params.frameId, reportCount }
+  if (notFound) throw new Error(`Request not found: "${params.requestId}"`)
+  return { requestId: params.requestId, reportCount }
 }
 
 /**
- * Replace a frame's reports with what `change` returns, and return them. A null
+ * Replace a request's reports with what `change` returns, and return them. A null
  * from `change` means no report has that id. The two report corrections share
- * this, so a missing frame or report reads the same from both.
+ * this, so a missing request or report reads the same from both.
  */
 async function changeReports(
   roomId: string,
-  frameId: string,
+  requestId: string,
   reportId: string,
-  change: (reports: FrameReport[]) => FrameReport[] | null
-): Promise<FrameReport[]> {
-  let missing: 'frame' | 'report' | null = null
-  let changed: FrameReport[] = []
+  change: (reports: RequestReport[]) => RequestReport[] | null
+): Promise<RequestReport[]> {
+  let missing: 'request' | 'report' | null = null
+  let changed: RequestReport[] = []
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === frameId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === requestId)
     if (!existing) {
-      missing = 'frame'
+      missing = 'request'
       return
     }
-    const next = change((getField(existing, 'reports') ?? []) as FrameReport[])
+    const next = change((getField(existing, 'reports') ?? []) as RequestReport[])
     if (!next) {
       missing = 'report'
       return
@@ -1528,9 +1528,9 @@ async function changeReports(
     changed = next
   })
 
-  if (missing === 'frame') throw new Error(`Frame not found: "${frameId}"`)
+  if (missing === 'request') throw new Error(`Request not found: "${requestId}"`)
   if (missing === 'report') {
-    throw new Error(`Report not found: "${reportId}". map_list_frames names them.`)
+    throw new Error(`Report not found: "${reportId}". map_list_requests names them.`)
   }
   return changed
 }
@@ -1540,23 +1540,23 @@ async function changeReports(
  * label and the source can change; the date and the capturer stay. Partial: an
  * omitted field is left unchanged, and "" clears the link or the customer.
  *
- * An edit is not the problem happening again, so it never wakes the frame and
- * never changes the count. It stores every report id on the frame, so ids that
+ * An edit is not the problem happening again, so it never wakes the request and
+ * never changes the count. It stores every report id on the request, so ids that
  * were derived for old reports never move after this.
  */
 export async function updateReport(
   roomId: string,
   params: {
-    frameId: string
+    requestId: string
     reportId: string
     /** Who made the edit: a Clerk user id or an agent id. */
     editor: string
     text?: string
     link?: string
     customer?: string
-    source?: FrameReport['source']
+    source?: RequestReport['source']
   }
-): Promise<{ frameId: string; reportId: string }> {
+): Promise<{ requestId: string; reportId: string }> {
   if (params.text !== undefined && !params.text.trim()) {
     throw new Error('A report needs text — one line saying what happened.')
   }
@@ -1565,10 +1565,10 @@ export async function updateReport(
   }
 
   const today = getTeamToday(new Date())
-  await changeReports(roomId, params.frameId, params.reportId, (reports) =>
+  await changeReports(roomId, params.requestId, params.reportId, (reports) =>
     correctReport(reports, params.reportId, params, params.editor, today)
   )
-  return { frameId: params.frameId, reportId: params.reportId }
+  return { requestId: params.requestId, reportId: params.reportId }
 }
 
 /**
@@ -1578,25 +1578,25 @@ export async function updateReport(
  */
 export async function deleteReport(
   roomId: string,
-  params: { frameId: string; reportId: string }
-): Promise<{ frameId: string; reportCount: number }> {
-  const kept = await changeReports(roomId, params.frameId, params.reportId, (reports) =>
+  params: { requestId: string; reportId: string }
+): Promise<{ requestId: string; reportCount: number }> {
+  const kept = await changeReports(roomId, params.requestId, params.reportId, (reports) =>
     removeReport(reports, params.reportId)
   )
-  return { frameId: params.frameId, reportCount: kept.length }
+  return { requestId: params.requestId, reportCount: kept.length }
 }
 
 /**
- * Attach a pointer to a frame. A frame packages pointers; the artifact stays
+ * Attach a pointer to a request. A request packages pointers; the artifact stays
  * where it lives, so the Product Map never becomes a second copy that drifts.
  *
- * This writes ONE field: the pointer list. It does not wake the frame, because
+ * This writes ONE field: the pointer list. It does not wake the request, because
  * only three things do and filing a link is not one of them (ADR 0024).
  */
 export async function linkPointer(
   roomId: string,
-  params: { frameId: string; url: string; kind: PointerKind; label?: string }
-): Promise<{ frameId: string; pointerCount: number }> {
+  params: { requestId: string; url: string; kind: PointerKind; label?: string }
+): Promise<{ requestId: string; pointerCount: number }> {
   if (!params.url.trim()) {
     throw new Error('A pointer needs a url — the artifact lives at the other end of it.')
   }
@@ -1610,51 +1610,51 @@ export async function linkPointer(
   let pointerCount = 0
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
     }
-    const pointer: FramePointer = {
+    const pointer: RequestPointer = {
       url: params.url.trim(),
       // A pointer with no label still needs something to click. The kind is the
       // honest fallback, and a caller can rename it later.
       label: params.label?.trim() || POINTER_KIND_LABELS[params.kind],
       kind: params.kind,
     }
-    const pointers = (getField(existing, 'pointers') ?? []) as FramePointer[]
+    const pointers = (getField(existing, 'pointers') ?? []) as RequestPointer[]
     existing.set('pointers', [...pointers, pointer])
     pointerCount = pointers.length + 1
   })
 
-  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
-  return { frameId: params.frameId, pointerCount }
+  if (notFound) throw new Error(`Request not found: "${params.requestId}"`)
+  return { requestId: params.requestId, pointerCount }
 }
 
 /**
- * Wake a frame. This writes ONE field, the freshness clock, and it must never
- * erase a frame: the problem, the appetite, the reports, the pointers and the
+ * Wake a request. This writes ONE field, the freshness clock, and it must never
+ * erase a request: the problem, the appetite, the reports, the pointers and the
  * owner all stay exactly as they were.
  *
  * A wake is a mention. It carries no note, because a wake with evidence behind
  * it is a Report — use attachReport for that (ADR 0024).
  */
-export async function wakeFrame(
+export async function wakeRequest(
   roomId: string,
-  params: { frameId: string; date?: string }
-): Promise<{ frameId: string; wokenOn: string }> {
+  params: { requestId: string; date?: string }
+): Promise<{ requestId: string; wokenOn: string }> {
   const mentionedOn = params.date?.trim() || getTeamToday(new Date())
   let notFound = false
   let wokenOn = mentionedOn
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
     }
     // The clock only ever moves forward. An agent replaying older table notes
-    // must never age a frame that something more recent already woke, so a
+    // must never age a request that something more recent already woke, so a
     // back-dated mention is recorded as a no-op rather than a regression.
     // ISO dates compare lexically, the same trick the cycle list engine uses.
     const current = String(getField(existing, 'last_woken') ?? '')
@@ -1665,21 +1665,21 @@ export async function wakeFrame(
     existing.set('last_woken', mentionedOn)
   })
 
-  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
-  return { frameId: params.frameId, wokenOn }
+  if (notFound) throw new Error(`Request not found: "${params.requestId}"`)
+  return { requestId: params.requestId, wokenOn }
 }
 
 /**
- * Leave a brief on a frame: where it stands and the next step (ADR 0029).
+ * Leave a brief on a request: where it stands and the next step (ADR 0029).
  *
  * This writes ONE field and replaces the whole brief, so an old "watch" line
- * never survives under a new headline. It does not wake the frame: a brief
+ * never survives under a new headline. It does not wake the request: a brief
  * restates the record and is not a mention of the problem (ADR 0024).
  */
 export async function writeBrief(
   roomId: string,
   params: {
-    frameId: string
+    requestId: string
     headline: string
     whereWeAre: string
     nextStep: string
@@ -1687,14 +1687,14 @@ export async function writeBrief(
     watch?: string
     writtenBy: string
   }
-): Promise<{ frameId: string; writtenOn: string }> {
+): Promise<{ requestId: string; writtenOn: string }> {
   const headline = params.headline.trim()
   const nextStep = params.nextStep.trim()
   if (!headline) throw new Error('A brief needs a headline.')
   if (!nextStep) throw new Error('A brief needs a next step.')
 
   const writtenOn = getTeamToday(new Date())
-  const brief: FrameBrief = {
+  const brief: RequestBrief = {
     headline,
     where_we_are: params.whereWeAre.trim(),
     next_step: nextStep,
@@ -1706,7 +1706,7 @@ export async function writeBrief(
   let notFound = false
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1714,28 +1714,28 @@ export async function writeBrief(
     existing.set('brief', brief)
   })
 
-  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
-  return { frameId: params.frameId, writtenOn }
+  if (notFound) throw new Error(`Request not found: "${params.requestId}"`)
+  return { requestId: params.requestId, writtenOn }
 }
 
 /**
- * Resolve a frame, because a person decided the problem is gone. Only a person
+ * Resolve a request, because a person decided the problem is gone. Only a person
  * does this. Nothing resolves on a timer, and shipping something never silently
  * claims the pain is over (ADR 0025).
  *
- * This writes ONE field. A resolved frame is not deleted: it leaves the Product Map and
+ * This writes ONE field. A resolved request is not deleted: it leaves the Product Map and
  * stays on its area, with the shapes that resolved it. Pass `resolved: false`
  * to put it back.
  */
-export async function resolveFrame(
+export async function resolveRequest(
   roomId: string,
-  params: { frameId: string; resolved?: boolean }
-): Promise<{ frameId: string; resolved: boolean }> {
+  params: { requestId: string; resolved?: boolean }
+): Promise<{ requestId: string; resolved: boolean }> {
   const resolved = params.resolved ?? true
   let notFound = false
 
   await withRoot(roomId, undefined, (root: any) => {
-    const existing = root.get('frames').find((f: any) => getField(f, 'id') === params.frameId)
+    const existing = getOrCreateList(root, 'requests').find((f: any) => getField(f, 'id') === params.requestId)
     if (!existing) {
       notFound = true
       return
@@ -1743,43 +1743,43 @@ export async function resolveFrame(
     existing.set('resolved', resolved)
   })
 
-  if (notFound) throw new Error(`Frame not found: "${params.frameId}"`)
-  return { frameId: params.frameId, resolved }
+  if (notFound) throw new Error(`Request not found: "${params.requestId}"`)
+  return { requestId: params.requestId, resolved }
 }
 
 /**
- * Delete a frame outright, because it should never have been captured — a
+ * Delete a request outright, because it should never have been captured — a
  * duplicate, a test, a mistake. This is NOT how a solved problem leaves the
- * Product Map: that is resolveFrame, which keeps the record (ADR 0026).
+ * Product Map: that is resolveRequest, which keeps the record (ADR 0026).
  *
- * Any frame that named this one as its origin loses that pointer. Only this
- * room is cleaned: a Shape's `frame_id` lives in a cycle room and can be left
- * pointing at a frame that is gone (ADR 0026, open question 2).
+ * Any request that named this one as its origin loses that pointer. Only this
+ * room is cleaned: a Shape's `request_id` lives in a cycle room and can be left
+ * pointing at a request that is gone (ADR 0026, open question 2).
  */
-export async function deleteFrame(roomId: string, id: string): Promise<void> {
+export async function deleteRequest(roomId: string, id: string): Promise<void> {
   let notFound = false
 
   await withRoot(roomId, undefined, (root: any) => {
-    const frames = root.get('frames')
-    const idx = frames.findIndex((f: any) => getField(f, 'id') === id)
+    const requests = getOrCreateList(root, 'requests')
+    const idx = requests.findIndex((f: any) => getField(f, 'id') === id)
     if (idx === -1) {
       notFound = true
       return
     }
-    // Unrelate first, while the frame is still there to unrelate from.
-    storeRelated(frames, id, [])
-    frames.delete(idx)
+    // Unrelate first, while the request is still there to unrelate from.
+    storeRelated(requests, id, [])
+    requests.delete(idx)
 
-    for (const f of frames) {
-      if (getField(f, 'originFrameId') === id) f.delete('originFrameId')
+    for (const f of requests) {
+      if (getField(f, 'originRequestId') === id) f.delete('originRequestId')
     }
   })
 
-  if (notFound) throw new Error(`Frame not found: "${id}"`)
+  if (notFound) throw new Error(`Request not found: "${id}"`)
 }
 
 /**
- * Delete an area. Nothing inside it is deleted: its frames go back to Unmapped
+ * Delete an area. Nothing inside it is deleted: its requests go back to Unmapped
  * and its sub-areas move to the top level, because an area is a place on the
  * Product Map and losing the place must not lose the problems (ADR 0026).
  *
@@ -1808,7 +1808,7 @@ export async function deleteArea(roomId: string, id: string): Promise<void> {
       a.set('x', slot.x)
       a.set('y', slot.y)
     }
-    for (const f of root.get('frames')) {
+    for (const f of getOrCreateList(root, 'requests')) {
       if (getField(f, 'areaId') === id) f.delete('areaId')
     }
   })
@@ -1816,7 +1816,7 @@ export async function deleteArea(roomId: string, id: string): Promise<void> {
   if (notFound) throw new Error(`Area not found: "${id}"`)
 }
 
-/** The owner of the area a frame is filed in, or '' when there is none to suggest. */
+/** The owner of the area a request is filed in, or '' when there is none to suggest. */
 function areaOwner(root: any, areaId: string | undefined): string {
   if (!areaId) return ''
   const areas = root.get('areas')

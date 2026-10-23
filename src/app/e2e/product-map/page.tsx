@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-import { FilteredFrames } from '@/app/[slug]/product/frame-filters'
+import { FilteredRequests } from '@/app/[slug]/product/request-filters'
 import { OrganizationUsersProvider } from '@/components/organization-users-context'
 import { MapCanvas } from '@/components/product-map/map-canvas'
 import {
@@ -12,7 +12,7 @@ import {
   type HeatLens,
 } from '@/lib/product-map-engine'
 
-import { AREAS, CYCLES, FRAMES, SHAPES, TODAY, USERS } from './fixture'
+import { AREAS, CYCLES, REQUESTS, SHAPES, TODAY, USERS } from './fixture'
 
 const LENS_LABELS: Record<HeatLens, string> = {
   all: 'Everyone',
@@ -31,7 +31,7 @@ export default function ProductMapE2EPage() {
 
   const model = renderProductMap({
     areas: AREAS,
-    frames: FRAMES,
+    requests: REQUESTS,
     cycles: CYCLES,
     shapes: SHAPES,
     lens,
@@ -60,8 +60,8 @@ export default function ProductMapE2EPage() {
         ))}
       </div>
 
-      <p data-testid="opened-frame" className="text-sm text-muted-foreground">
-        {opened ? `Opened: ${opened}` : 'No frame open'}
+      <p data-testid="opened-request" className="text-sm text-muted-foreground">
+        {opened ? `Opened: ${opened}` : 'No request open'}
       </p>
 
       <p data-testid="counts" className="text-sm text-muted-foreground">
@@ -70,8 +70,8 @@ export default function ProductMapE2EPage() {
       </p>
 
       <OrganizationUsersProvider organizationUsers={USERS}>
-        <MapCanvas areas={model.areas} onOpenFrame={setOpened} />
-        <FilteredFrames pins={[...model.pins, ...model.resolved]} areas={model.areas} />
+        <MapCanvas areas={model.areas} onOpenRequest={setOpened} />
+        <FilteredRequests pins={[...model.pins, ...model.resolved]} areas={model.areas} />
       </OrganizationUsersProvider>
     </main>
   )
